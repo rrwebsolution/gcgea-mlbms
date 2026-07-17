@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="application-name" content="GCGEA-MLBMS" />
+    <meta
+      name="description"
+      content="Internal membership, loan, contribution, and benefits management system of the Gingoog City Government Employees Association."
+    />
+    <meta name="theme-color" content="#F8FAFC" />
+    <title>GCGEA Membership, Loan and Benefits Management System</title>
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem("gcgea_theme_preference");
+          var pref = "system";
+          if (raw) {
+            try {
+              var parsed = JSON.parse(raw);
+              pref = (parsed && typeof parsed === "object" && "data" in parsed) ? parsed.data : parsed;
+            } catch (e) {
+              pref = raw;
+            }
+          }
+          var isDark = pref === "dark" || (pref === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var root = document.documentElement;
+          if (isDark) {
+            root.classList.add("dark");
+            root.setAttribute("data-theme", "dark");
+          } else {
+            root.setAttribute("data-theme", "light");
+          }
+          var themeColorMeta = document.querySelector('meta[name="theme-color"]');
+          if (themeColorMeta) themeColorMeta.setAttribute("content", isDark ? "#0F172A" : "#F8FAFC");
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,303 @@
+import type { Permission, PermissionCode, PermissionPreset } from "@/types"
+
+export interface PermissionGroupDef {
+  group: string
+  label: string
+  permissions: Permission[]
+}
+
+function p(code: PermissionCode, label: string, group: string, description: string): Permission {
+  return { code, label, group, description }
+}
+
+export const PERMISSION_GROUPS: PermissionGroupDef[] = [
+  {
+    group: "dashboard",
+    label: "Dashboard",
+    permissions: [p("dashboard.view", "View Dashboard", "dashboard", "View dashboard summaries and charts")],
+  },
+  {
+    group: "members",
+    label: "Members",
+    permissions: [
+      p("members.view", "View Members", "members", "View member records"),
+      p("members.create", "Create Members", "members", "Register new members"),
+      p("members.update", "Update Members", "members", "Edit member records"),
+      p("members.archive", "Archive Members", "members", "Archive member records"),
+      p("members.restore", "Restore Members", "members", "Restore archived members"),
+      p("members.import", "Import Members", "members", "Bulk import members"),
+      p("members.export", "Export Members", "members", "Export member records"),
+      p("members.print", "Print Members", "members", "Print member list/profile"),
+    ],
+  },
+  {
+    group: "beneficiaries",
+    label: "Beneficiaries",
+    permissions: [
+      p("beneficiaries.view", "View Beneficiaries", "beneficiaries", "View beneficiary records"),
+      p("beneficiaries.create", "Add Beneficiaries", "beneficiaries", "Add beneficiaries"),
+      p("beneficiaries.update", "Update Beneficiaries", "beneficiaries", "Edit beneficiaries"),
+      p("beneficiaries.delete", "Delete Beneficiaries", "beneficiaries", "Remove beneficiaries"),
+    ],
+  },
+  {
+    group: "offices",
+    label: "Offices",
+    permissions: [
+      p("offices.view", "View Offices", "offices", "View office records"),
+      p("offices.create", "Create Offices", "offices", "Add offices"),
+      p("offices.update", "Update Offices", "offices", "Edit offices"),
+      p("offices.activate", "Activate Offices", "offices", "Reactivate an inactive office"),
+      p("offices.deactivate", "Deactivate Offices", "offices", "Deactivate an office"),
+    ],
+  },
+  {
+    group: "contributions",
+    label: "Contributions",
+    permissions: [
+      p("contributions.view", "View Contributions", "contributions", "View contribution records"),
+      p("contributions.create", "Record Contributions", "contributions", "Record contributions"),
+      p("contributions.update", "Update Contributions", "contributions", "Edit contributions"),
+      p("contributions.void", "Void Contributions", "contributions", "Void posted contributions"),
+      p("contributions.bulk_create", "Bulk Contribution Entry", "contributions", "Record contributions for multiple members at once"),
+      p("contributions.import", "Import Contributions", "contributions", "Import payroll deductions"),
+      p("contributions.replace_duplicate", "Replace Duplicate Contributions", "contributions", "Overwrite existing contribution records flagged as duplicates during import"),
+      p("contributions.export", "Export Contributions", "contributions", "Export contribution reports"),
+      p("contributions.print", "Print Contributions", "contributions", "Print receipts"),
+    ],
+  },
+  {
+    group: "loans",
+    label: "Loans",
+    permissions: [
+      p("loans.view", "View Loans", "loans", "View loan applications"),
+      p("loans.create", "Create Loans", "loans", "Encode loan applications"),
+      p("loans.update", "Update Loans", "loans", "Edit loan applications"),
+      p("loans.submit", "Submit Loans", "loans", "Submit loan applications for review"),
+      p("loans.review", "Review Loans", "loans", "Review submitted loan applications"),
+      p("loans.recommend", "Recommend Loans", "loans", "Recommend a loan application for approval"),
+      p("loans.approve", "Approve Loans", "loans", "Approve loan applications"),
+      p("loans.reject", "Reject Loans", "loans", "Reject loan applications"),
+      p("loans.release", "Release Loans", "loans", "Release approved loans"),
+      p("loans.cancel", "Cancel Loans", "loans", "Cancel loan applications"),
+      p("loans.restructure", "Restructure Loans", "loans", "Restructure an existing loan"),
+      p("loans.override_eligibility", "Override Loan Eligibility", "loans", "Override failed eligibility checks with a documented reason"),
+      p("loans.print", "Print Loans", "loans", "Print loan documents"),
+      p("loans.export", "Export Loans", "loans", "Export loan reports"),
+    ],
+  },
+  {
+    group: "loan_payments",
+    label: "Loan Payments",
+    permissions: [
+      p("loan_payments.view", "View Loan Payments", "loan_payments", "View loan payments"),
+      p("loan_payments.create", "Record Loan Payments", "loan_payments", "Record loan payments"),
+      p("loan_payments.update", "Update Loan Payments", "loan_payments", "Edit loan payments"),
+      p("loan_payments.void", "Void Loan Payments", "loan_payments", "Void posted payments"),
+      p("loan_payments.import", "Import Loan Payments", "loan_payments", "Bulk import loan payments"),
+      p("loan_payments.print_receipt", "Print Receipts", "loan_payments", "Print payment receipts"),
+      p("loan_payments.export", "Export Loan Payments", "loan_payments", "Export payment records"),
+    ],
+  },
+  {
+    group: "benefits",
+    label: "Benefits",
+    permissions: [
+      p("benefits.view", "View Benefits", "benefits", "View benefit applications"),
+      p("benefits.create", "Create Benefits", "benefits", "Encode benefit applications"),
+      p("benefits.update", "Update Benefits", "benefits", "Edit benefit applications"),
+      p("benefits.submit", "Submit Benefits", "benefits", "Submit benefit applications"),
+      p("benefits.review", "Review Benefits", "benefits", "Review submitted benefit applications"),
+      p("benefits.approve", "Approve Benefits", "benefits", "Approve benefit applications"),
+      p("benefits.reject", "Reject Benefits", "benefits", "Reject benefit applications"),
+      p("benefits.release", "Release Benefits", "benefits", "Release approved benefits"),
+      p("benefits.cancel", "Cancel Benefits", "benefits", "Cancel benefit applications"),
+      p("benefits.override_eligibility", "Override Benefit Eligibility", "benefits", "Override failed eligibility checks with a documented reason"),
+      p("benefits.print", "Print Benefits", "benefits", "Print benefit documents"),
+      p("benefits.export", "Export Benefits", "benefits", "Export benefit reports"),
+    ],
+  },
+  {
+    group: "reports",
+    label: "Reports",
+    permissions: [
+      p("reports.view", "View Reports", "reports", "View the report center"),
+      p("reports.export", "Export Reports", "reports", "Export reports"),
+      p("reports.print", "Print Reports", "reports", "Print reports"),
+      p("reports.financial", "Financial Reports", "reports", "Access financial/collection reports"),
+      p("reports.audit", "Audit Reports", "reports", "Access audit-related reports"),
+      p("reports.member", "Member Reports", "reports", "Access member reports"),
+      p("reports.loan", "Loan Reports", "reports", "Access loan reports"),
+      p("reports.benefit", "Benefit Reports", "reports", "Access benefit reports"),
+      p("reports.contribution", "Contribution Reports", "reports", "Access contribution reports"),
+    ],
+  },
+  {
+    group: "users",
+    label: "Users",
+    permissions: [
+      p("users.view", "View Users", "users", "View system users"),
+      p("users.create", "Create Users", "users", "Create user accounts"),
+      p("users.update", "Update Users", "users", "Edit user accounts"),
+      p("users.activate", "Activate Users", "users", "Reactivate a user account"),
+      p("users.deactivate", "Deactivate Users", "users", "Deactivate a user account"),
+      p("users.reset_password", "Reset Passwords", "users", "Reset user passwords"),
+      p("users.assign_role", "Assign Roles", "users", "Assign primary/additional roles to a user"),
+      p("users.assign_permissions", "Assign User Permissions", "users", "Manage a user's direct allow/deny permissions"),
+      p("users.view_login_history", "View Login History", "users", "View a user's login history"),
+    ],
+  },
+  {
+    group: "roles",
+    label: "Roles & Permissions",
+    permissions: [
+      p("roles.view", "View Roles", "roles", "View roles and permissions"),
+      p("roles.create", "Create Roles", "roles", "Create roles"),
+      p("roles.update", "Update Roles", "roles", "Edit roles"),
+      p("roles.duplicate", "Duplicate Roles", "roles", "Duplicate an existing role"),
+      p("roles.delete", "Delete Roles", "roles", "Delete custom roles"),
+      p("roles.assign_permissions", "Assign Role Permissions", "roles", "Manage a role's permission matrix"),
+      p("roles.view_users", "View Assigned Users", "roles", "View users assigned to a role"),
+    ],
+  },
+  {
+    group: "audit_logs",
+    label: "Audit Logs",
+    permissions: [
+      p("audit_logs.view", "View Audit Logs", "audit_logs", "View system audit logs"),
+      p("audit_logs.export", "Export Audit Logs", "audit_logs", "Export audit log records"),
+      p("audit_logs.view_sensitive_changes", "View Sensitive Changes", "audit_logs", "View before/after values of sensitive fields"),
+    ],
+  },
+  {
+    group: "settings",
+    label: "Settings",
+    permissions: [
+      p("settings.view", "View Settings", "settings", "View system settings"),
+      p("settings.update", "Update Settings", "settings", "Update system settings"),
+      p("settings.general", "General Settings", "settings", "Manage general system settings"),
+      p("settings.organization", "Organization Profile", "settings", "Manage the organization profile"),
+      p("settings.numbering", "Numbering Formats", "settings", "Manage document numbering formats"),
+      p("settings.loan", "Loan Settings", "settings", "Manage default loan settings"),
+      p("settings.contribution", "Contribution Settings", "settings", "Manage default contribution settings"),
+      p("settings.benefit", "Benefit Settings", "settings", "Manage default benefit settings"),
+      p("settings.notification", "Notification Settings", "settings", "Manage notification preferences"),
+      p("settings.security", "Security Settings", "settings", "Manage password and session security policy"),
+      p("settings.backup", "Backup Settings", "settings", "Manage backup and restore settings"),
+      p("settings.appearance", "Appearance Settings", "settings", "Manage theme and appearance settings"),
+    ],
+  },
+]
+
+export const ALL_PERMISSIONS: Permission[] = PERMISSION_GROUPS.flatMap((g) => g.permissions)
+export const ALL_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.map((p) => p.code)
+
+export const VIEW_ONLY_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.filter((perm) =>
+  perm.code.endsWith(".view")
+).map((perm) => perm.code)
+
+const ENCODER_SUFFIXES = ["view", "create", "update", "submit", "print", "import", "bulk_create"]
+export const ENCODER_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.filter((perm) =>
+  ENCODER_SUFFIXES.some((suffix) => perm.code.endsWith(`.${suffix}`))
+).map((perm) => perm.code)
+
+const APPROVER_SUFFIXES = ["view", "review", "recommend", "approve", "reject", "release", "cancel", "restructure", "override_eligibility", "print", "export"]
+export const APPROVER_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.filter((perm) =>
+  APPROVER_SUFFIXES.some((suffix) => perm.code.endsWith(`.${suffix}`)) ||
+  perm.code === "dashboard.view" ||
+  perm.code === "members.view"
+).map((perm) => perm.code)
+
+const FINANCIAL_GROUPS = ["contributions", "loan_payments", "reports"]
+export const FINANCIAL_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.filter(
+  (perm) => FINANCIAL_GROUPS.includes(perm.group) || perm.code === "dashboard.view" || perm.code === "members.view" || perm.code === "loans.view"
+).map((perm) => perm.code)
+
+export const PERMISSION_PRESETS: { value: PermissionPreset; label: string; description: string }[] = [
+  { value: "no_access", label: "No Access", description: "Clears all permissions." },
+  { value: "view_only", label: "View Only", description: "Grants every *.view permission across all modules." },
+  { value: "encoder", label: "Encoder Access", description: "Grants create/update/submit/print/import access for day-to-day encoding work." },
+  { value: "approver", label: "Approver Access", description: "Grants review/recommend/approve/reject/release access for loans and benefits." },
+  { value: "financial", label: "Financial Access", description: "Grants contributions, loan payments, and reporting access." },
+  { value: "full_access", label: "Full Access", description: "Grants every permission in the system." },
+  { value: "copy_existing", label: "Copy from Existing Role", description: "Copies the permission set of another role as a starting point." },
+]
+
+export function permissionCodesForPreset(preset: PermissionPreset): PermissionCode[] {
+  switch (preset) {
+    case "no_access":
+      return []
+    case "view_only":
+      return VIEW_ONLY_PERMISSION_CODES
+    case "encoder":
+      return ENCODER_PERMISSION_CODES
+    case "approver":
+      return APPROVER_PERMISSION_CODES
+    case "financial":
+      return FINANCIAL_PERMISSION_CODES
+    case "full_access":
+      return ALL_PERMISSION_CODES
+    default:
+      return []
+  }
+}
+
+export function permissionsForRole(role: string): PermissionCode[] {
+  switch (role) {
+    case "Super Administrator":
+      return ALL_PERMISSION_CODES
+    case "Membership Officer":
+      return [
+        "dashboard.view",
+        "members.view", "members.create", "members.update", "members.archive", "members.restore",
+        "members.import", "members.export", "members.print",
+        "beneficiaries.view", "beneficiaries.create", "beneficiaries.update", "beneficiaries.delete",
+        "offices.view",
+        "reports.view", "reports.export", "reports.print", "reports.member",
+      ]
+    case "Loan Officer":
+      return [
+        "dashboard.view",
+        "members.view",
+        "offices.view",
+        "loans.view", "loans.create", "loans.update", "loans.submit", "loans.print", "loans.export",
+        "loan_payments.view", "loan_payments.create", "loan_payments.print_receipt",
+        "reports.view", "reports.export", "reports.print", "reports.loan",
+      ]
+    case "Treasurer":
+      return [
+        "dashboard.view",
+        "members.view",
+        "offices.view",
+        "contributions.view", "contributions.create", "contributions.update", "contributions.void",
+        "contributions.bulk_create", "contributions.import", "contributions.replace_duplicate",
+        "contributions.export", "contributions.print",
+        "loan_payments.view", "loan_payments.create", "loan_payments.update", "loan_payments.void",
+        "loan_payments.import", "loan_payments.print_receipt", "loan_payments.export",
+        "reports.view", "reports.export", "reports.print", "reports.financial", "reports.contribution",
+      ]
+    case "Benefits Officer":
+      return [
+        "dashboard.view",
+        "members.view",
+        "offices.view",
+        "benefits.view", "benefits.create", "benefits.update", "benefits.submit", "benefits.print", "benefits.export",
+        "reports.view", "reports.export", "reports.print", "reports.benefit",
+      ]
+    case "Approving Officer":
+      return [
+        "dashboard.view",
+        "members.view",
+        "offices.view",
+        "loans.view", "loans.review", "loans.recommend", "loans.approve", "loans.reject", "loans.release",
+        "loans.restructure", "loans.print", "loans.export",
+        "benefits.view", "benefits.review", "benefits.approve", "benefits.reject", "benefits.release",
+        "benefits.print", "benefits.export",
+        "reports.view", "reports.export", "reports.print", "reports.loan", "reports.benefit",
+      ]
+    case "Auditor / Viewer":
+      return Array.from(new Set([...VIEW_ONLY_PERMISSION_CODES, "audit_logs.view", "audit_logs.export"]))
+    default:
+      return ["dashboard.view"]
+  }
+}
