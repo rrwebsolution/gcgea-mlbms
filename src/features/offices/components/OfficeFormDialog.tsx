@@ -86,9 +86,9 @@ export function OfficeFormDialog({ open, onOpenChange, office, onSubmit }: Offic
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="animate-spin" />}
-              {office ? "Save Changes" : "Add Office"}
+            <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+              {isSubmitting && <Loader2 className="animate-spin" aria-hidden="true" />}
+              {isSubmitting ? "Saving…" : office ? "Save Changes" : "Add Office"}
             </Button>
           </DialogFooter>
         </form>

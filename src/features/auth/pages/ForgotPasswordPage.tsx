@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
           <Input id="email" type="email" autoComplete="email" placeholder="you@gcgea.gingoog.gov.ph" aria-invalid={!!errors.email} {...register("email")} />
           {errors.email && <p className="text-xs font-medium text-destructive">{errors.email.message}</p>}
         </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <Button type="submit" className="w-full" disabled={isSubmitting} aria-busy={isSubmitting}>
           {isSubmitting ? <Loader2 className="animate-spin" /> : <Send />}
           {isSubmitting ? "Sending…" : "Send Reset Instructions"}
         </Button>

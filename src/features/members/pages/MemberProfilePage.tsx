@@ -1,9 +1,11 @@
+import * as React from "react"
 import { Link, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import {
   Banknote,
   FileText,
   Landmark,
+  Loader2,
   PencilLine,
   Plus,
   PrinterIcon,
@@ -14,14 +16,17 @@ import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ProfileCompleteness } from "@/components/shared/ProfileCompleteness"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { DocumentCard } from "@/components/shared/DocumentCard"
+import { DocumentGallery, type DocumentGalleryItem } from "@/components/shared/DocumentGallery"
+import { ImagePreviewDialog } from "@/components/shared/ImagePreviewDialog"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getMember, profileCompleteness } from "@/services/members.service"
 import { getAllContributions } from "@/services/contributions.service"
 import { getAllLoans } from "@/services/loans.service"
-import { getAllLoanPayments } from "@/services/loan-payments.service"
+import { listAllLoanPayments } from "@/services/loan-payments.service"
 import { getAllBenefits } from "@/services/benefits.service"
 import { MEMBERSHIP_STATUS_TONE, LOAN_STATUS_TONE, BENEFIT_STATUS_TONE, CONTRIBUTION_STATUS_TONE } from "@/constants/status"
 import { calculateAge, calculateDurationLabel, formatCurrency, formatDateShort, initialsFromName } from "@/utils/format"
@@ -29,15 +34,24 @@ import { calculateAge, calculateDurationLabel, formatCurrency, formatDateShort, 
 export default function MemberProfilePage() {
   const { id = "" } = useParams()
   const { data: member, isLoading } = useQuery({ queryKey: ["members", id], queryFn: () => getMember(id) })
+  const { data: allPayments = [], isLoading: isLoadingPayments } = useQuery({ queryKey: ["loan-payments", "all"], queryFn: listAllLoanPayments })
+  const [photoPreviewOpen, setPhotoPreviewOpen] = React.useState(false)
 
   useBreadcrumbExtra(member?.fullName)
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading member profile…</p>
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center" role="status">
+        <Loader2 className="size-8 animate-spin text-primary" aria-hidden="true" />
+        <span className="sr-only">Loading member profile</span>
+      </div>
+    )
+  }
   if (!member) return <EmptyState icon={UserRound} title="Member not found" description="This member record may have been archived or removed." />
 
   const contributions = getAllContributions().filter((c) => c.memberId === member.id)
   const loans = getAllLoans().filter((l) => l.memberId === member.id)
-  const payments = getAllLoanPayments().filter((p) => p.memberId === member.id)
+  const payments = allPayments.filter((p) => p.memberId === member.id)
   const benefits = getAllBenefits().filter((b) => b.memberId === member.id)
 
   const outstandingBalance = loans.reduce((sum, l) => sum + l.outstandingBalance, 0)
@@ -46,17 +60,27 @@ export default function MemberProfilePage() {
   const completeness = profileCompleteness(member)
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+    <div className="space-y-6 pb-12">
+      
+      {/* Premium Profile Heading Card */}
+      <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-card/90 p-5 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <Avatar size="lg">
-              <AvatarFallback className="bg-primary text-lg text-primary-foreground">{initialsFromName(member.fullName)}</AvatarFallback>
-            </Avatar>
+            <button
+              type="button"
+              onClick={() => member.profilePhotoUrl && setPhotoPreviewOpen(true)}
+              className={`shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring transition-transform duration-300 hover:scale-[1.02] hover:shadow-md ${member.profilePhotoUrl ? "cursor-zoom-in" : "cursor-default"}`}
+              aria-label={member.profilePhotoUrl ? "View profile photo" : undefined}
+            >
+              <Avatar size="lg">
+                {member.profilePhotoUrl && <AvatarImage src={member.profilePhotoUrl} alt={member.fullName} />}
+                <AvatarFallback className="bg-primary text-lg text-primary-foreground font-semibold">{initialsFromName(member.fullName)}</AvatarFallback>
+              </Avatar>
+            </button>
             <div className="space-y-1">
-              <h1 className="font-heading text-lg font-semibold text-foreground sm:text-xl">{member.fullName}</h1>
-              <p className="text-sm text-muted-foreground">{member.memberNumber} · {member.position} · {member.officeName}</p>
-              <div className="flex flex-wrap items-center gap-2 pt-1">
+              <h1 className="font-heading text-lg font-bold tracking-tight text-foreground sm:text-2xl">{member.fullName}</h1>
+              <p className="text-sm font-medium text-muted-foreground">{member.memberNumber} · {member.position} · {member.officeName}</p>
+              <div className="flex flex-wrap items-center gap-2 pt-1.5">
                 <StatusBadge label={member.membershipStatus} tone={MEMBERSHIP_STATUS_TONE[member.membershipStatus]} />
                 {member.retireeStatus === "Retired" && <StatusBadge label="Retired" tone="gold" />}
                 <ProfileCompleteness percentage={completeness} />
@@ -64,59 +88,91 @@ export default function MemberProfilePage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <PermissionButton permission="members.update" variant="outline" size="sm" render={<Link to={`/members/${member.id}/edit`} />}>
-              <PencilLine />
-              Edit Profile
+            <PermissionButton 
+              permission="members.update" 
+              variant="outline" 
+              size="sm" 
+              className="h-9 gap-1.5 text-xs hover:bg-accent/80 active:scale-97 transition-all"
+              render={<Link to={`/members/${member.id}/edit`} />}
+            >
+              <PencilLine className="size-3.5" /> Edit Profile
             </PermissionButton>
-            <PermissionButton permission="members.print" variant="outline" size="sm">
-              <PrinterIcon />
-              Print Profile
+            <PermissionButton 
+              permission="members.print" 
+              variant="outline" 
+              size="sm"
+              className="h-9 gap-1.5 text-xs hover:bg-accent/80 active:scale-97 transition-all"
+            >
+              <PrinterIcon className="size-3.5" /> Print Profile
             </PermissionButton>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4 sm:grid-cols-3">
+        {/* Structured summary metrics widget panels */}
+        <div className="mt-5 grid grid-cols-1 gap-4 border-t border-border/60 pt-5 sm:grid-cols-3">
           <SummaryStat label="Outstanding Loan Balance" value={formatCurrency(outstandingBalance)} tone={outstandingBalance > 0 ? "danger" : undefined} />
           <SummaryStat label="Total Contributions" value={formatCurrency(totalContributions)} />
           <SummaryStat label="Total Benefits Received" value={formatCurrency(totalBenefits)} />
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
-          <PermissionButton permission="contributions.create" variant="secondary" size="sm" render={<Link to={`/contributions/new?member=${member.id}`} />}>
-            <Wallet />
-            Record Contribution
+        {/* Quick Action Button tray */}
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-border/60 pt-5">
+          <PermissionButton 
+            permission="contributions.create" 
+            variant="secondary" 
+            size="sm" 
+            className="h-8 gap-1.5 text-xs active:scale-97 transition-all"
+            render={<Link to={`/contributions/new?member=${member.id}`} />}
+          >
+            <Wallet className="size-3.5 text-muted-foreground" /> Record Contribution
           </PermissionButton>
-          <PermissionButton permission="loans.create" variant="secondary" size="sm" render={<Link to={`/loans/new?member=${member.id}`} />}>
-            <Landmark />
-            Create Loan
+          <PermissionButton 
+            permission="loans.create" 
+            variant="secondary" 
+            size="sm" 
+            className="h-8 gap-1.5 text-xs active:scale-97 transition-all"
+            render={<Link to={`/loans/new?member=${member.id}`} />}
+          >
+            <Landmark className="size-3.5 text-muted-foreground" /> Create Loan
           </PermissionButton>
-          <PermissionButton permission="loan_payments.create" variant="secondary" size="sm" render={<Link to="/loan-payments" />}>
-            <Banknote />
-            Record Payment
+          <PermissionButton 
+            permission="loan_payments.create" 
+            variant="secondary" 
+            size="sm" 
+            className="h-8 gap-1.5 text-xs active:scale-97 transition-all"
+            render={<Link to={`/loan-payments/new?member=${member.id}`} />}
+          >
+            <Banknote className="size-3.5 text-muted-foreground" /> Record Payment
           </PermissionButton>
-          <PermissionButton permission="benefits.create" variant="secondary" size="sm" render={<Link to={`/benefits/new?member=${member.id}`} />}>
-            <Plus />
-            Create Benefit Request
+          <PermissionButton 
+            permission="benefits.create" 
+            variant="secondary" 
+            size="sm" 
+            className="h-8 gap-1.5 text-xs active:scale-97 transition-all"
+            render={<Link to={`/benefits/new?member=${member.id}`} />}
+          >
+            <Plus className="size-3.5 text-muted-foreground" /> Create Benefit Request
           </PermissionButton>
         </div>
       </div>
 
+      {/* Tabs list navigation panel */}
       <Tabs defaultValue="overview">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="employment">Employment</TabsTrigger>
-          <TabsTrigger value="beneficiaries">Beneficiaries</TabsTrigger>
-          <TabsTrigger value="contributions">Contributions</TabsTrigger>
-          <TabsTrigger value="loans">Loans</TabsTrigger>
-          <TabsTrigger value="payments">Loan Payments</TabsTrigger>
-          <TabsTrigger value="benefits">Benefits</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="activity">Activity History</TabsTrigger>
+        <TabsList className="flex-wrap bg-muted/30 border border-border/40 p-1 rounded-xl">
+          <TabsTrigger value="overview" className="text-xs font-semibold">Overview</TabsTrigger>
+          <TabsTrigger value="employment" className="text-xs font-semibold">Employment</TabsTrigger>
+          <TabsTrigger value="beneficiaries" className="text-xs font-semibold">Beneficiaries</TabsTrigger>
+          <TabsTrigger value="contributions" className="text-xs font-semibold">Contributions</TabsTrigger>
+          <TabsTrigger value="loans" className="text-xs font-semibold">Loans</TabsTrigger>
+          <TabsTrigger value="payments" className="text-xs font-semibold">Loan Payments</TabsTrigger>
+          <TabsTrigger value="benefits" className="text-xs font-semibold">Benefits</TabsTrigger>
+          <TabsTrigger value="documents" className="text-xs font-semibold">Documents</TabsTrigger>
+          <TabsTrigger value="activity" className="text-xs font-semibold">Activity History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <dl className="grid grid-cols-1 gap-x-12 gap-y-3 text-sm md:grid-cols-2">
               <Detail label="Sex" value={member.sex} />
               <Detail label="Birthdate" value={`${formatDateShort(member.birthdate)} (${calculateAge(member.birthdate)} years old)`} />
               <Detail label="Civil Status" value={member.civilStatus} />
@@ -132,8 +188,8 @@ export default function MemberProfilePage() {
         </TabsContent>
 
         <TabsContent value="employment" className="mt-4">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <dl className="grid grid-cols-1 gap-x-12 gap-y-3.5 text-sm md:grid-cols-2">
               <Detail label="Present Office" value={member.officeName} />
               <Detail label="Position" value={member.position} />
               <Detail label="Date of Regular Appointment" value={formatDateShort(member.dateOfRegularAppointment)} />
@@ -147,25 +203,25 @@ export default function MemberProfilePage() {
           {member.beneficiaries.length === 0 ? (
             <EmptyState title="No beneficiaries on record" description="Add beneficiaries when editing this member's profile." />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Full Name</TableHead>
-                    <TableHead>Relationship</TableHead>
-                    <TableHead>Birthdate</TableHead>
-                    <TableHead>Contact Number</TableHead>
-                    <TableHead>Share %</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Full Name</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Relationship</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Birthdate</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Contact Number</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Share %</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {member.beneficiaries.map((b) => (
                     <TableRow key={b.id}>
-                      <TableCell className="font-medium text-foreground">{b.fullName}</TableCell>
-                      <TableCell>{b.relationship}</TableCell>
-                      <TableCell>{formatDateShort(b.birthdate)}</TableCell>
-                      <TableCell>{b.contactNumber || "—"}</TableCell>
-                      <TableCell>{b.sharePercentage != null ? `${b.sharePercentage}%` : "—"}</TableCell>
+                      <TableCell className="font-semibold text-foreground py-3">{b.fullName}</TableCell>
+                      <TableCell className="py-3">{b.relationship}</TableCell>
+                      <TableCell className="py-3">{formatDateShort(b.birthdate)}</TableCell>
+                      <TableCell className="py-3">{b.contactNumber || "—"}</TableCell>
+                      <TableCell className="font-medium py-3">{b.sharePercentage != null ? `${b.sharePercentage}%` : "—"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -178,25 +234,25 @@ export default function MemberProfilePage() {
           {contributions.length === 0 ? (
             <EmptyState title="No contributions on record" />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Reference #</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Payment Date</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Reference #</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Period</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Amount</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Payment Date</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {contributions.map((c) => (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium text-foreground">{c.referenceNumber}</TableCell>
-                      <TableCell>{c.contributionPeriod}</TableCell>
-                      <TableCell>{formatCurrency(c.amount)}</TableCell>
-                      <TableCell>{formatDateShort(c.paymentDate)}</TableCell>
-                      <TableCell><StatusBadge label={c.status} tone={CONTRIBUTION_STATUS_TONE[c.status]} /></TableCell>
+                      <TableCell className="font-semibold text-foreground py-3">{c.referenceNumber}</TableCell>
+                      <TableCell className="py-3">{c.contributionPeriod}</TableCell>
+                      <TableCell className="py-3">{formatCurrency(c.amount)}</TableCell>
+                      <TableCell className="py-3">{formatDateShort(c.paymentDate)}</TableCell>
+                      <TableCell className="py-3"><StatusBadge label={c.status} tone={CONTRIBUTION_STATUS_TONE[c.status]} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -209,27 +265,27 @@ export default function MemberProfilePage() {
           {loans.length === 0 ? (
             <EmptyState title="No loan applications on record" />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Application #</TableHead>
-                    <TableHead>Loan Type</TableHead>
-                    <TableHead>Requested Amount</TableHead>
-                    <TableHead>Outstanding Balance</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Application #</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Loan Type</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Requested Amount</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Outstanding Balance</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loans.map((l) => (
                     <TableRow key={l.id}>
-                      <TableCell>
-                        <Link to={`/loans/${l.id}`} className="font-medium text-primary hover:underline">{l.applicationNumber}</Link>
+                      <TableCell className="py-3">
+                        <Link to={`/loans/${l.id}`} className="font-semibold text-primary hover:underline">{l.applicationNumber}</Link>
                       </TableCell>
-                      <TableCell>{l.loanTypeName}</TableCell>
-                      <TableCell>{formatCurrency(l.requestedAmount)}</TableCell>
-                      <TableCell>{formatCurrency(l.outstandingBalance)}</TableCell>
-                      <TableCell><StatusBadge label={l.status} tone={LOAN_STATUS_TONE[l.status]} /></TableCell>
+                      <TableCell className="py-3">{l.loanTypeName}</TableCell>
+                      <TableCell className="py-3">{formatCurrency(l.requestedAmount)}</TableCell>
+                      <TableCell className="py-3">{formatCurrency(l.outstandingBalance)}</TableCell>
+                      <TableCell className="py-3"><StatusBadge label={l.status} tone={LOAN_STATUS_TONE[l.status]} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -239,28 +295,33 @@ export default function MemberProfilePage() {
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
-          {payments.length === 0 ? (
+          {isLoadingPayments ? (
+            <div className="flex min-h-40 items-center justify-center animate-pulse" role="status">
+              <Loader2 className="size-7 animate-spin text-primary" aria-hidden="true" />
+              <span className="sr-only">Loading member loan payments</span>
+            </div>
+          ) : payments.length === 0 ? (
             <EmptyState title="No loan payments on record" />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Reference #</TableHead>
-                    <TableHead>Loan Application #</TableHead>
-                    <TableHead>Payment Date</TableHead>
-                    <TableHead>Amount Paid</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Reference #</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Loan Application #</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Payment Date</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Amount Paid</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payments.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="font-medium text-foreground">{p.paymentReferenceNumber}</TableCell>
-                      <TableCell>{p.loanApplicationNumber}</TableCell>
-                      <TableCell>{formatDateShort(p.paymentDate)}</TableCell>
-                      <TableCell>{formatCurrency(p.amountPaid)}</TableCell>
-                      <TableCell><StatusBadge label={p.status} tone={p.status === "Posted" ? "success" : "danger"} /></TableCell>
+                      <TableCell className="font-semibold text-foreground py-3">{p.paymentReferenceNumber}</TableCell>
+                      <TableCell className="py-3">{p.loanApplicationNumber}</TableCell>
+                      <TableCell className="py-3">{formatDateShort(p.paymentDate)}</TableCell>
+                      <TableCell className="py-3">{formatCurrency(p.amountPaid)}</TableCell>
+                      <TableCell className="py-3"><StatusBadge label={p.status} tone={p.status === "Posted" ? "success" : "danger"} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -273,25 +334,25 @@ export default function MemberProfilePage() {
           {benefits.length === 0 ? (
             <EmptyState title="No benefit applications on record" />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Application #</TableHead>
-                    <TableHead>Benefit Type</TableHead>
-                    <TableHead>Requested Amount</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Application #</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Benefit Type</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Requested Amount</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {benefits.map((b) => (
                     <TableRow key={b.id}>
-                      <TableCell>
-                        <Link to={`/benefits/${b.id}`} className="font-medium text-primary hover:underline">{b.applicationNumber}</Link>
+                      <TableCell className="py-3">
+                        <Link to={`/benefits/${b.id}`} className="font-semibold text-primary hover:underline">{b.applicationNumber}</Link>
                       </TableCell>
-                      <TableCell>{b.benefitTypeName}</TableCell>
-                      <TableCell>{formatCurrency(b.requestedAmount)}</TableCell>
-                      <TableCell><StatusBadge label={b.status} tone={BENEFIT_STATUS_TONE[b.status]} /></TableCell>
+                      <TableCell className="py-3">{b.benefitTypeName}</TableCell>
+                      <TableCell className="py-3">{formatCurrency(b.requestedAmount)}</TableCell>
+                      <TableCell className="py-3"><StatusBadge label={b.status} tone={BENEFIT_STATUS_TONE[b.status]} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -304,49 +365,62 @@ export default function MemberProfilePage() {
           {member.documents.length === 0 ? (
             <EmptyState icon={FileText} title="No documents uploaded" description="Documents can be uploaded when editing this member's profile." />
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {member.documents.map((doc) => (
-                <div key={doc.id} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <FileText className="size-4" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground">{doc.category} · {doc.fileSize} · {formatDateShort(doc.uploadedAt)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <DocumentGallery
+              items={member.documents.map(
+                (doc): DocumentGalleryItem => ({
+                  key: doc.id,
+                  category: doc.category,
+                  node: (
+                    <DocumentCard
+                      title={doc.category}
+                      fileName={doc.fileName}
+                      fileUrl={doc.fileUrl}
+                      fileSize={doc.fileSize}
+                      uploadedAt={formatDateShort(doc.uploadedAt)}
+                      uploadedBy={doc.uploadedBy}
+                    />
+                  ),
+                })
+              )}
+            />
           )}
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <dl className="grid grid-cols-1 gap-x-12 gap-y-3.5 text-sm md:grid-cols-2">
               <Detail label="Record Created" value={`${formatDateShort(member.createdAt)} by ${member.createdBy}`} />
               <Detail label="Last Updated" value={formatDateShort(member.updatedAt)} />
             </dl>
           </div>
         </TabsContent>
       </Tabs>
+
+      {member.profilePhotoUrl && (
+        <ImagePreviewDialog
+          open={photoPreviewOpen}
+          onOpenChange={setPhotoPreviewOpen}
+          images={[{ url: member.profilePhotoUrl, name: `${member.fullName} — Profile Photo` }]}
+        />
+      )}
     </div>
   )
 }
 
 function SummaryStat({ label, value, tone }: { label: string; value: string; tone?: "danger" }) {
   return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`font-heading text-base font-semibold ${tone === "danger" ? "text-destructive" : "text-foreground"}`}>{value}</p>
+    <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3 shadow-inner">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">{label}</p>
+      <p className={`font-heading text-lg font-bold tracking-tight mt-1 ${tone === "danger" ? "text-destructive" : "text-foreground"}`}>{value}</p>
     </div>
   )
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium text-foreground">{value}</dd>
-    </>
+    <div className="flex flex-col gap-1 border-b border-border/30 pb-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/85 shrink-0">{label}</dt>
+      <dd className="text-sm font-medium text-foreground text-left sm:text-right truncate max-w-md">{value}</dd>
+    </div>
   )
 }

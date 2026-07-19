@@ -29,7 +29,7 @@ export function MemberSelectionStep({
   return (
     <div className="space-y-4">
       <div className="max-w-lg">
-        <MemberSearchSelect value={selectedMemberId} onSelect={onSelect} placeholder="Search by member number, name, office, or position…" />
+        <MemberSearchSelect value={selectedMemberId} selectedMember={member} onSelect={onSelect} placeholder="Search by member number, name, office, or position…" />
       </div>
       {member ? (
         <div className="space-y-4">

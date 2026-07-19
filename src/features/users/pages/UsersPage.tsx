@@ -2,7 +2,7 @@ import * as React from "react"
 import { Link } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Eye, History, KeyRound, MoreHorizontal, PencilLine, Plus, Power, ShieldCheck } from "lucide-react"
+import { Eye, History, KeyRound, Loader2, MoreHorizontal, PencilLine, Plus, Power, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
@@ -132,8 +132,11 @@ export default function UsersPage() {
                 </DropdownMenuItem>
               </PermissionGuard>
               <PermissionGuard permission="users.reset_password">
-                <DropdownMenuItem onClick={() => resetPasswordMutation.mutate(user.id)}>
-                  <KeyRound /> Reset Password
+                <DropdownMenuItem
+                  disabled={resetPasswordMutation.isPending && resetPasswordMutation.variables === user.id}
+                  onClick={() => resetPasswordMutation.mutate(user.id)}
+                >
+                  {resetPasswordMutation.isPending && resetPasswordMutation.variables === user.id ? <Loader2 className="animate-spin" /> : <KeyRound />} Reset Password
                 </DropdownMenuItem>
               </PermissionGuard>
               <PermissionGuard permission="users.view_login_history">
@@ -142,8 +145,11 @@ export default function UsersPage() {
                 </DropdownMenuItem>
               </PermissionGuard>
               <PermissionGuard anyOf={["users.activate", "users.deactivate"]}>
-                <DropdownMenuItem onClick={() => toggleMutation.mutate(user.id)}>
-                  <Power /> {user.status === "Active" ? "Deactivate" : "Activate"}
+                <DropdownMenuItem
+                  disabled={toggleMutation.isPending && toggleMutation.variables === user.id}
+                  onClick={() => toggleMutation.mutate(user.id)}
+                >
+                  {toggleMutation.isPending && toggleMutation.variables === user.id ? <Loader2 className="animate-spin" /> : <Power />} {user.status === "Active" ? "Deactivate" : "Activate"}
                 </DropdownMenuItem>
               </PermissionGuard>
             </DropdownMenuContent>

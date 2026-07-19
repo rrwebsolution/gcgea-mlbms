@@ -28,6 +28,7 @@ export interface MemberDocument {
   memberId: string
   category: DocumentCategory
   fileName: string
+  fileUrl: string
   uploadedAt: string
   uploadedBy: string
   fileSize: string
@@ -35,6 +36,14 @@ export interface MemberDocument {
 
 export interface Member {
   id: string
+  /**
+   * Technically nullable at the API level while isDraft=true (an
+   * in-progress draft can be missing almost anything below, not just this)
+   * — kept non-optional since ~all real consumers correctly assume a
+   * submitted member; draft-aware screens (MemberRegistrationPage resume,
+   * Draft Center) apply their own `?? ""`/`?? "—"` fallbacks instead of
+   * loosening this globally. See isDraft/draftReferenceNo.
+   */
   memberNumber: string
   employeeNumber: string
   surname: string
@@ -69,6 +78,12 @@ export interface Member {
   isArchived: boolean
   archivedAt?: string
   archivedReason?: string
+
+  /** Draft bookkeeping — see the Save as Draft system (useDraft, MemberRegistrationPage). */
+  isDraft: boolean
+  draftReferenceNo?: string
+  draftCompletionPercentage?: number
+  draftCurrentStep?: number
 
   createdAt: string
   updatedAt: string

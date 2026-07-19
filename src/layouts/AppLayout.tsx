@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom"
 import { SidebarProvider } from "@/contexts/SidebarContext"
 import { BreadcrumbProvider } from "@/contexts/BreadcrumbContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { AppBackground } from "@/components/shared/AppBackground"
 import { Sidebar } from "@/layouts/Sidebar"
 import { MobileSidebar } from "@/layouts/MobileSidebar"
 import { Topbar } from "@/layouts/Topbar"
@@ -13,7 +14,8 @@ export function AppLayout() {
     <SidebarProvider>
       <BreadcrumbProvider>
         <TooltipProvider delay={200}>
-          <div className="flex min-h-svh bg-muted/30">
+          <div className="flex min-h-svh">
+            <AppBackground intensity="subtle" position="fixed" />
             <Sidebar />
             <MobileSidebar />
             <div className="flex min-w-0 flex-1 flex-col">

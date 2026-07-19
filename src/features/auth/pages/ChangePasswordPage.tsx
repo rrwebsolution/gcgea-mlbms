@@ -28,7 +28,7 @@ export default function ChangePasswordPage() {
   async function onSubmit(values: ChangePasswordFormValues) {
     setFormError(null)
     try {
-      await authService.changePassword(values.currentPassword, values.newPassword)
+      await authService.changePassword(values.currentPassword, values.newPassword, values.confirmPassword)
       toast.success("Password updated successfully.")
       reset()
     } catch (err) {
@@ -64,7 +64,7 @@ export default function ChangePasswordPage() {
             {errors.confirmPassword && <p className="text-xs font-medium text-destructive">{errors.confirmPassword.message}</p>}
           </div>
           <div className="flex justify-end">
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
               {isSubmitting ? <Loader2 className="animate-spin" /> : <KeyRound />}
               {isSubmitting ? "Updating…" : "Update Password"}
             </Button>

@@ -9,20 +9,26 @@ interface OfficeSelectProps {
   disabled?: boolean
   activeOnly?: boolean
   className?: string
+  /** Which office field to use as the option value. Filters match by name; foreign-key fields (e.g. officeId) need the id. Defaults to "name". */
+  valueField?: "id" | "name"
 }
 
-export function OfficeSelect({ value, onValueChange, placeholder = "Select office", disabled, activeOnly = true, className }: OfficeSelectProps) {
+export function OfficeSelect({ value, onValueChange, placeholder = "Select office", disabled, activeOnly = true, className, valueField = "name" }: OfficeSelectProps) {
   const { data } = useQuery({ queryKey: ["offices", "all"], queryFn: listAllOffices })
   const offices = (data ?? []).filter((o) => !activeOnly || o.status === "Active")
 
   return (
     <Select value={value} onValueChange={(v) => onValueChange(v ?? "")} disabled={disabled}>
       <SelectTrigger className={className ?? "w-full"}>
-        <SelectValue placeholder={placeholder} />
+        <SelectValue placeholder={placeholder}>
+          {(selectedValue: string) =>
+            offices.find((office) => (valueField === "id" ? office.id : office.name) === selectedValue)?.name ?? placeholder
+          }
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {offices.map((office) => (
-          <SelectItem key={office.id} value={office.name}>
+          <SelectItem key={office.id} value={valueField === "id" ? office.id : office.name}>
             {office.name}
           </SelectItem>
         ))}

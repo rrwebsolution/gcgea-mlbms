@@ -1,15 +1,5 @@
 import type { BenefitApplication, BenefitType, PaginatedResponse, PaginationParams } from "@/types"
-import { simulateDelay } from "./http"
-import { MOCK_BENEFITS } from "./mock-data/benefits"
-import { MOCK_BENEFIT_TYPES } from "./mock-data/benefit-types"
-import { paginate, sortBy } from "@/utils/paginate"
-import { readStorage, writeStorage, STORAGE_KEYS } from "@/lib/storage"
-
-let benefits: BenefitApplication[] = readStorage<BenefitApplication[]>(STORAGE_KEYS.mockBenefits, MOCK_BENEFITS)
-
-function persist() {
-  writeStorage(STORAGE_KEYS.mockBenefits, benefits)
-}
+import { api } from "@/lib/api"
 
 export interface BenefitListParams extends PaginationParams {
   status?: string
@@ -17,89 +7,84 @@ export interface BenefitListParams extends PaginationParams {
 }
 
 export async function listBenefits(params: BenefitListParams = {}): Promise<PaginatedResponse<BenefitApplication>> {
-  let items = benefits
-  if (params.search) {
-    const term = params.search.toLowerCase()
-    items = items.filter((b) => b.memberName.toLowerCase().includes(term) || b.applicationNumber.toLowerCase().includes(term))
-  }
-  if (params.status) items = items.filter((b) => b.status === params.status)
-  if (params.benefitTypeId) items = items.filter((b) => b.benefitTypeId === params.benefitTypeId)
-  items = sortBy(items, params.sortBy, params.sortDir)
-  return simulateDelay(paginate(items, params.page, params.perPage))
+  const { data } = await api.get<PaginatedResponse<BenefitApplication>>("/benefits", { params })
+  return data
 }
 
 export async function getBenefit(id: string): Promise<BenefitApplication | undefined> {
-  return simulateDelay(benefits.find((b) => b.id === id))
+  const { data } = await api.get<BenefitApplication>(`/benefits/${id}`)
+  return data
 }
 
+// Best-effort synchronous cache of the last successful listBenefitTypes() fetch —
+// populated on every resolve so getBenefitTypesSync() has data available for code
+// that still calls it synchronously. Empty until the first real fetch completes.
+let cachedBenefitTypes: BenefitType[] = []
+
 export async function listBenefitTypes(): Promise<BenefitType[]> {
-  return simulateDelay(MOCK_BENEFIT_TYPES, 150)
+  const { data } = await api.get<BenefitType[]>("/benefit-types")
+  cachedBenefitTypes = data
+  return data
 }
 
 export function getBenefitTypesSync(): BenefitType[] {
-  return MOCK_BENEFIT_TYPES
+  return cachedBenefitTypes
+}
+
+export async function createBenefitType(input: Omit<BenefitType, "id">): Promise<BenefitType> {
+  const { data } = await api.post<BenefitType>("/benefit-types", input)
+  return data
+}
+
+export async function updateBenefitType(id: string, input: Partial<Omit<BenefitType, "id">>): Promise<BenefitType> {
+  const { data } = await api.put<BenefitType>(`/benefit-types/${id}`, input)
+  return data
+}
+
+export async function deleteBenefitType(id: string): Promise<void> {
+  await api.delete(`/benefit-types/${id}`)
+}
+
+// Best-effort synchronous cache of all benefits — mirrors getAllLoans() in
+// loans.service.ts. Populated by listAllBenefits(); empty until the first
+// call resolves.
+let cachedBenefits: BenefitApplication[] = []
+
+export async function listAllBenefits(): Promise<BenefitApplication[]> {
+  const { data } = await api.get<BenefitApplication[]>("/benefits/all")
+  cachedBenefits = data
+  return data
 }
 
 export function getAllBenefits(): BenefitApplication[] {
-  return benefits
+  return cachedBenefits
 }
 
 export function getMemberBenefits(memberId: string): BenefitApplication[] {
-  return benefits.filter((b) => b.memberId === memberId)
-}
-
-function nextApplicationNumber(): string {
-  const year = new Date().getFullYear()
-  const countThisYear = benefits.filter((b) => b.applicationNumber.includes(`-${year}-`)).length
-  return `GCGEA-BEN-${year}-${String(countThisYear + 1).padStart(6, "0")}`
+  return cachedBenefits.filter((b) => b.memberId === memberId)
 }
 
 export interface CreateBenefitApplicationInput {
   memberId: string
-  memberNumber: string
-  memberName: string
-  officeName: string
-  benefitTypeId: string
-  benefitTypeName: string
-  requestedAmount: number
-  applicationDate: string
+  benefitTypeId?: string
+  requestedAmount?: number
   incidentDate?: string
-  reason: string
-  beneficiaryOrRecipient: string
+  reason?: string
+  beneficiaryOrRecipient?: string
   requirements: { label: string; completed: boolean }[]
-  remarks?: string
   asDraft: boolean
-  createdBy: string
+  draftCurrentStep?: number
 }
 
 export async function createBenefitApplication(input: CreateBenefitApplicationInput): Promise<BenefitApplication> {
-  const id = `ben-${Date.now()}`
-  const now = new Date().toISOString()
-  const status = input.asDraft ? "Draft" : "Submitted"
+  const { data } = await api.post<BenefitApplication>("/benefits", input)
+  cachedBenefits = [data, ...cachedBenefits]
+  return data
+}
 
-  const benefit: BenefitApplication = {
-    id,
-    applicationNumber: nextApplicationNumber(),
-    applicationDate: input.applicationDate,
-    memberId: input.memberId,
-    memberNumber: input.memberNumber,
-    memberName: input.memberName,
-    officeName: input.officeName,
-    benefitTypeId: input.benefitTypeId,
-    benefitTypeName: input.benefitTypeName,
-    requestedAmount: input.requestedAmount,
-    reason: input.reason,
-    incidentDate: input.incidentDate,
-    beneficiaryOrRecipient: input.beneficiaryOrRecipient,
-    requirements: input.requirements,
-    status,
-    remarks: input.remarks,
-    createdAt: now,
-    updatedAt: now,
-    createdBy: input.createdBy,
-  }
-
-  benefits = [benefit, ...benefits]
-  persist()
-  return simulateDelay(benefit, 500)
+/** Edits a draft application in place — only allowed while the benefit is still status "Draft". */
+export async function updateBenefitApplication(id: string, input: CreateBenefitApplicationInput): Promise<BenefitApplication> {
+  const { data } = await api.put<BenefitApplication>(`/benefits/${id}`, input)
+  cachedBenefits = cachedBenefits.map((b) => (b.id === data.id ? data : b))
+  return data
 }

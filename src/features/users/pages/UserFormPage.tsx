@@ -11,6 +11,7 @@ import { AlertBanner } from "@/components/shared/AlertBanner"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { PermissionMatrix } from "@/features/roles/components/PermissionMatrix"
 import { RoleMultiSelect } from "@/features/users/components/RoleMultiSelect"
+import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,6 +31,8 @@ export default function UserFormPage() {
 
   const { data: existingUser, isLoading: isLoadingUser } = useQuery({ queryKey: ["users", id], queryFn: () => getUser(id!), enabled: isEdit })
   const { data: allRoles = [] } = useQuery({ queryKey: ["roles", "all"], queryFn: listAllRoles })
+
+  useBreadcrumbExtra(isEdit ? existingUser?.fullName : "Add User")
 
   const [showPassword, setShowPassword] = React.useState(false)
   const [allowedPermissions, setAllowedPermissions] = React.useState<PermissionCode[]>([])
@@ -311,15 +314,17 @@ export default function UserFormPage() {
             Cancel
           </Button>
           {!isEdit && (
-            <Button type="button" variant="secondary" disabled={isSubmitting} onClick={handleSubmit(onSubmitAddAnother)}>
-              Save and Add Another
+            <Button type="button" variant="secondary" disabled={isSubmitting} aria-busy={isSubmitting} onClick={handleSubmit(onSubmitAddAnother)}>
+              {isSubmitting && <Loader2 className="animate-spin" aria-hidden="true" />}
+              {isSubmitting ? "Saving…" : "Save and Add Another"}
             </Button>
           )}
-          <Button type="button" variant="secondary" disabled={isSubmitting} onClick={handleSubmit(onSubmitConfigurePermissions)}>
-            Save and Configure Permissions
+          <Button type="button" variant="secondary" disabled={isSubmitting} aria-busy={isSubmitting} onClick={handleSubmit(onSubmitConfigurePermissions)}>
+            {isSubmitting && <Loader2 className="animate-spin" aria-hidden="true" />}
+            {isSubmitting ? "Saving…" : "Save and Configure Permissions"}
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
+          <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+            {isSubmitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Save aria-hidden="true" />}
             {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Save User"}
           </Button>
         </div>

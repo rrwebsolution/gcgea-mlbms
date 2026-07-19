@@ -1,6 +1,7 @@
 import * as React from "react"
 import type { AuthUser, LoginCredentials, PermissionCode } from "@/types"
 import * as authService from "@/services/auth.service"
+import { warmSyncCaches } from "@/lib/warm-caches"
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -26,18 +27,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionExpired, setSessionExpired] = React.useState(false)
 
   React.useEffect(() => {
-    // getStoredSession() resolves synchronously, so without a minimum display
-    // time the startup/session-restore AppLoader would flash for under a frame
-    // on every refresh — long enough to crash but too short to actually see.
+    // Without a minimum display time the startup/session-restore AppLoader
+    // would flash for under a frame whenever /auth/me resolves quickly —
+    // long enough to crash but too short to actually see.
     const MIN_LOADER_MS = 700
+    let cancelled = false
     const start = performance.now()
-    const stored = authService.getStoredSession()
-    const elapsed = performance.now() - start
-    const timer = setTimeout(() => {
-      setUser(stored)
-      setIsInitializing(false)
-    }, Math.max(0, MIN_LOADER_MS - elapsed))
-    return () => clearTimeout(timer)
+
+    authService.getCurrentUser().then((resolved) => {
+      if (cancelled) return
+      // Not awaited — isInitializing doesn't wait on this. See warm-caches.ts.
+      if (resolved) warmSyncCaches()
+      const elapsed = performance.now() - start
+      setTimeout(() => {
+        if (cancelled) return
+        setUser(resolved)
+        setIsInitializing(false)
+      }, Math.max(0, MIN_LOADER_MS - elapsed))
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   React.useEffect(() => {
@@ -53,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const authUser = await authService.login(credentials)
       setUser(authUser)
+      warmSyncCaches()
     } finally {
       setIsLoggingIn(false)
     }

@@ -2,7 +2,7 @@ import * as React from "react"
 import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Plus } from "lucide-react"
+import { PencilLine, Plus } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { DataTable } from "@/components/shared/DataTable"
@@ -10,6 +10,8 @@ import { Pagination } from "@/components/shared/Pagination"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ExportButtons } from "@/components/shared/ExportButtons"
 import { PermissionButton } from "@/components/shared/PermissionButton"
+import { PermissionGuard } from "@/components/shared/PermissionGuard"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { listBenefits } from "@/services/benefits.service"
 import { BENEFIT_STATUS_TONE } from "@/constants/status"
@@ -47,6 +49,19 @@ export default function BenefitsPage({ presetStatus, title = "Benefit Applicatio
     { accessorKey: "approvedAmount", header: "Approved Amount", cell: ({ row }) => row.original.approvedAmount != null ? formatCurrency(row.original.approvedAmount) : "—" },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={BENEFIT_STATUS_TONE[row.original.status]} /> },
     { accessorKey: "releaseDate", header: "Release Date", cell: ({ row }) => formatDateShort(row.original.releaseDate) },
+    {
+      id: "actions",
+      header: "Actions",
+      enableHiding: false,
+      cell: ({ row }) =>
+        row.original.status === "Draft" ? (
+          <PermissionGuard permission="benefits.update">
+            <Button variant="outline" size="sm" render={<Link to={`/benefits/${row.original.id}/edit`} />}>
+              <PencilLine /> Continue Editing
+            </Button>
+          </PermissionGuard>
+        ) : null,
+    },
   ]
 
   return (

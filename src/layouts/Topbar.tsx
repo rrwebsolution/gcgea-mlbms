@@ -14,28 +14,43 @@ export function Topbar() {
   const breadcrumbs = useBreadcrumbs()
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 backdrop-blur-lg shadow-sm">
       <HeaderDropdownProvider>
-        <div className="grid h-14 grid-cols-[auto_1fr_auto] items-center gap-2 px-3 sm:px-4">
-          <div className="flex min-w-0 items-center gap-2 justify-self-start">
-            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation menu">
-              <Menu />
+        <div className="grid h-14 grid-cols-[auto_1fr_auto] items-center gap-4 px-4 sm:px-6">
+          
+          {/* Left Slot: Mobile Navigation Trigger */}
+          <div className="flex min-w-0 items-center gap-2 justify-self-start lg:hidden">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="hover:bg-accent/80 active:scale-95 transition-all duration-200" 
+              onClick={() => setMobileOpen(true)} 
+              aria-label="Open navigation menu"
+            >
+              <Menu className="size-5 text-muted-foreground" />
             </Button>
           </div>
 
+          {/* Center Slot: Focused Search Box */}
           <div className="flex min-w-0 justify-center">
-            <GlobalSearch />
+            <div className="w-full max-w-md transition-all duration-200">
+              <GlobalSearch />
+            </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 justify-self-end sm:gap-1.5">
+          {/* Right Slot: Action Utilities */}
+          <div className="flex shrink-0 items-center gap-2 justify-self-end sm:gap-3">
             <ThemeSelector />
             <NotificationDropdown />
             <UserMenu />
           </div>
+
         </div>
       </HeaderDropdownProvider>
+
+      {/* Structured Sub-Header Breadcrumb Ribbon */}
       {breadcrumbs.length > 0 && (
-        <div className="border-t border-border/60 px-4 py-1.5 sm:px-6">
+        <div className="border-t border-border/40 bg-muted/25 px-4 py-2 sm:px-6 transition-all duration-300">
           <AppBreadcrumbs items={breadcrumbs} />
         </div>
       )}

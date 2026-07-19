@@ -10,6 +10,8 @@ import { DataTable } from "@/components/shared/DataTable"
 import { Pagination } from "@/components/shared/Pagination"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ProfileCompleteness } from "@/components/shared/ProfileCompleteness"
+import { DraftStatusBadge } from "@/components/shared/DraftStatusBadge"
+import { DraftCompletionBar } from "@/components/shared/DraftCompletionBar"
 import { ExportButtons } from "@/components/shared/ExportButtons"
 import { PrintButton } from "@/components/shared/PrintButton"
 import { PermissionButton } from "@/components/shared/PermissionButton"
@@ -33,11 +35,12 @@ import type { Member } from "@/types"
 interface MembersPageProps {
   archived?: boolean
   incompleteOnly?: boolean
+  draftsOnly?: boolean
   title?: string
   description?: string
 }
 
-export default function MembersPage({ archived = false, incompleteOnly = false, title, description }: MembersPageProps) {
+export default function MembersPage({ archived = false, incompleteOnly = false, draftsOnly = false, title, description }: MembersPageProps) {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -57,7 +60,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   const sortDir = sorting[0] ? (sorting[0].desc ? "desc" : "asc") : undefined
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["members", { archived, incompleteOnly, search, office, sex, membershipStatus, retireeStatus, page, perPage, sortBy, sortDir }],
+    queryKey: ["members", { archived, incompleteOnly, draftsOnly, search, office, sex, membershipStatus, retireeStatus, page, perPage, sortBy, sortDir }],
     queryFn: () =>
       archived
         ? listArchivedMembers({ search, page, perPage, sortBy, sortDir })
@@ -68,6 +71,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
             membershipStatus: membershipStatus || undefined,
             retireeStatus: retireeStatus || undefined,
             incompleteOnly: incompleteOnly || undefined,
+            draftsOnly: draftsOnly || undefined,
             page,
             perPage,
             sortBy,
@@ -105,12 +109,20 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   const columns: ColumnDef<Member, unknown>[] = [
     {
       accessorKey: "memberNumber",
-      header: "Member Number",
-      cell: ({ row }) => (
-        <Link to={`/members/${row.original.id}`} className="font-medium text-primary hover:underline">
-          {row.original.memberNumber}
-        </Link>
-      ),
+      header: draftsOnly ? "Draft Reference" : "Member Number",
+      cell: ({ row }) =>
+        draftsOnly ? (
+          <div className="flex items-center gap-2">
+            <Link to={`/members/${row.original.id}/edit`} className="font-medium text-primary hover:underline">
+              {row.original.draftReferenceNo ?? "Untitled Member Draft"}
+            </Link>
+            <DraftStatusBadge status="Draft" />
+          </div>
+        ) : (
+          <Link to={`/members/${row.original.id}`} className="font-medium text-primary hover:underline">
+            {row.original.memberNumber}
+          </Link>
+        ),
     },
     {
       accessorKey: "fullName",
@@ -136,35 +148,47 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
     { accessorKey: "retireeStatus", header: "Retiree Status" },
     {
       id: "profileCompleteness",
-      header: "Profile Completeness",
+      header: draftsOnly ? "Draft Completion" : "Profile Completeness",
       enableSorting: false,
-      cell: ({ row }) => <ProfileCompleteness percentage={profileCompleteness(row.original)} />,
+      cell: ({ row }) =>
+        draftsOnly ? (
+          <DraftCompletionBar percentage={row.original.draftCompletionPercentage ?? 0} showLabel={false} />
+        ) : (
+          <ProfileCompleteness percentage={profileCompleteness(row.original)} />
+        ),
     },
     {
       id: "actions",
       header: "Actions",
       enableHiding: false,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" render={<Link to={`/members/${row.original.id}`} />} aria-label="View member">
-            <Eye />
-          </Button>
+      cell: ({ row }) =>
+        draftsOnly ? (
           <PermissionGuard permission="members.update">
-            <Button variant="ghost" size="icon-sm" render={<Link to={`/members/${row.original.id}/edit`} />} aria-label="Edit member">
-              <PencilLine />
+            <Button variant="outline" size="sm" render={<Link to={`/members/${row.original.id}/edit`} />}>
+              <PencilLine /> Continue Editing
             </Button>
           </PermissionGuard>
-          {archived ? (
-            <PermissionButton permission="members.restore" variant="ghost" size="icon-sm" onClick={() => setRestoreTarget(row.original)} aria-label="Restore member">
-              <ArchiveRestore />
-            </PermissionButton>
-          ) : (
-            <PermissionButton permission="members.archive" variant="ghost" size="icon-sm" onClick={() => setArchiveTarget(row.original)} aria-label="Archive member">
-              <Archive />
-            </PermissionButton>
-          )}
-        </div>
-      ),
+        ) : (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon-sm" render={<Link to={`/members/${row.original.id}`} />} aria-label="View member">
+              <Eye />
+            </Button>
+            <PermissionGuard permission="members.update">
+              <Button variant="ghost" size="icon-sm" render={<Link to={`/members/${row.original.id}/edit`} />} aria-label="Edit member">
+                <PencilLine />
+              </Button>
+            </PermissionGuard>
+            {archived ? (
+              <PermissionButton permission="members.restore" variant="ghost" size="icon-sm" onClick={() => setRestoreTarget(row.original)} aria-label="Restore member">
+                <ArchiveRestore />
+              </PermissionButton>
+            ) : (
+              <PermissionButton permission="members.archive" variant="ghost" size="icon-sm" onClick={() => setArchiveTarget(row.original)} aria-label="Archive member">
+                <Archive />
+              </PermissionButton>
+            )}
+          </div>
+        ),
     },
   ]
 
@@ -173,10 +197,18 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   return (
     <div className="space-y-5">
       <PageHeader
-        title={title ?? (archived ? "Archived Members" : "Member Management")}
-        description={description ?? (archived ? "Members that have been archived. Their financial records remain intact." : "Manage GCGEA member records, profiles, and beneficiaries.")}
+        title={title ?? (archived ? "Archived Members" : draftsOnly ? "Member Drafts" : "Member Management")}
+        description={
+          description ??
+          (archived
+            ? "Members that have been archived. Their financial records remain intact."
+            : draftsOnly
+              ? "Incomplete registrations saved as drafts. Continue editing to finish and submit them."
+              : "Manage GCGEA member records, profiles, and beneficiaries.")
+        }
         actions={
-          !archived && (
+          !archived &&
+          !draftsOnly && (
             <>
               <PrintButton permission="members.print" label="Print List" />
               <ExportButtons permission="members.export" label="members" />
@@ -201,7 +233,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
             placeholder="Search by name, member #, office, position, contact…"
             className="max-w-sm"
           />
-          {!archived && (
+          {!archived && !draftsOnly && (
             <>
               <OfficeSelect value={office} onValueChange={updateOfficeFilter} placeholder="All Offices" className="w-40" />
               <Select value={sex || "all"} onValueChange={(v) => { setSex(!v || v === "all" ? "" : v); setPage(1) }}>
@@ -253,8 +285,14 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
           rowSelection={rowSelection}
           onRowSelectionChange={setRowSelection}
           getRowId={(m) => m.id}
-          emptyTitle={archived ? "No archived members" : incompleteOnly ? "All profiles complete" : "No members found"}
-          emptyDescription={incompleteOnly ? "Every member profile currently has complete information." : "Try adjusting your search or filters."}
+          emptyTitle={archived ? "No archived members" : draftsOnly ? "No member drafts" : incompleteOnly ? "All profiles complete" : "No members found"}
+          emptyDescription={
+            draftsOnly
+              ? "Draft registrations you save will appear here so you can continue them later."
+              : incompleteOnly
+                ? "Every member profile currently has complete information."
+                : "Try adjusting your search or filters."
+          }
         />
         {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>

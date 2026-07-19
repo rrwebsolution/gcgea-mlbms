@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { PermissionMatrix } from "@/features/roles/components/PermissionMatrix"
 import { Button } from "@/components/ui/button"
+import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { getRole, updateRolePermissions } from "@/services/roles.service"
 import { listAllUsers } from "@/services/users.service"
 import { ALL_PERMISSION_CODES, APPROVER_PERMISSION_CODES, ENCODER_PERMISSION_CODES, VIEW_ONLY_PERMISSION_CODES } from "@/constants/permissions"
@@ -27,6 +28,8 @@ export default function RolePermissionsPage() {
 
   const { data: role, isLoading } = useQuery({ queryKey: ["roles", id], queryFn: () => getRole(id) })
   const { data: allUsers = [] } = useQuery({ queryKey: ["users", "all"], queryFn: listAllUsers })
+
+  useBreadcrumbExtra(role?.name)
 
   const [draft, setDraft] = React.useState<PermissionCode[]>([])
   const [showLeaveConfirm, setShowLeaveConfirm] = React.useState(false)

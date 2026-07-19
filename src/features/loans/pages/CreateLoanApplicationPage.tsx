@@ -1,6 +1,6 @@
 import * as React from "react"
-import { useNavigate } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   AlertTriangle,
@@ -9,7 +9,6 @@ import {
   FilePlus2,
   Loader2,
   Printer,
-  Save,
   ShieldAlert,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -21,6 +20,9 @@ import { FileUploader } from "@/components/shared/FileUploader"
 import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { AlertBanner } from "@/components/shared/AlertBanner"
+import { SaveDraftButton } from "@/components/shared/SaveDraftButton"
+import { DraftStatusBadge } from "@/components/shared/DraftStatusBadge"
+import { UnsavedChangesDialog } from "@/components/shared/UnsavedChangesDialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,13 +34,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { getMember } from "@/services/members.service"
 import { getAllContributions } from "@/services/contributions.service"
-import { createLoanApplication, getLoanTypesSync, getMemberLoans } from "@/services/loans.service"
+import { createLoanApplication, getLoan, listLoanTypes, getMemberLoans, updateLoanApplication, type CreateLoanApplicationInput } from "@/services/loans.service"
 import { computeLoan } from "@/utils/loan-math"
 import { evaluateLoanEligibility, resultFor } from "@/utils/eligibility"
 import { downloadCsv } from "@/utils/csv"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
-import type { LoanRequirementItem, PaymentMethod } from "@/types"
+import { useDraft } from "@/hooks/useDraft"
+import { useAutosaveDraft } from "@/hooks/useAutosaveDraft"
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges"
+import type { LoanApplication, LoanRequirementItem, PaymentMethod } from "@/types"
 
 const STEPS = ["Select Member", "Loan Details", "Eligibility Check", "Loan Computation", "Requirements", "Review & Submit"]
 
@@ -54,11 +59,21 @@ const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Tra
 
 export default function CreateLoanApplicationPage() {
   const navigate = useNavigate()
+  const { id } = useParams()
+  const isEdit = !!id
+  const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
   const { user, hasPermission } = useAuth()
   const canOverride = hasPermission("loans.override_eligibility")
 
+  const { data: existingLoan, isLoading: isLoadingLoan } = useQuery({
+    queryKey: ["loans", id],
+    queryFn: () => getLoan(id!),
+    enabled: isEdit,
+  })
+
   const [step, setStep] = React.useState(1);
-  const [memberId, setMemberId] = React.useState("")
+  const [memberId, setMemberId] = React.useState(() => searchParams.get("member") ?? "")
   const [loanTypeId, setLoanTypeId] = React.useState("")
   const [requestedAmount, setRequestedAmount] = React.useState<number>()
   const [termMonths, setTermMonths] = React.useState<number>()
@@ -81,10 +96,9 @@ export default function CreateLoanApplicationPage() {
   const [agree, setAgree] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [successDialog, setSuccessDialog] = React.useState<{ id: string; applicationNumber: string } | null>(null)
-  const [showCancelConfirm, setShowCancelConfirm] = React.useState(false)
 
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
-  const loanTypes = getLoanTypesSync()
+  const { data: loanTypes = [] } = useQuery({ queryKey: ["loan-types"], queryFn: listLoanTypes })
   const loanType = loanTypes.find((lt) => lt.id === loanTypeId)
 
   const memberLoans = memberId ? getMemberLoans(memberId) : []
@@ -101,6 +115,37 @@ export default function CreateLoanApplicationPage() {
       setTermMonths((prev) => prev ?? Math.min(12, loanType.maxTermMonths))
     }
   }, [loanType])
+
+  // Resuming a draft — restore every field plus the wizard step it was last saved on.
+  React.useEffect(() => {
+    if (!existingLoan) return
+    setMemberId(existingLoan.memberId)
+    setLoanTypeId(existingLoan.loanTypeId)
+    setRequestedAmount(existingLoan.requestedAmount || undefined)
+    setTermMonths(existingLoan.termMonths || undefined)
+    setPurpose(existingLoan.purpose ?? "")
+    setPaymentMethod(existingLoan.paymentMethod ?? "Payroll Deduction")
+    setAssignedOfficer(existingLoan.assignedOfficer || user?.fullName || "")
+    setRequirements(
+      Object.fromEntries(REQUIREMENT_LABELS.map((label) => [label, existingLoan.requirements.find((r) => r.label === label)?.completed ?? false]))
+    )
+    setStep(existingLoan.draftCurrentStep ?? 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingLoan])
+
+  const isDraftContext = isEdit ? existingLoan?.status === "Draft" : false
+
+  const loanDraft = useDraft<CreateLoanApplicationInput, LoanApplication>({
+    draftId: isEdit ? id : undefined,
+    create: createLoanApplication,
+    update: updateLoanApplication,
+    getId: (l) => l.id,
+    onSaved: (l) => {
+      queryClient.setQueryData(["loans", l.id], l)
+      queryClient.invalidateQueries({ queryKey: ["loans"] })
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save draft."),
+  })
 
   const eligibilityItems = member && loanType
     ? evaluateLoanEligibility(member, loanType, requestedAmount, termMonths, contributionMonths, memberLoans)
@@ -125,6 +170,41 @@ export default function CreateLoanApplicationPage() {
   const requirementItems: LoanRequirementItem[] = REQUIREMENT_LABELS.map((label) => ({ label, completed: requirements[label] }))
   const missingRequirements = requirementItems.filter((r) => !r.completed)
 
+  const draftSnapshot: CreateLoanApplicationInput = {
+    memberId,
+    loanTypeId: loanTypeId || undefined,
+    requestedAmount,
+    termMonths,
+    purpose: purpose || undefined,
+    paymentMethod,
+    requirements: requirementItems,
+    asDraft: true,
+    draftCurrentStep: step,
+  }
+
+  async function saveDraft() {
+    if (!memberId) {
+      toast.error("Select a member before saving a draft.")
+      return
+    }
+    try {
+      await loanDraft.save(draftSnapshot)
+      toast.success("Draft saved successfully.")
+    } catch {
+      // Surfaced via loanDraft's onError above.
+    }
+  }
+
+  const autosave = useAutosaveDraft(draftSnapshot, (snap) => (memberId ? loanDraft.save(snap) : Promise.resolve(undefined)), {
+    enabled: Boolean(memberId) && (!isEdit || isDraftContext) && loanDraft.status !== "saving" && !isSubmitting,
+    delayMs: 30000,
+  })
+
+  // No RHF here (plain wizard state) — "dirty" just means the user has started
+  // the application and hasn't finished submitting it yet.
+  const hasUnsavedChanges = Boolean(memberId) && !successDialog
+  const { showPrompt: showUnsavedPrompt, promptLeave, resolvePrompt } = useUnsavedChanges(hasUnsavedChanges)
+
   function canProceedFromStep(s: number): boolean {
     if (s === 1) return !!member
     if (s === 2) return !!loanTypeId && !!requestedAmount && !!termMonths && !!purpose.trim() && !!assignedOfficer.trim()
@@ -139,49 +219,45 @@ export default function CreateLoanApplicationPage() {
       return
     }
     setStep((s) => Math.min(STEPS.length, s + 1))
+    if (memberId) void autosave.triggerNow()
   }
   function goBack() {
     setStep((s) => Math.max(1, s - 1))
   }
 
   async function handleSubmit(asDraft: boolean) {
-    if (!member || !loanType || !requestedAmount || !termMonths || !computation) return
-    if (!asDraft && isBlocked) {
-      toast.error("This application cannot be submitted until eligibility is met or overridden.")
-      return
-    }
-    if (!asDraft && !agree) {
-      toast.error("Please confirm the information has been reviewed and is accurate.")
-      return
+    if (!member) return
+    if (!asDraft) {
+      if (!loanType || !requestedAmount || !termMonths || !computation) return
+      if (isBlocked) {
+        toast.error("This application cannot be submitted until eligibility is met or overridden.")
+        return
+      }
+      if (!agree) {
+        toast.error("Please confirm the information has been reviewed and is accurate.")
+        return
+      }
     }
 
     setIsSubmitting(true)
     try {
-      const loan = await createLoanApplication({
+      const loan = await loanDraft.save({
         memberId: member.id,
-        memberNumber: member.memberNumber,
-        memberName: member.fullName,
-        officeName: member.officeName,
-        loanTypeId: loanType.id,
-        loanTypeName: loanType.name,
+        loanTypeId: loanType?.id,
         requestedAmount,
         termMonths,
-        interestRate: loanType.defaultInterestRate,
-        processingFee: loanType.processingFee,
-        interestMethod: loanType.interestMethod,
-        purpose,
+        purpose: purpose || undefined,
         paymentMethod,
-        applicationDate,
-        assignedOfficer,
-        eligibility: eligibilityItems,
-        eligibilityOverridden: overrideEnabled && eligibilityResult === "Not Eligible",
-        eligibilityOverrideReason: overrideEnabled ? overrideReason : undefined,
         requirements: requirementItems,
         asDraft,
-        createdBy: user?.fullName ?? "System",
+        draftCurrentStep: step,
       })
-      toast.success(asDraft ? "Loan application saved as draft." : "Loan application submitted successfully.")
-      setSuccessDialog({ id: loan.id, applicationNumber: loan.applicationNumber })
+      if (asDraft) {
+        toast.success("Draft saved successfully.")
+      } else {
+        toast.success("Loan application submitted successfully.")
+        setSuccessDialog({ id: loan.id, applicationNumber: loan.applicationNumber })
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to save the loan application.")
     } finally {
@@ -215,9 +291,22 @@ export default function CreateLoanApplicationPage() {
     setSuccessDialog(null)
   }
 
+  if (isEdit && isLoadingLoan) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center" role="status">
+        <Loader2 className="size-8 animate-spin text-primary" aria-hidden="true" />
+        <span className="sr-only">Loading loan draft</span>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5 pb-16">
-      <PageHeader title="Create Loan Application" description="Encode a loan application based on the physical documents submitted by the member." />
+      <PageHeader
+        title={isDraftContext ? "Continue Loan Draft" : "Create Loan Application"}
+        description="Encode a loan application based on the physical documents submitted by the member."
+        actions={isDraftContext && <DraftStatusBadge status="Draft" />}
+      />
 
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <WizardStepIndicator steps={STEPS} currentStep={step} />
@@ -487,17 +576,16 @@ export default function CreateLoanApplicationPage() {
       )}
 
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
-        <Button variant="outline" onClick={() => setShowCancelConfirm(true)}>Cancel</Button>
-        <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => promptLeave(() => navigate("/loans"))}>Cancel</Button>
+        <div className="flex flex-wrap items-center gap-2">
           {step > 1 && <Button variant="outline" onClick={goBack}>Previous</Button>}
-          <Button variant="secondary" onClick={() => handleSubmit(true)} disabled={!member || isSubmitting}>
-            {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />} Save Draft
-          </Button>
+          <SaveDraftButton status={loanDraft.status} lastSavedAt={loanDraft.lastSavedAt} onClick={saveDraft} disabled={!memberId || isSubmitting} />
           {step < STEPS.length ? (
             <Button onClick={goNext} disabled={!canProceedFromStep(step)}>Next</Button>
           ) : (
-            <Button onClick={() => handleSubmit(false)} disabled={isSubmitting || isBlocked || !agree}>
-              {isSubmitting ? <Loader2 className="animate-spin" /> : <FilePlus2 />} Submit Application
+            <Button onClick={() => handleSubmit(false)} disabled={isSubmitting || isBlocked || !agree} aria-busy={isSubmitting}>
+              {isSubmitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <FilePlus2 aria-hidden="true" />}
+              {isSubmitting ? "Submitting…" : "Submit Application"}
             </Button>
           )}
         </div>
@@ -516,17 +604,15 @@ export default function CreateLoanApplicationPage() {
         }}
       />
 
-      <ConfirmDialog
-        open={showCancelConfirm}
-        onOpenChange={setShowCancelConfirm}
-        title="Cancel this application?"
-        description="Any information entered so far will be lost."
-        confirmLabel="Discard"
-        destructive
-        onConfirm={() => {
-          setShowCancelConfirm(false)
-          navigate("/loans")
+      <UnsavedChangesDialog
+        open={showUnsavedPrompt}
+        onOpenChange={(open) => !open && resolvePrompt("stay")}
+        isSaving={loanDraft.status === "saving"}
+        onSaveAndLeave={async () => {
+          await saveDraft()
+          resolvePrompt("leave")
         }}
+        onLeaveWithoutSaving={() => resolvePrompt("leave")}
       />
 
       <Dialog open={!!successDialog} onOpenChange={(open) => !open && setSuccessDialog(null)}>

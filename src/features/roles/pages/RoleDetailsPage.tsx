@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Copy, KeyRound, PencilLine, Power, ShieldCheck, Trash2 } from "lucide-react"
+import { Copy, KeyRound, Loader2, PencilLine, Power, ShieldCheck, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatusBadge } from "@/components/shared/StatusBadge"
@@ -81,11 +81,11 @@ export default function RoleDetailsPage() {
             <PermissionButton permission="roles.assign_permissions" variant="outline" size="sm" render={<Link to={`/admin/roles/${role.id}/permissions`} />}>
               <KeyRound /> Manage Permissions
             </PermissionButton>
-            <PermissionButton permission="roles.duplicate" variant="outline" size="sm" onClick={() => duplicateMutation.mutate(role.id)}>
-              <Copy /> Duplicate
+            <PermissionButton permission="roles.duplicate" variant="outline" size="sm" disabled={duplicateMutation.isPending} onClick={() => duplicateMutation.mutate(role.id)}>
+              {duplicateMutation.isPending ? <Loader2 className="animate-spin" /> : <Copy />} Duplicate
             </PermissionButton>
-            <PermissionButton permission="roles.update" variant="outline" size="sm" onClick={() => toggleMutation.mutate(role.id)}>
-              <Power /> {role.status === "Active" ? "Deactivate" : "Activate"}
+            <PermissionButton permission="roles.update" variant="outline" size="sm" disabled={toggleMutation.isPending} onClick={() => toggleMutation.mutate(role.id)}>
+              {toggleMutation.isPending ? <Loader2 className="animate-spin" /> : <Power />} {role.status === "Active" ? "Deactivate" : "Activate"}
             </PermissionButton>
             {!role.isSystemRole && (
               <PermissionButton permission="roles.delete" variant="destructive" size="sm" onClick={() => setDeleteConfirm(true)}>

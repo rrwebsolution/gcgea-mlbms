@@ -1,5 +1,6 @@
+import * as React from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { KeyRound, LogOut, Settings, UserCircle } from "lucide-react"
+import { KeyRound, Loader2, LogOut, Settings, UserCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -20,13 +21,19 @@ export function UserMenu() {
   const { user, logout, hasPermission } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useHeaderDropdownSlot("profile")
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false)
 
   if (!user) return null
 
   async function handleLogout() {
-    await logout()
-    toast.success("You have been logged out successfully.")
-    navigate("/login", { replace: true })
+    setIsLoggingOut(true)
+    try {
+      await logout()
+      toast.success("You have been logged out successfully.")
+      navigate("/login", { replace: true })
+    } finally {
+      setIsLoggingOut(false)
+    }
   }
 
   return (
@@ -64,8 +71,8 @@ export function UserMenu() {
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={handleLogout}>
-          <LogOut />
+        <DropdownMenuItem variant="destructive" disabled={isLoggingOut} onClick={handleLogout}>
+          {isLoggingOut ? <Loader2 className="animate-spin" /> : <LogOut />}
           Log Out
         </DropdownMenuItem>
       </DropdownMenuContent>

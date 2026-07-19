@@ -6,6 +6,7 @@ import {
   Copy,
   Eye,
   KeyRound,
+  Loader2,
   Lock,
   MoreHorizontal,
   PencilLine,
@@ -162,13 +163,19 @@ export default function RolesPage() {
                 </DropdownMenuItem>
               </PermissionGuard>
               <PermissionGuard permission="roles.duplicate">
-                <DropdownMenuItem onClick={() => duplicateMutation.mutate(role.id)}>
-                  <Copy /> Duplicate
+                <DropdownMenuItem
+                  disabled={duplicateMutation.isPending && duplicateMutation.variables === role.id}
+                  onClick={() => duplicateMutation.mutate(role.id)}
+                >
+                  {duplicateMutation.isPending && duplicateMutation.variables === role.id ? <Loader2 className="animate-spin" /> : <Copy />} Duplicate
                 </DropdownMenuItem>
               </PermissionGuard>
               <PermissionGuard permission="roles.update">
-                <DropdownMenuItem onClick={() => toggleMutation.mutate(role.id)}>
-                  <Power /> {role.status === "Active" ? "Deactivate" : "Activate"}
+                <DropdownMenuItem
+                  disabled={toggleMutation.isPending && toggleMutation.variables === role.id}
+                  onClick={() => toggleMutation.mutate(role.id)}
+                >
+                  {toggleMutation.isPending && toggleMutation.variables === role.id ? <Loader2 className="animate-spin" /> : <Power />} {role.status === "Active" ? "Deactivate" : "Activate"}
                 </DropdownMenuItem>
               </PermissionGuard>
               {!role.isSystemRole && (

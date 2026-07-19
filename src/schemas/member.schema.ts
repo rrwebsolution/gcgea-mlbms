@@ -30,7 +30,10 @@ export const memberSchema = z.object({
   nameOfSpouse: z.string().optional(),
 
   // Section 2: Employment Information
-  officeId: z.string().min(1, "Office is required"),
+  officeId: z
+    .string()
+    .min(1, "Office is required")
+    .regex(/^\d+$/, "Please select a valid office"),
   position: z.string().min(1, "Position is required"),
   dateOfRegularAppointment: z.string().min(1, "Date of regular appointment is required"),
   employmentStatus: z.enum(["Permanent", "Casual", "Job Order", "Contractual", "Co-terminus"]),

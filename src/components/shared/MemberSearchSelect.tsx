@@ -6,15 +6,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { listMembers } from "@/services/members.service"
 import { cn } from "@/lib/utils"
+import type { Member } from "@/types"
 
 interface MemberSearchSelectProps {
   value?: string
   onSelect: (memberId: string) => void
   disabled?: boolean
   placeholder?: string
+  selectedMember?: Member
 }
 
-export function MemberSearchSelect({ value, onSelect, disabled, placeholder = "Search by name or member number…" }: MemberSearchSelectProps) {
+export function MemberSearchSelect({ value, onSelect, disabled, placeholder = "Search by name or member number…", selectedMember }: MemberSearchSelectProps) {
   const [open, setOpen] = React.useState(false)
 
   const { data, isLoading } = useQuery({
@@ -23,7 +25,7 @@ export function MemberSearchSelect({ value, onSelect, disabled, placeholder = "S
   })
 
   const members = data?.data ?? []
-  const selected = members.find((m) => m.id === value)
+  const selected = members.find((m) => m.id === value) ?? (selectedMember?.id === value ? selectedMember : undefined)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

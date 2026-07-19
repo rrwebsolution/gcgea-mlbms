@@ -44,6 +44,11 @@ export const NAV_ITEMS: NavItem[] = [
     icon: LayoutDashboard,
     permission: "dashboard.view",
   },
+  // {
+  //   label: "Draft Center",
+  //   path: "/drafts",
+  //   icon: FileClock,
+  // },
   {
     label: "Member Management",
     path: "/members",
@@ -54,6 +59,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Add Member", path: "/members/new", icon: UserPlus, permission: "members.create" },
       { label: "Import Members", path: "/members/import", icon: UploadCloud, permission: "members.import" },
       { label: "Incomplete Profiles", path: "/members/incomplete", icon: AlertTriangle, permission: "members.view" },
+      { label: "Member Drafts", path: "/members/drafts", icon: FileClock, permission: "members.view" },
       { label: "Archived Members", path: "/members/archived", icon: UserX, permission: "members.view" },
     ],
   },
@@ -77,6 +83,7 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Loan Applications", path: "/loans", icon: Landmark, permission: "loans.view" },
       { label: "Create Loan", path: "/loans/new", icon: FilePlus2, permission: "loans.create" },
+      { label: "Draft Applications", path: "/loans/drafts", icon: FileClock, permission: "loans.view" },
       { label: "Active Loans", path: "/loans/active", icon: BadgeCheck, permission: "loans.view" },
       { label: "Loan Payments", path: "/loan-payments", icon: CreditCard, permission: "loan_payments.view" },
       { label: "Overdue Loans", path: "/loans/overdue", icon: AlertTriangle, permission: "loans.view" },
@@ -91,6 +98,7 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Benefit Applications", path: "/benefits", icon: HeartHandshake, permission: "benefits.view" },
       { label: "Create Application", path: "/benefits/new", icon: FilePlus2, permission: "benefits.create" },
+      { label: "Draft Applications", path: "/benefits/drafts", icon: FileClock, permission: "benefits.view" },
       { label: "Released Benefits", path: "/benefits/released", icon: FileClock, permission: "benefits.view" },
       { label: "Benefit Types", path: "/benefits/types", icon: Gift, permission: "benefits.view" },
     ],
@@ -100,13 +108,6 @@ export const NAV_ITEMS: NavItem[] = [
     path: "/reports",
     icon: BarChart3,
     permission: "reports.view",
-    children: [
-      { label: "Member Reports", path: "/reports/members", icon: Users, permission: "reports.view" },
-      { label: "Contribution Reports", path: "/reports/contributions", icon: Wallet, permission: "reports.view" },
-      { label: "Loan Reports", path: "/reports/loans", icon: Landmark, permission: "reports.view" },
-      { label: "Benefit Reports", path: "/reports/benefits", icon: HeartHandshake, permission: "reports.view" },
-      { label: "Financial Reports", path: "/reports/financial", icon: BarChart3, permission: "reports.view" },
-    ],
   },
   {
     label: "Administration",

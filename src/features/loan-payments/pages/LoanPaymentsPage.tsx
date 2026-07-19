@@ -1,5 +1,7 @@
 import * as React from "react"
+import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
+import { Plus } from "lucide-react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
@@ -7,6 +9,7 @@ import { DataTable } from "@/components/shared/DataTable"
 import { Pagination } from "@/components/shared/Pagination"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ExportButtons } from "@/components/shared/ExportButtons"
+import { PermissionButton } from "@/components/shared/PermissionButton"
 import { listLoanPayments } from "@/services/loan-payments.service"
 import { PAYMENT_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
@@ -41,7 +44,7 @@ export default function LoanPaymentsPage() {
       <PageHeader
         title="Loan Payments"
         description="Record and track loan amortization payments."
-        actions={<ExportButtons permission="loan_payments.view" label="loan payments" />}
+        actions={<><ExportButtons permission="loan_payments.view" label="loan payments" /><PermissionButton permission="loan_payments.create" render={<Link to="/loan-payments/new" />}><Plus /> Record Payment</PermissionButton></>}
       />
       <div className="rounded-xl border border-border bg-card shadow-sm">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">

@@ -13,9 +13,14 @@ export interface Contribution {
   amount: number
   paymentDate: string
   paymentMethod: PaymentMethod
+  officialReceiptNumber?: string
   payrollReference?: string
+  remarks?: string
   encodedBy: string
   status: ContributionStatus
   voidReason?: string
+  voidedBy?: string
+  voidedAt?: string
   createdAt: string
+  updatedAt?: string
 }

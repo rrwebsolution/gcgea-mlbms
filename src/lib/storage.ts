@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   appearanceSettings: "gcgea_appearance_settings",
   importHistory: "gcgea_import_history",
   backupHistory: "gcgea_backup_history",
+  draftRecovery: "gcgea_draft_recovery",
 } as const
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
@@ -31,7 +32,7 @@ interface Envelope<T> {
 // Bump whenever a persisted shape changes (e.g. new required fields on Role/SystemUser/
 // LoanApplication/etc.) so browsers holding an older cached shape fall back to fresh
 // mock defaults instead of crashing on missing fields.
-const CURRENT_VERSION = 2
+const CURRENT_VERSION = 3
 
 export function readStorage<T>(key: StorageKey, fallback: T, version: number = CURRENT_VERSION): T {
   if (typeof window === "undefined") return fallback

@@ -2,7 +2,7 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
-import { PencilLine, Plus, Power, Users as UsersIcon } from "lucide-react"
+import { Loader2, PencilLine, Plus, Power, Users as UsersIcon } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
@@ -93,10 +93,11 @@ export default function OfficesPage() {
             <Button
               variant="ghost"
               size="icon-sm"
+              disabled={toggleMutation.isPending && toggleMutation.variables === row.original.id}
               onClick={() => toggleMutation.mutate(row.original.id)}
               aria-label={row.original.status === "Active" ? "Deactivate office" : "Activate office"}
             >
-              <Power />
+              {toggleMutation.isPending && toggleMutation.variables === row.original.id ? <Loader2 className="animate-spin" /> : <Power />}
             </Button>
           </PermissionGuard>
         </div>

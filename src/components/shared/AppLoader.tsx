@@ -1,6 +1,7 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import { ORGANIZATION } from "@/constants/organization"
+import { AppBackground } from "@/components/shared/AppBackground"
 import { cn } from "@/lib/utils"
 
 const FADE_MS = 400
@@ -88,12 +89,12 @@ export function AppLoader({ isLoading, progress, message }: AppLoaderProps) {
       aria-busy="true"
       className={cn(
         "fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden",
-        "bg-[#F8FAFC] dark:bg-[#0F172A]",
         "transition-opacity ease-out motion-reduce:transition-none",
         visible ? "opacity-100" : "opacity-0"
       )}
       style={{ transitionDuration: `${FADE_MS}ms` }}
     >
+      <AppBackground intensity="subtle" position="absolute" />
       <div className="flex max-w-xs flex-col items-center px-6 text-center">
         <img
           src={ORGANIZATION.logoPath}

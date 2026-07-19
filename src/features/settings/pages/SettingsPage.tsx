@@ -62,8 +62,8 @@ const SECTIONS: { key: SectionKey; label: string; icon: typeof Settings2 }[] = [
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
+    <div className="space-y-2">
+      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90">{label}</Label>
       {children}
     </div>
   )
@@ -71,12 +71,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function ToggleField({ label, checked, onCheckedChange, description }: { label: string; checked: boolean; onCheckedChange: (v: boolean) => void; description?: string }) {
   return (
-    <label className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
-      <span>
-        <span className="block text-sm font-medium text-foreground">{label}</span>
-        {description && <span className="block text-xs text-muted-foreground">{description}</span>}
+    <label className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card p-4 hover:border-border transition-all duration-200 cursor-pointer shadow-sm/5">
+      <span className="space-y-0.5">
+        <span className="block text-sm font-semibold text-foreground">{label}</span>
+        {description && <span className="block text-xs text-muted-foreground leading-normal">{description}</span>}
       </span>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch checked={checked} onCheckedChange={onCheckedChange} className="mt-0.5" />
     </label>
   )
 }
@@ -97,20 +97,20 @@ function SectionShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="font-heading text-base font-semibold text-foreground">{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-card/95 p-5 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200">
+        <div className="mb-5 border-b border-border/30 pb-3">
+          <h2 className="font-heading text-base font-bold tracking-tight text-foreground">{title}</h2>
+          <p className="text-xs font-medium text-muted-foreground mt-0.5">{description}</p>
         </div>
         {children}
       </div>
       <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="outline" onClick={onReset}>
-          <RotateCcw /> Reset to Default
+        <Button variant="outline" onClick={onReset} className="h-9 text-xs">
+          <RotateCcw className="size-3.5" /> Reset to Default
         </Button>
-        <Button onClick={onSave} disabled={isSaving}>
-          {isSaving ? <Loader2 className="animate-spin" /> : <Save />} Save Changes
+        <Button onClick={onSave} disabled={isSaving} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
+          {isSaving ? <Loader2 className="animate-spin size-3.5" /> : <Save className="size-3.5" />} Save Changes
         </Button>
       </div>
     </div>
@@ -200,25 +200,28 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-5 pb-10">
+    <div className="space-y-6 pb-12">
       <PageHeader title="System Settings" description="Configure GCGEA MLBMS behavior, numbering, policies, and appearance. All changes are saved locally to this browser." />
 
-      <div className="flex flex-col gap-5 lg:flex-row">
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Navigation Sidebar */}
         <nav className="lg:w-64 lg:shrink-0">
           <Select value={active} onValueChange={(v) => setActive((v ?? "general") as SectionKey)}>
-            <SelectTrigger className="w-full lg:hidden"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full lg:hidden h-10 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {SECTIONS.map((s) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
+              {SECTIONS.map((s) => <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <div className="hidden space-y-0.5 rounded-xl border border-border bg-card p-2 shadow-sm lg:block">
+          <div className="hidden space-y-1 rounded-2xl border border-border/60 bg-card p-3 shadow-sm lg:block">
             {SECTIONS.map((s) => (
               <button
                 key={s.key}
                 type="button"
                 onClick={() => setActive(s.key)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-                  active === s.key ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${
+                  active === s.key 
+                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/10" 
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 <s.icon className="size-4 shrink-0" />
@@ -228,21 +231,22 @@ export default function SettingsPage() {
           </div>
         </nav>
 
+        {/* Panel Form Sections */}
         <div className="min-w-0 flex-1">
           {active === "general" && (
             <SectionShell title="General Settings" description="Core system identity and localization defaults." onSave={() => handleSave("general")} onReset={() => setResetConfirm("general")} isSaving={isSaving}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="System Name"><Input value={settings.general.systemName} onChange={(e) => patch("general", { systemName: e.target.value })} /></Field>
-                <Field label="System Short Name"><Input value={settings.general.systemShortName} onChange={(e) => patch("general", { systemShortName: e.target.value })} /></Field>
-                <Field label="Default Language"><Input value={settings.general.defaultLanguage} onChange={(e) => patch("general", { defaultLanguage: e.target.value })} /></Field>
-                <Field label="Time Zone"><Input value={settings.general.timeZone} onChange={(e) => patch("general", { timeZone: e.target.value })} /></Field>
-                <Field label="Date Format"><Input value={settings.general.dateFormat} onChange={(e) => patch("general", { dateFormat: e.target.value })} /></Field>
-                <Field label="Currency"><Input value={settings.general.currency} onChange={(e) => patch("general", { currency: e.target.value })} /></Field>
-                <Field label="Fiscal Year Start"><Input value={settings.general.fiscalYearStart} onChange={(e) => patch("general", { fiscalYearStart: e.target.value })} /></Field>
+                <Field label="System Name"><Input value={settings.general.systemName} onChange={(e) => patch("general", { systemName: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="System Short Name"><Input value={settings.general.systemShortName} onChange={(e) => patch("general", { systemShortName: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Default Language"><Input value={settings.general.defaultLanguage} onChange={(e) => patch("general", { defaultLanguage: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Time Zone"><Input value={settings.general.timeZone} onChange={(e) => patch("general", { timeZone: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Date Format"><Input value={settings.general.dateFormat} onChange={(e) => patch("general", { dateFormat: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Currency"><Input value={settings.general.currency} onChange={(e) => patch("general", { currency: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Fiscal Year Start"><Input value={settings.general.fiscalYearStart} onChange={(e) => patch("general", { fiscalYearStart: e.target.value })} className="h-10 text-sm" /></Field>
                 <Field label="Records Per Page">
                   <Select value={String(settings.general.recordsPerPage)} onValueChange={(v) => patch("general", { recordsPerPage: Number(v ?? 10) })}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>{[10, 25, 50, 100].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
+                    <SelectContent>{[10, 25, 50, 100].map((n) => <SelectItem key={n} value={String(n)} className="text-xs">{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
               </div>
@@ -255,35 +259,35 @@ export default function SettingsPage() {
           {active === "organization" && (
             <SectionShell title="Organization Profile" description="Details used on printed forms, receipts, and letterheads." onSave={() => handleSave("organization")} onReset={() => setResetConfirm("organization")} isSaving={isSaving}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Organization Name"><Input value={settings.organization.organizationName} onChange={(e) => patch("organization", { organizationName: e.target.value })} /></Field>
-                <Field label="Acronym"><Input value={settings.organization.acronym} onChange={(e) => patch("organization", { acronym: e.target.value })} /></Field>
-                <Field label="Address"><Input value={settings.organization.address} onChange={(e) => patch("organization", { address: e.target.value })} /></Field>
-                <Field label="Contact Number"><Input value={settings.organization.contactNumber} onChange={(e) => patch("organization", { contactNumber: e.target.value })} /></Field>
-                <Field label="Email Address"><Input value={settings.organization.email} onChange={(e) => patch("organization", { email: e.target.value })} /></Field>
-                <Field label="Website"><Input value={settings.organization.website} onChange={(e) => patch("organization", { website: e.target.value })} /></Field>
-                <Field label="Authorized Signatory Name"><Input value={settings.organization.authorizedSignatoryName} onChange={(e) => patch("organization", { authorizedSignatoryName: e.target.value })} /></Field>
-                <Field label="Authorized Signatory Position"><Input value={settings.organization.authorizedSignatoryPosition} onChange={(e) => patch("organization", { authorizedSignatoryPosition: e.target.value })} /></Field>
-                <Field label="Treasurer Name"><Input value={settings.organization.treasurerName} onChange={(e) => patch("organization", { treasurerName: e.target.value })} /></Field>
-                <Field label="President Name"><Input value={settings.organization.presidentName} onChange={(e) => patch("organization", { presidentName: e.target.value })} /></Field>
+                <Field label="Organization Name"><Input value={settings.organization.organizationName} onChange={(e) => patch("organization", { organizationName: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Acronym"><Input value={settings.organization.acronym} onChange={(e) => patch("organization", { acronym: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Address"><Input value={settings.organization.address} onChange={(e) => patch("organization", { address: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Contact Number"><Input value={settings.organization.contactNumber} onChange={(e) => patch("organization", { contactNumber: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Email Address"><Input value={settings.organization.email} onChange={(e) => patch("organization", { email: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Website"><Input value={settings.organization.website} onChange={(e) => patch("organization", { website: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Authorized Signatory Name"><Input value={settings.organization.authorizedSignatoryName} onChange={(e) => patch("organization", { authorizedSignatoryName: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Authorized Signatory Position"><Input value={settings.organization.authorizedSignatoryPosition} onChange={(e) => patch("organization", { authorizedSignatoryPosition: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Treasurer Name"><Input value={settings.organization.treasurerName} onChange={(e) => patch("organization", { treasurerName: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="President Name"><Input value={settings.organization.presidentName} onChange={(e) => patch("organization", { presidentName: e.target.value })} className="h-10 text-sm" /></Field>
               </div>
-              <div className="mt-4 rounded-lg border border-dashed border-border p-4 text-center">
-                <p className="mb-2 text-xs text-muted-foreground">Organization Logo / City Seal (mock upload — not sent anywhere)</p>
+              <div className="mt-5 rounded-xl border border-dashed border-border/80 p-5 text-center bg-muted/10 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground/80">Organization Logo &amp; City Seal uploads</p>
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => toast.info("Logo upload is a mock action in this demo.")}><Upload /> Upload Logo</Button>
-                  <Button variant="outline" size="sm" onClick={() => toast.info("City seal upload is a mock action in this demo.")}><Upload /> Upload City Seal</Button>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => toast.info("Logo upload is a mock action.")}><Upload className="size-3.5" /> Upload Logo</Button>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => toast.info("City seal upload is a mock action.")}><Upload className="size-3.5" /> Upload City Seal</Button>
                 </div>
               </div>
-              <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4 text-center">
-                <p className="text-xs text-muted-foreground">Document Header Preview</p>
-                <p className="mt-1 font-heading text-sm font-semibold text-foreground">{settings.organization.organizationName}</p>
+              <div className="mt-5 rounded-xl border border-border bg-muted/20 p-5 text-center shadow-inner space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2">Document Header Preview</p>
+                <p className="font-heading text-sm font-bold text-foreground">{settings.organization.organizationName}</p>
                 <p className="text-xs text-muted-foreground">{settings.organization.address}</p>
-                <p className="text-xs text-muted-foreground">{settings.organization.contactNumber} · {settings.organization.email}</p>
+                <p className="text-xs text-muted-foreground/80 font-medium">{settings.organization.contactNumber} · {settings.organization.email}</p>
               </div>
             </SectionShell>
           )}
 
           {active === "numbering" && (
-            <SectionShell title="Numbering Formats" description="Configure the reference number format for each document type." onSave={() => handleSave("numbering")} onReset={() => setResetConfirm("numbering")} isSaving={isSaving}>
+            <SectionShell title="Numbering Formats" description="Configure reference number formats." onSave={() => handleSave("numbering")} onReset={() => setResetConfirm("numbering")} isSaving={isSaving}>
               <div className="space-y-4">
                 {(Object.keys(settings.numbering) as (keyof SystemSettings["numbering"])[]).map((key) => (
                   <NumberingFormatRow
@@ -298,32 +302,32 @@ export default function SettingsPage() {
           )}
 
           {active === "loan" && (
-            <SectionShell title="Loan Settings" description="Default policy values applied when creating new loan types and applications." onSave={() => handleSave("loan")} onReset={() => setResetConfirm("loan")} isSaving={isSaving}>
+            <SectionShell title="Loan Settings" description="Default policy values applied to new loan types." onSave={() => handleSave("loan")} onReset={() => setResetConfirm("loan")} isSaving={isSaving}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Default Interest Method">
                   <Select value={settings.loan.defaultInterestMethod} onValueChange={(v) => patch("loan", { defaultInterestMethod: v ?? "" })}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["Flat Interest", "Diminishing Balance", "Zero Interest", "Custom"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                      {["Flat Interest", "Diminishing Balance", "Zero Interest", "Custom"].map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Default Interest Rate (%/mo)"><Input type="number" step="0.01" value={settings.loan.defaultInterestRate} onChange={(e) => patch("loan", { defaultInterestRate: Number(e.target.value) })} /></Field>
-                <Field label="Default Processing Fee (₱)"><Input type="number" value={settings.loan.defaultProcessingFee} onChange={(e) => patch("loan", { defaultProcessingFee: Number(e.target.value) })} /></Field>
-                <Field label="Default Penalty Rate (%)"><Input type="number" step="0.01" value={settings.loan.defaultPenaltyRate} onChange={(e) => patch("loan", { defaultPenaltyRate: Number(e.target.value) })} /></Field>
-                <Field label="Grace Period (Days)"><Input type="number" value={settings.loan.gracePeriodDays} onChange={(e) => patch("loan", { gracePeriodDays: Number(e.target.value) })} /></Field>
-                <Field label="Maximum Active Loans"><Input type="number" value={settings.loan.maximumActiveLoans} onChange={(e) => patch("loan", { maximumActiveLoans: Number(e.target.value) })} /></Field>
+                <Field label="Default Interest Rate (%/mo)"><Input type="number" step="0.01" value={settings.loan.defaultInterestRate} onChange={(e) => patch("loan", { defaultInterestRate: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Default Processing Fee (₱)"><Input type="number" value={settings.loan.defaultProcessingFee} onChange={(e) => patch("loan", { defaultProcessingFee: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Default Penalty Rate (%)"><Input type="number" step="0.01" value={settings.loan.defaultPenaltyRate} onChange={(e) => patch("loan", { defaultPenaltyRate: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Grace Period (Days)"><Input type="number" value={settings.loan.gracePeriodDays} onChange={(e) => patch("loan", { gracePeriodDays: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Maximum Active Loans"><Input type="number" value={settings.loan.maximumActiveLoans} onChange={(e) => patch("loan", { maximumActiveLoans: Number(e.target.value) })} className="h-10 text-sm" /></Field>
                 <Field label="Default Payment Method">
                   <Select value={settings.loan.defaultPaymentMethod} onValueChange={(v) => patch("loan", { defaultPaymentMethod: v ?? "" })}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["Payroll Deduction", "Cash", "Bank Transfer", "Check"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                      {["Payroll Deduction", "Cash", "Bank Transfer", "Check"].map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Rounding Rule"><Input value={settings.loan.roundingRule} onChange={(e) => patch("loan", { roundingRule: e.target.value })} /></Field>
+                <Field label="Rounding Rule"><Input value={settings.loan.roundingRule} onChange={(e) => patch("loan", { roundingRule: e.target.value })} className="h-10 text-sm" /></Field>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="Allow Eligibility Override" checked={settings.loan.allowEligibilityOverride} onCheckedChange={(v) => patch("loan", { allowEligibilityOverride: v })} />
                 <ToggleField label="Require Approval" checked={settings.loan.requireApproval} onCheckedChange={(v) => patch("loan", { requireApproval: v })} />
                 <ToggleField label="Require Release Confirmation" checked={settings.loan.requireReleaseConfirmation} onCheckedChange={(v) => patch("loan", { requireReleaseConfirmation: v })} />
@@ -335,28 +339,28 @@ export default function SettingsPage() {
           )}
 
           {active === "contribution" && (
-            <SectionShell title="Contribution Settings" description="Default values used across the contribution and payroll import modules." onSave={() => handleSave("contribution")} onReset={() => setResetConfirm("contribution")} isSaving={isSaving}>
+            <SectionShell title="Contribution Settings" description="Defaults for contribution and import modules." onSave={() => handleSave("contribution")} onReset={() => setResetConfirm("contribution")} isSaving={isSaving}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Default Monthly Contribution (₱)"><Input type="number" value={settings.contribution.defaultMonthlyContribution} onChange={(e) => patch("contribution", { defaultMonthlyContribution: Number(e.target.value) })} /></Field>
-                <Field label="Contribution Due Day"><Input type="number" min={1} max={31} value={settings.contribution.contributionDueDay} onChange={(e) => patch("contribution", { contributionDueDay: Number(e.target.value) })} /></Field>
+                <Field label="Default Monthly Contribution (₱)"><Input type="number" value={settings.contribution.defaultMonthlyContribution} onChange={(e) => patch("contribution", { defaultMonthlyContribution: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Contribution Due Day"><Input type="number" min={1} max={31} value={settings.contribution.contributionDueDay} onChange={(e) => patch("contribution", { contributionDueDay: Number(e.target.value) })} className="h-10 text-sm" /></Field>
                 <Field label="Duplicate Handling">
                   <Select value={settings.contribution.duplicateHandling} onValueChange={(v) => patch("contribution", { duplicateHandling: v ?? "" })}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["Skip duplicates", "Flag for review", "Replace existing"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                      {["Skip duplicates", "Flag for review", "Replace existing"].map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>
                 <Field label="Default Payment Method">
                   <Select value={settings.contribution.defaultPaymentMethod} onValueChange={(v) => patch("contribution", { defaultPaymentMethod: v ?? "" })}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["Payroll Deduction", "Cash", "Bank Transfer", "Check"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                      {["Payroll Deduction", "Cash", "Bank Transfer", "Check"].map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="Allow Partial Contribution" checked={settings.contribution.allowPartialContribution} onCheckedChange={(v) => patch("contribution", { allowPartialContribution: v })} />
                 <ToggleField label="Allow Advance Contribution" checked={settings.contribution.allowAdvanceContribution} onCheckedChange={(v) => patch("contribution", { allowAdvanceContribution: v })} />
                 <ToggleField label="Payroll Import Enabled" checked={settings.contribution.payrollImportEnabled} onCheckedChange={(v) => patch("contribution", { payrollImportEnabled: v })} />
@@ -367,13 +371,13 @@ export default function SettingsPage() {
           )}
 
           {active === "benefit" && (
-            <SectionShell title="Benefit Settings" description="Default policy values applied to benefit types and applications." onSave={() => handleSave("benefit")} onReset={() => setResetConfirm("benefit")} isSaving={isSaving}>
+            <SectionShell title="Benefit Settings" description="Policy standards applied to benefits." onSave={() => handleSave("benefit")} onReset={() => setResetConfirm("benefit")} isSaving={isSaving}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Default Approval Limit (₱)"><Input type="number" value={settings.benefit.defaultApprovalLimit} onChange={(e) => patch("benefit", { defaultApprovalLimit: Number(e.target.value) })} /></Field>
-                <Field label="Default Frequency Limit"><Input value={settings.benefit.defaultFrequencyLimit} onChange={(e) => patch("benefit", { defaultFrequencyLimit: e.target.value })} /></Field>
-                <Field label="Benefit Year Reset Month"><Input value={settings.benefit.benefitYearResetMonth} onChange={(e) => patch("benefit", { benefitYearResetMonth: e.target.value })} /></Field>
+                <Field label="Default Approval Limit (₱)"><Input type="number" value={settings.benefit.defaultApprovalLimit} onChange={(e) => patch("benefit", { defaultApprovalLimit: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Default Frequency Limit"><Input value={settings.benefit.defaultFrequencyLimit} onChange={(e) => patch("benefit", { defaultFrequencyLimit: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Benefit Year Reset Month"><Input value={settings.benefit.benefitYearResetMonth} onChange={(e) => patch("benefit", { benefitYearResetMonth: e.target.value })} className="h-10 text-sm" /></Field>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="Require Approval" checked={settings.benefit.requireApproval} onCheckedChange={(v) => patch("benefit", { requireApproval: v })} />
                 <ToggleField label="Require Release Confirmation" checked={settings.benefit.requireReleaseConfirmation} onCheckedChange={(v) => patch("benefit", { requireReleaseConfirmation: v })} />
                 <ToggleField label="Allow Eligibility Override" checked={settings.benefit.allowEligibilityOverride} onCheckedChange={(v) => patch("benefit", { allowEligibilityOverride: v })} />
@@ -384,7 +388,7 @@ export default function SettingsPage() {
           )}
 
           {active === "notification" && (
-            <SectionShell title="Notification Settings" description="Control which in-app alerts are generated across the system." onSave={() => handleSave("notification")} onReset={() => setResetConfirm("notification")} isSaving={isSaving}>
+            <SectionShell title="Notification Settings" description="In-app alerts configuration." onSave={() => handleSave("notification")} onReset={() => setResetConfirm("notification")} isSaving={isSaving}>
               <AlertBanner tone="info" title="Frontend-only notifications" description="Email and SMS delivery will require backend integration in a future phase." className="mb-4" />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="In-App Notifications" checked={settings.notification.inAppNotifications} onCheckedChange={(v) => patch("notification", { inAppNotifications: v })} />
@@ -395,22 +399,22 @@ export default function SettingsPage() {
                 <ToggleField label="Overdue Loan Alerts" checked={settings.notification.overdueLoanAlerts} onCheckedChange={(v) => patch("notification", { overdueLoanAlerts: v })} />
                 <ToggleField label="Benefit Approval Alerts" checked={settings.notification.benefitApprovalAlerts} onCheckedChange={(v) => patch("notification", { benefitApprovalAlerts: v })} />
                 <ToggleField label="Contribution Import Alerts" checked={settings.notification.contributionImportAlerts} onCheckedChange={(v) => patch("notification", { contributionImportAlerts: v })} />
-                <ToggleField label="Incomplete Member Profile Alerts" checked={settings.notification.incompleteProfileAlerts} onCheckedChange={(v) => patch("notification", { incompleteProfileAlerts: v })} />
+                <ToggleField label="Incomplete Profile Alerts" checked={settings.notification.incompleteProfileAlerts} onCheckedChange={(v) => patch("notification", { incompleteProfileAlerts: v })} />
                 <ToggleField label="User Account Alerts" checked={settings.notification.userAccountAlerts} onCheckedChange={(v) => patch("notification", { userAccountAlerts: v })} />
               </div>
             </SectionShell>
           )}
 
           {active === "security" && (
-            <SectionShell title="Security Settings" description="Password policy and session security preferences." onSave={() => handleSave("security")} onReset={() => setResetConfirm("security")} isSaving={isSaving}>
+            <SectionShell title="Security Settings" description="Credential and session security standards." onSave={() => handleSave("security")} onReset={() => setResetConfirm("security")} isSaving={isSaving}>
               <AlertBanner tone="info" title="Frontend-only enforcement" description="Actual enforcement of these policies will require backend integration in a future phase." className="mb-4" />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Minimum Password Length"><Input type="number" value={settings.security.minimumPasswordLength} onChange={(e) => patch("security", { minimumPasswordLength: Number(e.target.value) })} /></Field>
-                <Field label="Session Timeout (Minutes)"><Input type="number" value={settings.security.sessionTimeoutMinutes} onChange={(e) => patch("security", { sessionTimeoutMinutes: Number(e.target.value) })} /></Field>
-                <Field label="Maximum Login Attempts"><Input type="number" value={settings.security.maximumLoginAttempts} onChange={(e) => patch("security", { maximumLoginAttempts: Number(e.target.value) })} /></Field>
-                <Field label="Lockout Duration (Minutes)"><Input type="number" value={settings.security.lockoutDurationMinutes} onChange={(e) => patch("security", { lockoutDurationMinutes: Number(e.target.value) })} /></Field>
+                <Field label="Minimum Password Length"><Input type="number" value={settings.security.minimumPasswordLength} onChange={(e) => patch("security", { minimumPasswordLength: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Session Timeout (Minutes)"><Input type="number" value={settings.security.sessionTimeoutMinutes} onChange={(e) => patch("security", { sessionTimeoutMinutes: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Maximum Login Attempts"><Input type="number" value={settings.security.maximumLoginAttempts} onChange={(e) => patch("security", { maximumLoginAttempts: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Lockout Duration (Minutes)"><Input type="number" value={settings.security.lockoutDurationMinutes} onChange={(e) => patch("security", { lockoutDurationMinutes: Number(e.target.value) })} className="h-10 text-sm" /></Field>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="Require Uppercase Letter" checked={settings.security.requireUppercase} onCheckedChange={(v) => patch("security", { requireUppercase: v })} />
                 <ToggleField label="Require Lowercase Letter" checked={settings.security.requireLowercase} onCheckedChange={(v) => patch("security", { requireLowercase: v })} />
                 <ToggleField label="Require Number" checked={settings.security.requireNumber} onCheckedChange={(v) => patch("security", { requireNumber: v })} />
@@ -424,68 +428,73 @@ export default function SettingsPage() {
           )}
 
           {active === "backup" && (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                <AlertBanner tone="warning" title="Frontend simulation only" description="No real database backup occurs here — this demonstrates the workflow using local browser storage." className="mb-4" />
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-card/95 p-5 shadow-sm">
+                <div className="mb-4 border-b border-border/30 pb-3">
+                  <h2 className="font-heading text-base font-bold tracking-tight text-foreground">Backup Settings</h2>
+                  <p className="text-xs font-medium text-muted-foreground mt-0.5">Automated and manual mock system archives.</p>
+                </div>
+                <AlertBanner tone="warning" title="Frontend simulation only" description="No real database backup occurs here — this demonstrates the workflow using local browser storage." className="mb-4 animate-in fade-in duration-200" />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Backup Frequency">
                     <Select value={settings.backup.backupFrequency} onValueChange={(v) => patch("backup", { backupFrequency: v ?? "" })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {["Hourly", "Daily", "Weekly", "Monthly"].map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                        {["Hourly", "Daily", "Weekly", "Monthly"].map((f) => <SelectItem key={f} value={f} className="text-xs">{f}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="Retention (Days)"><Input type="number" value={settings.backup.retentionDays} onChange={(e) => patch("backup", { retentionDays: Number(e.target.value) })} /></Field>
+                  <Field label="Retention (Days)"><Input type="number" value={settings.backup.retentionDays} onChange={(e) => patch("backup", { retentionDays: Number(e.target.value) })} className="h-10 text-sm" /></Field>
                 </div>
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ToggleField label="Automatic Backup" checked={settings.backup.automaticBackup} onCheckedChange={(v) => patch("backup", { automaticBackup: v })} />
                   <ToggleField label="Include Attachments" checked={settings.backup.includeAttachments} onCheckedChange={(v) => patch("backup", { includeAttachments: v })} />
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button onClick={handleCreateBackup} disabled={isCreatingBackup}>
-                    {isCreatingBackup ? <Loader2 className="animate-spin" /> : <DatabaseBackup />} Create Mock Backup
+                <div className="mt-5 flex flex-wrap gap-2 pt-2 border-t border-border/30">
+                  <Button onClick={handleCreateBackup} disabled={isCreatingBackup} className="h-9 text-xs gap-1.5 shadow-sm">
+                    {isCreatingBackup ? <Loader2 className="animate-spin size-3.5" /> : <DatabaseBackup className="size-3.5" />} Create Mock Backup
                   </Button>
-                  <Button variant="outline" onClick={downloadSettingsBackup}>
-                    <Download /> Download Settings Backup
+                  <Button variant="outline" onClick={downloadSettingsBackup} className="h-9 text-xs gap-1.5">
+                    <Download className="size-3.5" /> Download Settings Backup
                   </Button>
-                  <Button variant="outline" onClick={() => restoreInputRef.current?.click()}>
-                    <Upload /> Restore from JSON
+                  <Button variant="outline" onClick={() => restoreInputRef.current?.click()} className="h-9 text-xs gap-1.5">
+                    <Upload className="size-3.5" /> Restore from JSON
                   </Button>
                   <input ref={restoreInputRef} type="file" accept="application/json" className="hidden" onChange={handleRestoreFile} />
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                <div className="border-b border-border px-4 py-3">
-                  <h3 className="text-sm font-semibold text-foreground">Backup History</h3>
+              {/* Table list history */}
+              <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+                <div className="border-b border-border/60 bg-muted/10 px-4 py-3">
+                  <h3 className="text-sm font-bold tracking-tight text-foreground">Backup History Logs</h3>
                 </div>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Backup Name</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Size</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created By</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Backup Name</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Date Created</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Type</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">File Size</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Created By</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {backupHistory.map((b) => (
                       <TableRow key={b.id}>
-                        <TableCell className="font-medium text-foreground">{b.name}</TableCell>
-                        <TableCell>{formatDateTime(b.date)}</TableCell>
-                        <TableCell>{b.type}</TableCell>
-                        <TableCell>{b.size}</TableCell>
-                        <TableCell><StatusBadge label={b.status} tone={b.status === "Completed" ? "success" : "danger"} /></TableCell>
-                        <TableCell>{b.createdBy}</TableCell>
-                        <TableCell>
+                        <TableCell className="font-semibold text-foreground py-3">{b.name}</TableCell>
+                        <TableCell className="py-3">{formatDateTime(b.date)}</TableCell>
+                        <TableCell className="py-3">{b.type}</TableCell>
+                        <TableCell className="py-3">{b.size}</TableCell>
+                        <TableCell className="py-3"><StatusBadge label={b.status} tone={b.status === "Completed" ? "success" : "danger"} /></TableCell>
+                        <TableCell className="py-3">{b.createdBy}</TableCell>
+                        <TableCell className="py-3">
                           <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon-sm" onClick={downloadSettingsBackup} aria-label="Download backup"><Download /></Button>
-                            <Button variant="ghost" size="icon-sm" onClick={() => toast.info("Restoring this snapshot is a mock action in this demo.")} aria-label="Restore backup"><RotateCcw /></Button>
-                            <Button variant="ghost" size="icon-sm" onClick={() => setDeleteBackupId(b.id)} aria-label="Delete backup"><Trash2 /></Button>
+                            <Button variant="ghost" size="icon-sm" className="size-7 rounded-full" onClick={downloadSettingsBackup} aria-label="Download backup"><Download className="size-3.5" /></Button>
+                            <Button variant="ghost" size="icon-sm" className="size-7 rounded-full" onClick={() => toast.info("Restoring is simulated in this demo.")} aria-label="Restore backup"><RotateCcw className="size-3.5" /></Button>
+                            <Button variant="ghost" size="icon-sm" className="size-7 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteBackupId(b.id)} aria-label="Delete backup"><Trash2 className="size-3.5" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -497,30 +506,30 @@ export default function SettingsPage() {
           )}
 
           {active === "appearance" && (
-            <SectionShell title="Appearance Settings" description="Theme colors and layout defaults. Combine with the Light/Dark/System selector in the top navigation." onSave={() => handleSave("appearance")} onReset={() => setResetConfirm("appearance")} isSaving={isSaving}>
+            <SectionShell title="Appearance Settings" description="Theme colors and layout defaults. Combine with the theme selector." onSave={() => handleSave("appearance")} onReset={() => setResetConfirm("appearance")} isSaving={isSaving}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <ColorField label="Primary Color" value={appearance.primaryColor} onChange={(v) => setAppearance((prev) => ({ ...prev, primaryColor: v }))} />
                 <ColorField label="Secondary Color" value={appearance.secondaryColor} onChange={(v) => setAppearance((prev) => ({ ...prev, secondaryColor: v }))} />
                 <ColorField label="Accent Color" value={appearance.accentColor} onChange={(v) => setAppearance((prev) => ({ ...prev, accentColor: v }))} />
                 <ColorField label="Sidebar Color" value={appearance.sidebarColor} onChange={(v) => setAppearance((prev) => ({ ...prev, sidebarColor: v }))} />
                 <ColorField label="Background Color" value={appearance.backgroundColor} onChange={(v) => setAppearance((prev) => ({ ...prev, backgroundColor: v }))} />
-                <Field label="Border Radius (px)"><Input type="number" value={appearance.borderRadius} onChange={(e) => setAppearance((prev) => ({ ...prev, borderRadius: Number(e.target.value) }))} /></Field>
+                <Field label="Border Radius (px)"><Input type="number" value={appearance.borderRadius} onChange={(e) => setAppearance((prev) => ({ ...prev, borderRadius: Number(e.target.value) }))} className="h-10 text-sm" /></Field>
                 <Field label="Sidebar Style">
                   <Select value={appearance.sidebarStyle} onValueChange={(v) => setAppearance((prev) => ({ ...prev, sidebarStyle: (v ?? "expanded") as AppearanceSettings["sidebarStyle"] }))}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="expanded">Expanded</SelectItem>
-                      <SelectItem value="collapsed">Collapsed</SelectItem>
+                      <SelectItem value="expanded" className="text-xs">Expanded</SelectItem>
+                      <SelectItem value="collapsed" className="text-xs">Collapsed</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
                 <Field label="Logo Size">
                   <Select value={appearance.logoSize} onValueChange={(v) => setAppearance((prev) => ({ ...prev, logoSize: (v ?? "medium") as AppearanceSettings["logoSize"] }))}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="small">Small</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="large">Large</SelectItem>
+                      <SelectItem value="small" className="text-xs">Small</SelectItem>
+                      <SelectItem value="medium" className="text-xs">Medium</SelectItem>
+                      <SelectItem value="large" className="text-xs">Large</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
@@ -529,20 +538,21 @@ export default function SettingsPage() {
                 <ToggleField label="Compact Mode" description="Reduce padding across tables and cards." checked={appearance.compactMode} onCheckedChange={(v) => setAppearance((prev) => ({ ...prev, compactMode: v }))} />
               </div>
 
-              <div className="mt-5 rounded-xl border border-border p-4" style={{ borderRadius: appearance.borderRadius }}>
-                <p className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Live Preview</p>
-                <div className="overflow-hidden rounded-lg border" style={{ borderRadius: appearance.borderRadius }}>
-                  <div className="flex items-center justify-between px-4 py-2.5 text-sm font-medium text-white" style={{ backgroundColor: appearance.sidebarColor }}>
-                    <span>GCGEA-MLBMS</span>
-                    <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: appearance.accentColor, color: "#1a1200" }}>Admin</span>
+              {/* Theme Live Preview */}
+              <div className="mt-6 rounded-2xl border border-border p-4 bg-muted/10" style={{ borderRadius: appearance.borderRadius }}>
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Theme Live Preview</p>
+                <div className="overflow-hidden border border-border/60 shadow-md" style={{ borderRadius: appearance.borderRadius }}>
+                  <div className="flex items-center justify-between px-4 py-3 text-xs font-semibold text-white shadow-sm" style={{ backgroundColor: appearance.sidebarColor }}>
+                    <span>GCGEA-MLBMS Application Header</span>
+                    <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ backgroundColor: appearance.accentColor, color: "#1a1200" }}>Admin role</span>
                   </div>
-                  <div className="space-y-3 p-4" style={{ backgroundColor: appearance.backgroundColor }}>
+                  <div className="space-y-4 p-5" style={{ backgroundColor: appearance.backgroundColor }}>
                     <div className="flex gap-2">
-                      <span className="rounded-md px-3 py-1.5 text-xs font-medium text-white" style={{ backgroundColor: appearance.primaryColor, borderRadius: appearance.borderRadius }}>Primary Button</span>
-                      <span className="rounded-md px-3 py-1.5 text-xs font-medium text-white" style={{ backgroundColor: appearance.secondaryColor, borderRadius: appearance.borderRadius }}>Secondary</span>
+                      <span className="px-3.5 py-2 text-xs font-semibold text-white shadow-sm" style={{ backgroundColor: appearance.primaryColor, borderRadius: appearance.borderRadius }}>Primary Action Button</span>
+                      <span className="px-3.5 py-2 text-xs font-semibold text-white shadow-sm" style={{ backgroundColor: appearance.secondaryColor, borderRadius: appearance.borderRadius }}>Secondary</span>
                     </div>
-                    <div className="rounded-lg border border-black/10 bg-white p-3 text-xs text-slate-700" style={{ borderRadius: appearance.borderRadius }}>
-                      Sample card content on the configured background color.
+                    <div className="border border-black/10 bg-white p-4 text-xs font-medium text-slate-700 shadow-sm" style={{ borderRadius: appearance.borderRadius }}>
+                      Sample dashboard layout block on the configured system background color.
                     </div>
                   </div>
                 </div>
@@ -577,11 +587,11 @@ export default function SettingsPage() {
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
+    <div className="space-y-2">
+      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90">{label}</Label>
       <div className="flex items-center gap-2">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-8 w-10 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0.5" />
-        <Input value={value} onChange={(e) => onChange(e.target.value)} />
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-12 shrink-0 cursor-pointer rounded-xl border border-border/80 bg-transparent p-1 transition-transform active:scale-95" />
+        <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-10 text-sm" />
       </div>
     </div>
   )
@@ -592,27 +602,46 @@ function NumberingFormatRow({ label, config, onChange }: { label: string; config
   const preview = [config.prefix, yearPart, String(config.startingNumber).padStart(config.sequenceLength, "0")].filter(Boolean).join(config.separator)
 
   return (
-    <div className="rounded-lg border border-border p-3">
-      <p className="mb-2 text-sm font-medium text-foreground">{label}</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-        <Input className="col-span-2 sm:col-span-1" value={config.prefix} onChange={(e) => onChange({ ...config, prefix: e.target.value })} placeholder="Prefix" />
-        <Input value={config.separator} onChange={(e) => onChange({ ...config, separator: e.target.value })} placeholder="Separator" />
-        <Input type="number" value={config.sequenceLength} onChange={(e) => onChange({ ...config, sequenceLength: Number(e.target.value) })} placeholder="Sequence Length" />
-        <Input type="number" value={config.startingNumber} onChange={(e) => onChange({ ...config, startingNumber: Number(e.target.value) })} placeholder="Starting Number" />
-        <label className="flex items-center gap-1.5 text-xs text-foreground">
-          <Switch checked={config.includeYear} onCheckedChange={(v) => onChange({ ...config, includeYear: v })} /> Include Year
-        </label>
-        <Select value={config.yearFormat} onValueChange={(v) => onChange({ ...config, yearFormat: (v ?? "YYYY") as "YYYY" | "YY" })} disabled={!config.includeYear}>
-          <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="YYYY">YYYY</SelectItem>
-            <SelectItem value="YY">YY</SelectItem>
-          </SelectContent>
-        </Select>
+    <div className="rounded-xl border border-border/60 bg-muted/5 p-4 space-y-4 shadow-sm">
+      <p className="text-xs font-bold text-foreground/95 tracking-tight border-b border-border/30 pb-2">{label}</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-6 items-end">
+        <div className="space-y-1.5 col-span-2 sm:col-span-1">
+          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Prefix</Label>
+          <Input className="h-9 text-xs" value={config.prefix} onChange={(e) => onChange({ ...config, prefix: e.target.value })} placeholder="Prefix" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Separator</Label>
+          <Input className="h-9 text-xs" value={config.separator} onChange={(e) => onChange({ ...config, separator: e.target.value })} placeholder="Separator" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Seq Length</Label>
+          <Input className="h-9 text-xs" type="number" value={config.sequenceLength} onChange={(e) => onChange({ ...config, sequenceLength: Number(e.target.value) })} placeholder="Sequence Length" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Start Num</Label>
+          <Input className="h-9 text-xs" type="number" value={config.startingNumber} onChange={(e) => onChange({ ...config, startingNumber: Number(e.target.value) })} placeholder="Starting Number" />
+        </div>
+        <div className="flex h-9 items-center pb-1">
+          <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground/90 cursor-pointer">
+            <Switch checked={config.includeYear} onCheckedChange={(v) => onChange({ ...config, includeYear: v })} /> Include Year
+          </label>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Year Format</Label>
+          <Select value={config.yearFormat} onValueChange={(v) => onChange({ ...config, yearFormat: (v ?? "YYYY") as "YYYY" | "YY" })} disabled={!config.includeYear}>
+            <SelectTrigger size="sm" className="w-full h-9 text-xs bg-background border-border/80 hover:bg-accent/40 transition-all"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="YYYY" className="text-xs">YYYY</SelectItem>
+              <SelectItem value="YY" className="text-xs">YY</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Preview: <code className="font-medium text-foreground">{preview}</code>
-      </p>
+      <div className="pt-2 border-t border-border/30">
+        <p className="text-xs font-medium text-muted-foreground">
+          Format Preview: <code className="font-bold text-foreground px-2 py-0.5 rounded bg-muted/65 border border-border/10 ml-1.5">{preview}</code>
+        </p>
+      </div>
     </div>
   )
 }

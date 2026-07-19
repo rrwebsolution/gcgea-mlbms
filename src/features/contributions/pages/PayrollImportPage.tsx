@@ -54,7 +54,8 @@ interface ValidatedRow {
 
 export default function PayrollImportPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
+  const canReplaceDuplicates = hasPermission("contributions.replace_duplicate")
   const [step, setStep] = React.useState(1)
   const [file, setFile] = React.useState<File | null>(null)
   const [parsed, setParsed] = React.useState<ParsedCsv | null>(null)
@@ -64,9 +65,10 @@ export default function PayrollImportPage() {
   const [skipInvalid, setSkipInvalid] = React.useState(true)
   const [includeWarnings, setIncludeWarnings] = React.useState(true)
   const [skipDuplicates, setSkipDuplicates] = React.useState(true)
+  const [replaceDuplicates, setReplaceDuplicates] = React.useState(false)
   const [confirmChecked, setConfirmChecked] = React.useState(false)
   const [isImporting, setIsImporting] = React.useState(false)
-  const [summary, setSummary] = React.useState<{ saved: number; skipped: number; duplicate: number; failed: number; totalAmount: number } | null>(null)
+  const [summary, setSummary] = React.useState<{ saved: number; skipped: number; duplicate: number; replaced: number; failed: number; totalAmount: number } | null>(null)
 
   function handleDownloadTemplate() {
     downloadCsv(
@@ -183,7 +185,7 @@ export default function PayrollImportPage() {
   const importableRows = rows.filter((r) => {
     if (r.excluded) return false
     if (r.category === "Invalid") return false
-    if (r.category === "Duplicate") return !skipDuplicates
+    if (r.category === "Duplicate") return replaceDuplicates || !skipDuplicates
     return true
   })
   const totalImportAmount = importableRows.reduce((sum, r) => sum + (r.amount ?? 0), 0)
@@ -208,11 +210,12 @@ export default function PayrollImportPage() {
         paymentMethod: "Payroll Deduction",
         encodedBy: user.fullName,
         skipDuplicates,
+        replaceDuplicates: canReplaceDuplicates && replaceDuplicates,
         rows: importableRows
           .filter((r) => r.memberId)
           .map((r) => ({ memberId: r.memberId!, memberNumber: r.data[mapping.memberNumber] ?? "", memberName: r.memberName ?? "", officeName: r.officeName ?? "", amount: r.amount ?? 0 })),
       })
-      setSummary({ saved: result.saved, skipped: rows.filter((r) => r.excluded).length, duplicate: result.skippedDuplicates + duplicateRows.length, failed: invalidRows.length + result.failed, totalAmount: totalImportAmount })
+      setSummary({ saved: result.saved, skipped: rows.filter((r) => r.excluded).length, duplicate: result.skippedDuplicates, replaced: result.replaced, failed: invalidRows.length + result.failed, totalAmount: totalImportAmount })
       setStep(7)
       toast.success(`Imported ${result.saved} contribution record(s).`)
     } catch (err) {
@@ -449,9 +452,16 @@ export default function PayrollImportPage() {
               Include warning rows
             </label>
             <label className="flex items-center gap-2 text-sm text-foreground">
-              <Checkbox checked={skipDuplicates} onCheckedChange={(v) => setSkipDuplicates(!!v)} />
+              <Checkbox checked={skipDuplicates} disabled={replaceDuplicates} onCheckedChange={(v) => setSkipDuplicates(!!v)} />
               Skip duplicate records
             </label>
+            {canReplaceDuplicates && (
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <Checkbox checked={replaceDuplicates} onCheckedChange={(v) => setReplaceDuplicates(!!v)} />
+                Replace duplicate records with this import's values
+                <StatusBadge label="Permission-gated" tone="gold" />
+              </label>
+            )}
           </div>
           <p className="mt-4 text-sm text-muted-foreground">
             You are about to import <strong className="text-foreground">{importableRows.length}</strong> record(s) totaling{" "}
@@ -481,9 +491,9 @@ export default function PayrollImportPage() {
             Successfully imported <strong className="text-foreground">{summary.saved}</strong> record(s) totaling{" "}
             <strong className="text-foreground">{formatCurrency(summary.totalAmount)}</strong>.
           </p>
-          {(summary.skipped > 0 || summary.duplicate > 0 || summary.failed > 0) && (
+          {(summary.skipped > 0 || summary.duplicate > 0 || summary.replaced > 0 || summary.failed > 0) && (
             <p className="mt-1 flex items-center justify-center gap-1 text-sm text-warning">
-              <XCircle className="size-3.5" /> {summary.skipped} skipped · {summary.duplicate} duplicate · {summary.failed} failed
+              <XCircle className="size-3.5" /> {summary.skipped} skipped · {summary.duplicate} duplicate · {summary.replaced} replaced · {summary.failed} failed
             </p>
           )}
           <div className="mt-5 flex flex-wrap justify-center gap-2">

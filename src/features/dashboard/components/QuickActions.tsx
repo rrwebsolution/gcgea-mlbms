@@ -5,7 +5,7 @@ import { PermissionGuard } from "@/components/shared/PermissionGuard"
 const ACTIONS = [
   { label: "Add Member", path: "/members/new", icon: UserPlus, permission: "members.create" as const },
   { label: "Create Loan Application", path: "/loans/new", icon: Landmark, permission: "loans.create" as const },
-  { label: "Record Loan Payment", path: "/loan-payments", icon: CreditCard, permission: "loan_payments.create" as const },
+  { label: "Record Payment", path: "/loan-payments/new", icon: CreditCard, permission: "loan_payments.create" as const },
   { label: "Record Contribution", path: "/contributions/new", icon: Wallet, permission: "contributions.create" as const },
   { label: "Create Benefit Application", path: "/benefits/new", icon: HeartHandshake, permission: "benefits.create" as const },
   { label: "Generate Report", path: "/reports", icon: FileBarChart, permission: "reports.view" as const },

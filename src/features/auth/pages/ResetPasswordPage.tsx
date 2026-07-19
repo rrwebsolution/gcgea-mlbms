@@ -31,7 +31,7 @@ export default function ResetPasswordPage() {
     setFormError(null)
     setIsSubmitting(true)
     try {
-      await authService.resetPassword(searchParams.get("token") ?? "", values.password)
+      await authService.resetPassword(searchParams.get("token") ?? "", searchParams.get("email") ?? "", values.password, values.confirmPassword)
       toast.success("Password reset successfully. You may now log in.")
       navigate("/login", { replace: true })
     } catch (err) {
@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
           <Input id="confirmPassword" type="password" autoComplete="new-password" placeholder="Re-enter new password" aria-invalid={!!errors.confirmPassword} {...register("confirmPassword")} />
           {errors.confirmPassword && <p className="text-xs font-medium text-destructive">{errors.confirmPassword.message}</p>}
         </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <Button type="submit" className="w-full" disabled={isSubmitting} aria-busy={isSubmitting}>
           {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
           {isSubmitting ? "Resetting…" : "Reset Password"}
         </Button>

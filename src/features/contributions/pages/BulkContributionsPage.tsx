@@ -32,6 +32,7 @@ interface BulkRow {
   officeName: string
   position: string
   amount: number
+  originalAmount: number
   status: "Paid" | "Unpaid"
   remarks: string
   isDuplicate: boolean
@@ -83,6 +84,7 @@ export default function BulkContributionsPage() {
         officeName: m.officeName,
         position: m.position,
         amount: defaultAmount,
+        originalAmount: defaultAmount,
         status: "Paid",
         remarks: "",
         isDuplicate: hasExistingContribution(m.id, period),
@@ -267,6 +269,7 @@ export default function BulkContributionsPage() {
             Load Members
           </Button>
           <Button variant="outline" onClick={handleClear} disabled={rows.length === 0}>Clear</Button>
+          <Button variant="ghost" onClick={() => navigate("/contributions")}>Cancel</Button>
         </div>
       </FormSection>
 
@@ -291,6 +294,7 @@ export default function BulkContributionsPage() {
                 <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected({ status: "Paid" })}>Mark Selected Paid</Button>
                 <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected({ status: "Unpaid" })}>Mark Selected Unpaid</Button>
                 <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected({ remarks: "" })}>Clear Remarks</Button>
+                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected((row) => ({ amount: row.originalAmount }))}>Reset Amount</Button>
                 <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={excludeSelected}>Exclude Selected</Button>
               </div>
             </div>

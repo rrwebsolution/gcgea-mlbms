@@ -2,7 +2,7 @@ import * as React from "react"
 import { useSearchParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Plus } from "lucide-react"
+import { PencilLine, Plus } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { DataTable } from "@/components/shared/DataTable"
@@ -10,6 +10,8 @@ import { Pagination } from "@/components/shared/Pagination"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ExportButtons } from "@/components/shared/ExportButtons"
 import { PermissionButton } from "@/components/shared/PermissionButton"
+import { PermissionGuard } from "@/components/shared/PermissionGuard"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { listLoans } from "@/services/loans.service"
 import { LOAN_STATUS_TONE } from "@/constants/status"
@@ -52,6 +54,19 @@ export default function LoansPage({ presetStatus, overdueOnly, title = "Loan App
     { accessorKey: "outstandingBalance", header: "Outstanding Balance", cell: ({ row }) => formatCurrency(row.original.outstandingBalance) },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={LOAN_STATUS_TONE[row.original.status]} /> },
     { accessorKey: "assignedOfficer", header: "Assigned Officer" },
+    {
+      id: "actions",
+      header: "Actions",
+      enableHiding: false,
+      cell: ({ row }) =>
+        row.original.status === "Draft" ? (
+          <PermissionGuard permission="loans.update">
+            <Button variant="outline" size="sm" render={<Link to={`/loans/${row.original.id}/edit`} />}>
+              <PencilLine /> Continue Editing
+            </Button>
+          </PermissionGuard>
+        ) : null,
+    },
   ]
 
   return (

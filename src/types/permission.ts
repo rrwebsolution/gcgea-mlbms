@@ -99,6 +99,16 @@ export type PermissionCode =
   | "settings.security"
   | "settings.backup"
   | "settings.appearance"
+  | "drafts.view_own"
+  | "drafts.view_all"
+  | "drafts.create"
+  | "drafts.update_own"
+  | "drafts.update_all"
+  | "drafts.delete_own"
+  | "drafts.delete_all"
+  | "drafts.duplicate"
+  | "drafts.transfer"
+  | "drafts.submit"
 
 export interface Permission {
   code: PermissionCode

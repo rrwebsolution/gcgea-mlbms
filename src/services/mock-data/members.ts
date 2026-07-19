@@ -98,11 +98,12 @@ export const MOCK_MEMBERS: Member[] = RAW_MEMBERS.map((m, index) => {
       ...b,
     })),
     documents: index % 3 === 0 ? [
-      { id: `mem-${String(index + 1).padStart(2, "0")}-doc-1`, memberId: `mem-${String(index + 1).padStart(2, "0")}`, category: "Valid ID", fileName: `${m.surname}_ValidID.pdf`, uploadedAt: m.membershipDate, uploadedBy: "Ana Liza P. Fernandez", fileSize: "482 KB" },
-      { id: `mem-${String(index + 1).padStart(2, "0")}-doc-2`, memberId: `mem-${String(index + 1).padStart(2, "0")}`, category: "Membership Form", fileName: `${m.surname}_MembershipForm.pdf`, uploadedAt: m.membershipDate, uploadedBy: "Ana Liza P. Fernandez", fileSize: "610 KB" },
+      { id: `mem-${String(index + 1).padStart(2, "0")}-doc-1`, memberId: `mem-${String(index + 1).padStart(2, "0")}`, category: "Valid ID", fileName: `${m.surname}_ValidID.pdf`, fileUrl: "", uploadedAt: m.membershipDate, uploadedBy: "Ana Liza P. Fernandez", fileSize: "482 KB" },
+      { id: `mem-${String(index + 1).padStart(2, "0")}-doc-2`, memberId: `mem-${String(index + 1).padStart(2, "0")}`, category: "Membership Form", fileName: `${m.surname}_MembershipForm.pdf`, fileUrl: "", uploadedAt: m.membershipDate, uploadedBy: "Ana Liza P. Fernandez", fileSize: "610 KB" },
     ] : [],
 
     isArchived: false,
+    isDraft: false,
     createdAt: m.membershipDate,
     updatedAt: "2026-06-01",
     createdBy: "Ana Liza P. Fernandez",

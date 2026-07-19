@@ -10,6 +10,7 @@ import { FormSection } from "@/components/shared/FormSection"
 import { AlertBanner } from "@/components/shared/AlertBanner"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { PermissionMatrix } from "@/features/roles/components/PermissionMatrix"
+import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -42,6 +43,8 @@ export default function RoleFormPage() {
   })
   const { data: allRoles = [] } = useQuery({ queryKey: ["roles", "all"], queryFn: listAllRoles })
   const { data: allUsers = [] } = useQuery({ queryKey: ["users", "all"], queryFn: listAllUsers })
+
+  useBreadcrumbExtra(isEdit ? existingRole?.name : "Add Role")
 
   const [permissions, setPermissions] = React.useState<PermissionCode[]>([])
   const [preset, setPreset] = React.useState<PermissionPreset>("custom")
@@ -263,12 +266,13 @@ export default function RoleFormPage() {
             Cancel
           </Button>
           {!isEdit && (
-            <Button type="button" variant="secondary" disabled={isSubmitting} onClick={handleSubmit(onSubmitAddAnother)}>
-              Save and Add Another
+            <Button type="button" variant="secondary" disabled={isSubmitting} aria-busy={isSubmitting} onClick={handleSubmit(onSubmitAddAnother)}>
+              {isSubmitting && <Loader2 className="animate-spin" aria-hidden="true" />}
+              {isSubmitting ? "Saving…" : "Save and Add Another"}
             </Button>
           )}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
+          <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+            {isSubmitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Save aria-hidden="true" />}
             {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Save Role"}
           </Button>
         </div>

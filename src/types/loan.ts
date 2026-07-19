@@ -47,6 +47,13 @@ export interface LoanApplication {
   memberName: string
   officeName: string
   loanTypeId: string
+  /**
+   * Technically absent at the API level while a draft hasn't reached Step 2
+   * yet (same for purpose/paymentMethod/firstDueDate below) — kept
+   * non-optional since ~all real consumers assume a fully-specified loan;
+   * draft-aware screens (CreateLoanApplicationPage resume, Draft Center)
+   * apply their own `|| "—"` fallbacks instead of loosening this globally.
+   */
   loanTypeName: string
   requestedAmount: number
   approvedAmount?: number
@@ -66,6 +73,8 @@ export interface LoanApplication {
 
   outstandingBalance: number
   status: LoanStatus
+  /** Which wizard step a draft was last saved on (Create Loan Application page). */
+  draftCurrentStep?: number
   assignedOfficer: string
 
   eligibility: EligibilityCheckItem[]

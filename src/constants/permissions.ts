@@ -170,6 +170,22 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
     ],
   },
   {
+    group: "drafts",
+    label: "Drafts",
+    permissions: [
+      p("drafts.view_own", "View Own Drafts", "drafts", "View drafts you created"),
+      p("drafts.view_all", "View All Drafts", "drafts", "View every draft in the system"),
+      p("drafts.create", "Create Drafts", "drafts", "Save new drafts"),
+      p("drafts.update_own", "Update Own Drafts", "drafts", "Edit and resave your own drafts"),
+      p("drafts.update_all", "Update All Drafts", "drafts", "Edit and resave any user's draft"),
+      p("drafts.delete_own", "Delete Own Drafts", "drafts", "Delete your own drafts"),
+      p("drafts.delete_all", "Delete All Drafts", "drafts", "Delete any user's draft"),
+      p("drafts.duplicate", "Duplicate Drafts", "drafts", "Duplicate an existing draft"),
+      p("drafts.transfer", "Transfer Draft Ownership", "drafts", "Transfer a draft to another user"),
+      p("drafts.submit", "Submit Drafts", "drafts", "Finalize a draft into a real record"),
+    ],
+  },
+  {
     group: "settings",
     label: "Settings",
     permissions: [
@@ -254,6 +270,7 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "beneficiaries.view", "beneficiaries.create", "beneficiaries.update", "beneficiaries.delete",
         "offices.view",
         "reports.view", "reports.export", "reports.print", "reports.member",
+        "drafts.view_own", "drafts.create", "drafts.update_own", "drafts.delete_own", "drafts.submit",
       ]
     case "Loan Officer":
       return [
@@ -263,6 +280,7 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "loans.view", "loans.create", "loans.update", "loans.submit", "loans.print", "loans.export",
         "loan_payments.view", "loan_payments.create", "loan_payments.print_receipt",
         "reports.view", "reports.export", "reports.print", "reports.loan",
+        "drafts.view_own", "drafts.create", "drafts.update_own", "drafts.delete_own", "drafts.submit",
       ]
     case "Treasurer":
       return [
@@ -283,6 +301,7 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "offices.view",
         "benefits.view", "benefits.create", "benefits.update", "benefits.submit", "benefits.print", "benefits.export",
         "reports.view", "reports.export", "reports.print", "reports.benefit",
+        "drafts.view_own", "drafts.create", "drafts.update_own", "drafts.delete_own", "drafts.submit",
       ]
     case "Approving Officer":
       return [
@@ -296,7 +315,7 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "reports.view", "reports.export", "reports.print", "reports.loan", "reports.benefit",
       ]
     case "Auditor / Viewer":
-      return Array.from(new Set([...VIEW_ONLY_PERMISSION_CODES, "audit_logs.view", "audit_logs.export"]))
+      return Array.from(new Set([...VIEW_ONLY_PERMISSION_CODES, "audit_logs.view", "audit_logs.export", "drafts.view_all"]))
     default:
       return ["dashboard.view"]
   }

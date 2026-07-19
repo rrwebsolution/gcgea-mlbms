@@ -1,25 +1,39 @@
-import type { LoanPayment, PaginatedResponse, PaginationParams } from "@/types"
-import { simulateDelay } from "./http"
-import { MOCK_LOAN_PAYMENTS } from "./mock-data/loan-payments"
-import { paginate, sortBy } from "@/utils/paginate"
-
-const payments: LoanPayment[] = [...MOCK_LOAN_PAYMENTS]
+import type { LoanPayment, PaginatedResponse, PaginationParams, PaymentMethod } from "@/types"
+import { api } from "@/lib/api"
 
 export async function listLoanPayments(params: PaginationParams = {}): Promise<PaginatedResponse<LoanPayment>> {
-  let items = payments
-  if (params.search) {
-    const term = params.search.toLowerCase()
-    items = items.filter(
-      (p) =>
-        p.memberName.toLowerCase().includes(term) ||
-        p.paymentReferenceNumber.toLowerCase().includes(term) ||
-        p.loanApplicationNumber.toLowerCase().includes(term)
-    )
-  }
-  items = sortBy(items, params.sortBy, params.sortDir)
-  return simulateDelay(paginate(items, params.page, params.perPage))
+  const { data } = await api.get<PaginatedResponse<LoanPayment>>("/loan-payments", { params })
+  return data
+}
+
+export interface CreateLoanPaymentInput {
+  memberId: string
+  loanApplicationId: string
+  paymentDate: string
+  amountPaid: number
+  penalty: number
+  paymentMethod: PaymentMethod
+  officialReceiptNumber: string
+  payrollReference?: string
+  remarks?: string
+}
+
+export async function createLoanPayment(input: CreateLoanPaymentInput): Promise<LoanPayment> {
+  const { data } = await api.post<LoanPayment>("/loan-payments", input)
+  cachedLoanPayments = [data, ...cachedLoanPayments]
+  return data
+}
+
+// Best-effort synchronous cache — same pattern as other modules. Populated by
+// listAllLoanPayments(); empty until the first call resolves.
+let cachedLoanPayments: LoanPayment[] = []
+
+export async function listAllLoanPayments(): Promise<LoanPayment[]> {
+  const { data } = await api.get<LoanPayment[]>("/loan-payments/all")
+  cachedLoanPayments = data
+  return data
 }
 
 export function getAllLoanPayments(): LoanPayment[] {
-  return payments
+  return cachedLoanPayments
 }

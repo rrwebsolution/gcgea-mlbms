@@ -1,4 +1,5 @@
 import * as React from "react"
+import { createPortal } from "react-dom"
 import {
   flexRender,
   getCoreRowModel,
@@ -63,12 +64,23 @@ export function DataTable<TData>({
   toolbar,
 }: DataTableProps<TData>) {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+  const rootRef = React.useRef<HTMLDivElement>(null)
+  const [externalToolbar, setExternalToolbar] = React.useState<HTMLElement | null>(null)
 
-  // Sorting and row selection can either be controlled by the parent (server-driven
-  // pagination/sorting, e.g. Members) or left uncontrolled, in which case DataTable
-  // manages the state itself and sorts client-side. Either way the state fed into
-  // the table is always a real value, never `undefined`, since TanStack Table reads
-  // from it unconditionally (e.g. every header cell calls `getIsSorted()`).
+  React.useLayoutEffect(() => {
+    if (toolbar) {
+      setExternalToolbar(null)
+      return
+    }
+
+    const previous = rootRef.current?.previousElementSibling
+    const isFilterBar = previous instanceof HTMLElement
+      && previous.classList.contains("flex")
+      && previous.classList.contains("border-b")
+
+    setExternalToolbar(isFilterBar ? previous : null)
+  }, [toolbar])
+
   const isSortingControlled = controlledSorting !== undefined && controlledOnSortingChange !== undefined
   const [internalSorting, setInternalSorting] = React.useState<SortingState>([])
   const sorting = isSortingControlled ? controlledSorting! : internalSorting
@@ -121,35 +133,46 @@ export function DataTable<TData>({
     enableRowSelection,
   })
 
-  const showToolbar = enableColumnVisibility || toolbar
+  const showToolbar = Boolean(toolbar) || (enableColumnVisibility && !externalToolbar)
+
+  const columnVisibilityMenu = enableColumnVisibility ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger 
+        render={
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="ml-auto h-8 shrink-0 gap-2 px-3 text-xs hover:bg-accent/80 active:scale-98 transition-all" 
+          />
+        }
+      >
+        <Columns3 className="size-3.5 text-muted-foreground" />
+        Columns
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {table
+          .getAllColumns()
+          .filter((column) => column.getCanHide())
+          .map((column) => (
+            <DropdownMenuCheckboxItem
+              key={column.id}
+              checked={column.getIsVisible()}
+              onCheckedChange={(value) => column.toggleVisibility(!!value)}
+            >
+              {typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}
+            </DropdownMenuCheckboxItem>
+          ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null
 
   return (
-    <div className="flex flex-col">
+    <div ref={rootRef} className="flex flex-col border border-border/60 bg-card overflow-hidden shadow-sm">
+      {externalToolbar && columnVisibilityMenu && createPortal(columnVisibilityMenu, externalToolbar)}
       {showToolbar && (
-        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
-          <div className="flex flex-1 items-center gap-2">{toolbar}</div>
-          {enableColumnVisibility && (
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
-                <Columns3 />
-                Columns
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {table
-                  .getAllColumns()
-                  .filter((column) => column.getCanHide())
-                  .map((column) => (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                    >
-                      {typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/10 px-4 py-2.5 transition-all">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{toolbar}</div>
+          {columnVisibilityMenu}
         </div>
       )}
       <Table containerClassName={cn("overflow-y-auto", maxHeight)}>
@@ -164,20 +187,22 @@ export function DataTable<TData>({
                     {header.isPlaceholder ? null : canSort ? (
                       <button
                         type="button"
-                        className="flex items-center gap-1 font-medium text-foreground hover:text-primary"
+                        className="group flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90 hover:text-foreground transition-colors"
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         {sortDir === "asc" ? (
-                          <ArrowUp className="size-3.5" />
+                          <ArrowUp className="size-3.5 text-primary" />
                         ) : sortDir === "desc" ? (
-                          <ArrowDown className="size-3.5" />
+                          <ArrowDown className="size-3.5 text-primary" />
                         ) : (
-                          <ArrowUpDown className="size-3.5 text-muted-foreground/50" />
+                          <ArrowUpDown className="size-3.5 text-muted-foreground/40 group-hover:text-muted-foreground/80 transition-colors" />
                         )}
                       </button>
                     ) : (
-                      flexRender(header.column.columnDef.header, header.getContext())
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </span>
                     )}
                   </TableHead>
                 )
@@ -191,28 +216,34 @@ export function DataTable<TData>({
               <TableRow key={`skeleton-${i}`}>
                 {tableColumns.map((_, ci) => (
                   <TableCell key={ci}>
-                    <Skeleton className="h-4 w-full max-w-32" />
+                    <Skeleton className={cn("h-4 w-full", ci % 2 === 0 ? "max-w-[120px]" : "max-w-[80px]")} />
                   </TableCell>
                 ))}
               </TableRow>
             ))
           ) : isError ? (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={tableColumns.length} className="whitespace-normal py-10">
+              <TableCell colSpan={tableColumns.length} className="whitespace-normal py-12">
                 <ErrorState onRetry={onRetry} />
               </TableCell>
             </TableRow>
           ) : table.getRowModel().rows.length === 0 ? (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={tableColumns.length} className="whitespace-normal py-10">
+              <TableCell colSpan={tableColumns.length} className="whitespace-normal py-12">
                 <EmptyState title={emptyTitle} description={emptyDescription} />
               </TableCell>
             </TableRow>
           ) : (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined}>
+              <TableRow 
+                key={row.id} 
+                data-state={row.getIsSelected() ? "selected" : undefined}
+                className="transition-colors data-[state=selected]:bg-primary/5 hover:data-[state=selected]:bg-primary/10"
+              >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                  <TableCell key={cell.id} className="py-3">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
                 ))}
               </TableRow>
             ))
