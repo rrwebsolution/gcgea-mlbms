@@ -17,6 +17,8 @@ interface ConfirmDialogProps {
   title: string
   description?: React.ReactNode
   confirmLabel?: string
+  /** Label shown in place of `confirmLabel` while `isLoading` (e.g. "Posting…", "Approving…"). Defaults to `confirmLabel` unchanged. */
+  confirmingLabel?: string
   cancelLabel?: string
   destructive?: boolean
   isLoading?: boolean
@@ -30,6 +32,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  confirmingLabel,
   cancelLabel = "Cancel",
   destructive,
   isLoading,
@@ -51,8 +54,8 @@ export function ConfirmDialog({
             disabled={isLoading}
             onClick={onConfirm}
           >
-            {isLoading && <Loader2 className="animate-spin" />}
-            {confirmLabel}
+            {isLoading && <Loader2 className="animate-spin" aria-hidden="true" />}
+            {isLoading && confirmingLabel ? confirmingLabel : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

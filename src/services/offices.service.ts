@@ -1,9 +1,8 @@
 import type { Office, PaginatedResponse, PaginationParams } from "@/types"
-import { api } from "@/lib/api"
+import { api, getPaginated } from "@/lib/api"
 
 export async function listOffices(params: PaginationParams = {}): Promise<PaginatedResponse<Office>> {
-  const { data } = await api.get<PaginatedResponse<Office>>("/offices", { params })
-  return data
+  return getPaginated<Office>("/offices", params)
 }
 
 export async function listAllOffices(): Promise<Office[]> {

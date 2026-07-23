@@ -1,18 +1,16 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
-import { toast } from "sonner"
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { ArrowLeft, Building2, Download, RotateCcw, Users } from "lucide-react"
+import { ArrowLeft, Building2, RotateCcw, Users } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { DataTable } from "@/components/shared/DataTable"
-import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllActiveMembers } from "@/services/members.service"
-import { downloadCsv } from "@/utils/csv"
 
 const PIE_COLORS = ["var(--color-primary)", "var(--color-success)", "var(--color-gold)", "var(--color-info)", "var(--color-warning)", "var(--color-destructive)"]
 
@@ -24,6 +22,8 @@ const EMPTY_FILTERS: Filters = { membershipStatus: "" }
 
 interface OfficeRow {
   office: string
+  memberNameList: string[]
+  memberNames: string
   count: number
   share: number
 }
@@ -31,15 +31,29 @@ interface OfficeRow {
 export default function MembersByOfficeReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
   const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [viewingOffice, setViewingOffice] = React.useState<OfficeRow | null>(null)
 
   const rows = React.useMemo<OfficeRow[]>(() => {
     if (!applied) return []
     const filtered = getAllActiveMembers().filter((m) => !applied.membershipStatus || m.membershipStatus === applied.membershipStatus)
-    const map = new Map<string, number>()
-    for (const m of filtered) map.set(m.officeName, (map.get(m.officeName) ?? 0) + 1)
+    const map = new Map<string, string[]>()
+    for (const member of filtered) {
+      const names = map.get(member.officeName) ?? []
+      names.push(member.fullName)
+      map.set(member.officeName, names)
+    }
     const total = filtered.length
     return Array.from(map.entries())
-      .map(([office, count]) => ({ office, count, share: total > 0 ? (count / total) * 100 : 0 }))
+      .map(([office, names]) => {
+        const sortedNames = names.sort((a, b) => a.localeCompare(b))
+        return {
+          office,
+          memberNameList: sortedNames,
+          memberNames: sortedNames.map((name) => `* ${name}`).join("\n"),
+          count: sortedNames.length,
+          share: total > 0 ? (sortedNames.length / total) * 100 : 0,
+        }
+      })
       .sort((a, b) => b.count - a.count)
   }, [applied])
 
@@ -57,18 +71,27 @@ export default function MembersByOfficeReportPage() {
     setApplied(null)
   }
 
-  function handleExportCsv() {
-    downloadCsv(
-      "members-by-office-report.csv",
-      ["Office", "Members", "Share %"],
-      rows.map((r) => [r.office, r.count, r.share.toFixed(1)])
-    )
-    toast.success("Members by office report exported to CSV.")
-  }
-
   const columns: ColumnDef<OfficeRow, unknown>[] = [
     { accessorKey: "office", header: "Office" },
-    { accessorKey: "count", header: "Members" },
+    { accessorKey: "count", header: "Member Count" },
+    {
+      accessorKey: "memberNames",
+      header: "Member List",
+      cell: ({ row }) => {
+        const record = row.original
+        const preview = record.memberNameList.slice(0, 3)
+        return (
+          <div data-report-value={record.memberNames} className="min-w-52">
+            <div className="whitespace-pre-line">{preview.map((name) => `* ${name}`).join("\n")}</div>
+            {record.memberNameList.length > 3 && (
+              <Button type="button" variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" onClick={() => setViewingOffice(record)}>
+                View All ({record.memberNameList.length})
+              </Button>
+            )}
+          </div>
+        )
+      },
+    },
     { accessorKey: "share", header: "Share", cell: ({ row }) => `${row.original.share.toFixed(1)}%` },
   ]
 
@@ -84,25 +107,26 @@ export default function MembersByOfficeReportPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Membership Status</Label>
-            <Select value={draft.membershipStatus || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, membershipStatus: v === "__all__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Statuses">{(v: string) => (v === "__all__" ? "All Statuses" : v)}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Statuses</SelectItem>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Inactive">Inactive</SelectItem>
-                <SelectItem value="Suspended">Suspended</SelectItem>
-                <SelectItem value="Terminated">Terminated</SelectItem>
-                <SelectItem value="Deceased">Deceased</SelectItem>
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.membershipStatus || "__all__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, membershipStatus: v === "__all__" ? "" : (v ?? "") }))}
+              options={[
+                { value: "__all__", label: "All Statuses" },
+                { value: "Active", label: "Active" },
+                { value: "Inactive", label: "Inactive" },
+                { value: "Suspended", label: "Suspended" },
+                { value: "Terminated", label: "Terminated" },
+                { value: "Deceased", label: "Deceased" },
+              ]}
+              placeholder="All Statuses"
+              hideSearch
+            />
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button size="sm" onClick={handleGenerate}>Generate</Button>
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
-          <PermissionButton permission="members.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
-            <Download /> Export CSV
-          </PermissionButton>
         </div>
       </div>
 
@@ -162,6 +186,25 @@ export default function MembersByOfficeReportPage() {
           </div>
         </>
       )}
+
+      <Dialog open={!!viewingOffice} onOpenChange={(open) => !open && setViewingOffice(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{viewingOffice?.office} Members</DialogTitle>
+            <DialogDescription>{viewingOffice?.count ?? 0} member(s) assigned to this office.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[55vh] overflow-y-auto rounded-lg border border-border">
+            <ol className="divide-y divide-border">
+              {viewingOffice?.memberNameList.map((name, index) => (
+                <li key={`${name}-${index}`} className="flex gap-3 px-4 py-2.5 text-sm">
+                  <span className="w-6 shrink-0 text-right text-xs text-muted-foreground">{index + 1}.</span>
+                  <span className="font-medium text-foreground">{name}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

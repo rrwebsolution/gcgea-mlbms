@@ -7,10 +7,15 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
-function isItemVisible(item: NavItem, hasPermission: (code: import("@/types").PermissionCode) => boolean): boolean {
+function isItemVisible(
+  item: NavItem,
+  hasPermission: (code: import("@/types").PermissionCode) => boolean,
+  hasAnyPermission: (codes: import("@/types").PermissionCode[]) => boolean
+): boolean {
   if (item.children) {
-    return item.children.some((child) => isItemVisible(child, hasPermission))
+    return item.children.some((child) => isItemVisible(child, hasPermission, hasAnyPermission))
   }
+  if (item.anyOf) return hasAnyPermission(item.anyOf)
   return item.permission ? hasPermission(item.permission) : true
 }
 
@@ -64,8 +69,8 @@ function NavLink({
 }
 
 function NavGroup({ item, collapsed, pathname }: { item: NavItem; collapsed: boolean; pathname: string }) {
-  const { hasPermission } = useAuth()
-  const visibleChildren = (item.children ?? []).filter((child) => isItemVisible(child, hasPermission))
+  const { hasPermission, hasAnyPermission } = useAuth()
+  const visibleChildren = (item.children ?? []).filter((child) => isItemVisible(child, hasPermission, hasAnyPermission))
   const isGroupActive = pathname.startsWith(item.path === "/admin" ? "/admin" : item.path)
   const [open, setOpen] = React.useState(isGroupActive)
 
@@ -119,9 +124,9 @@ function NavGroup({ item, collapsed, pathname }: { item: NavItem; collapsed: boo
 }
 
 export function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
-  const { hasPermission } = useAuth()
+  const { hasPermission, hasAnyPermission } = useAuth()
   const location = useLocation()
-  const visibleItems = NAV_ITEMS.filter((item) => isItemVisible(item, hasPermission))
+  const visibleItems = NAV_ITEMS.filter((item) => isItemVisible(item, hasPermission, hasAnyPermission))
 
   return (
     <nav className="flex flex-col gap-1 px-2.5" onClick={onNavigate}>

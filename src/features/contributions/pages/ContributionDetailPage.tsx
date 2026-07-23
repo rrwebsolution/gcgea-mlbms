@@ -2,7 +2,7 @@ import * as React from "react"
 import { useParams, Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Ban, FileText, Loader2, Pencil, PlusCircle, Wallet } from "lucide-react"
+import { Ban, FileText, Pencil, PlusCircle, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { PrintButton } from "@/components/shared/PrintButton"
@@ -10,6 +10,7 @@ import { PermissionButton } from "@/components/shared/PermissionButton"
 import { VoidTransactionDialog } from "@/components/shared/VoidTransactionDialog"
 import { ActivityTimeline, type TimelineEntry } from "@/components/shared/ActivityTimeline"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -56,14 +57,7 @@ export default function ContributionDetailPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center" role="status">
-        <Loader2 className="size-8 animate-spin text-primary" aria-hidden="true" />
-        <span className="sr-only">Loading contribution record</span>
-      </div>
-    )
-  }
+  if (isLoading) return <ProfileSkeleton cards={1} showTabs={false} />
   if (!contribution) return <EmptyState icon={Wallet} title="Contribution record not found" description="This contribution record may have been removed." />
 
   const timelineEntries: TimelineEntry[] = [

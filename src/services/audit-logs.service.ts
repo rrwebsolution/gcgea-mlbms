@@ -11,7 +11,7 @@ export interface AuditLogListParams extends PaginationParams {
 }
 
 export async function listAuditLogs(params: AuditLogListParams = {}): Promise<PaginatedResponse<AuditLog>> {
-  let items = auditLogs
+  let items = auditLogs.filter((item) => !["draft_created", "draft_updated"].includes(item.action))
   if (params.search) {
     const term = params.search.toLowerCase()
     items = items.filter(

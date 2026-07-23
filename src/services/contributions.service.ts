@@ -1,5 +1,14 @@
-import type { Contribution, PaginatedResponse, PaginationParams, PaymentMethod } from "@/types"
-import { api } from "@/lib/api"
+import type { Contribution, ContributionType, PaginatedResponse, PaginationParams, PaymentMethod } from "@/types"
+import { api, getPaginated } from "@/lib/api"
+import { getSettings } from "@/services/settings.service"
+
+/** Never hardcoded — read fresh from Settings › Contribution Settings each time (defaults: ₱150 Monthly Dues, ₱200 Cash Pabaon per the GCGEA Cash Pabaon Program, Board Resolution 06-2024). */
+export function defaultContributionAmountForType(type: ContributionType): number | undefined {
+  const { contribution } = getSettings()
+  if (type === "Monthly Dues") return contribution.defaultMonthlyContribution
+  if (type === "Cash Pabaon") return contribution.defaultCashPabaonContribution
+  return undefined
+}
 
 export interface ListContributionsParams extends PaginationParams {
   period?: string
@@ -8,11 +17,11 @@ export interface ListContributionsParams extends PaginationParams {
   status?: string
   dateFrom?: string
   dateTo?: string
+  contributionType?: ContributionType
 }
 
 export async function listContributions(params: ListContributionsParams = {}): Promise<PaginatedResponse<Contribution>> {
-  const { data } = await api.get<PaginatedResponse<Contribution>>("/contributions", { params })
-  return data
+  return getPaginated<Contribution>("/contributions", params)
 }
 
 // Best-effort synchronous cache — several pages compute duplicate-checks and
@@ -39,8 +48,10 @@ export function getContributionPeriods(): string[] {
   return Array.from(new Set(cachedContributions.map((c) => c.contributionPeriod))).sort().reverse()
 }
 
-export function hasExistingContribution(memberId: string, period: string): boolean {
-  return cachedContributions.some((c) => c.memberId === memberId && c.contributionPeriod === period && c.status === "Posted")
+export function hasExistingContribution(memberId: string, period: string, contributionType: ContributionType = "Monthly Dues"): boolean {
+  return cachedContributions.some(
+    (c) => c.memberId === memberId && c.contributionPeriod === period && c.contributionType === contributionType && c.status === "Posted"
+  )
 }
 
 export interface CreateContributionInput {
@@ -49,6 +60,7 @@ export interface CreateContributionInput {
   memberName: string
   officeName: string
   contributionPeriod: string
+  contributionType?: ContributionType
   amount: number
   paymentMethod: PaymentMethod
   officialReceiptNumber?: string
@@ -66,6 +78,7 @@ export async function createContribution(input: CreateContributionInput): Promis
 
 export interface UpdateContributionInput {
   contributionPeriod: string
+  contributionType?: ContributionType
   amount: number
   paymentMethod: PaymentMethod
   officialReceiptNumber?: string
@@ -96,6 +109,7 @@ export interface BulkContributionRow {
 
 export interface BulkCreateContributionsInput {
   contributionPeriod: string
+  contributionType?: ContributionType
   paymentDate: string
   paymentMethod: PaymentMethod
   payrollReference?: string
@@ -111,6 +125,8 @@ export interface BulkCreateResult {
   skippedDuplicates: number
   replaced: number
   failed: number
+  cashPabaonSaved: number
+  cashPabaonSkipped: number
 }
 
 export async function bulkCreateContributions(input: BulkCreateContributionsInput): Promise<BulkCreateResult> {

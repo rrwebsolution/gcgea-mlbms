@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
+import { RefreshPageDataButton } from "@/components/shared/RefreshPageDataButton"
 
 interface PageHeaderProps {
   title: string
@@ -15,7 +16,10 @@ export function PageHeader({ title, description, actions, className }: PageHeade
         <h1 className="font-heading text-xl font-semibold text-foreground sm:text-2xl">{title}</h1>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      <div className="flex flex-wrap items-center gap-2 self-start">
+        <RefreshPageDataButton />
+        {actions}
+      </div>
     </div>
   )
 }

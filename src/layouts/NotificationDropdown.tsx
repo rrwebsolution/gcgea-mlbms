@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Bell, CheckCheck, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,8 +16,14 @@ import { useHeaderDropdownSlot } from "@/contexts/HeaderDropdownContext"
 
 export function NotificationDropdown() {
   const [open, setOpen] = useHeaderDropdownSlot("notifications")
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { data: notifications = [] } = useQuery({ queryKey: ["notifications"], queryFn: listNotifications })
+  const { data: notifications = [], isLoading, refetch } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: listNotifications,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
   const unreadCount = notifications.filter((n) => !n.isRead).length
   const [markingId, setMarkingId] = React.useState<string | null>(null)
   const [isMarkingAllRead, setIsMarkingAllRead] = React.useState(false)
@@ -32,6 +38,12 @@ export function NotificationDropdown() {
     }
   }
 
+  async function openNotification(notification: (typeof notifications)[number]) {
+    if (!notification.isRead) await handleMarkRead(notification.id)
+    setOpen(false)
+    if (notification.link) navigate(notification.link)
+  }
+
   async function handleMarkAllRead() {
     setIsMarkingAllRead(true)
     try {
@@ -43,7 +55,10 @@ export function NotificationDropdown() {
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={(nextOpen) => {
+      setOpen(nextOpen)
+      if (nextOpen) void refetch()
+    }}>
       <DropdownMenuTrigger
         render={
           <Button variant="ghost" size="icon" className="relative" aria-label="Notifications" />
@@ -67,7 +82,9 @@ export function NotificationDropdown() {
           )}
         </div>
         <ScrollArea className="h-80">
-          {notifications.length === 0 ? (
+          {isLoading ? (
+            <div className="flex h-32 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading notifications…</div>
+          ) : notifications.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">You're all caught up.</p>
           ) : (
             <ul>
@@ -75,7 +92,7 @@ export function NotificationDropdown() {
                 <li key={n.id}>
                   <button
                     type="button"
-                    onClick={() => handleMarkRead(n.id)}
+                    onClick={() => openNotification(n)}
                     disabled={markingId === n.id}
                     className={cn(
                       "flex w-full flex-col gap-0.5 border-b border-border px-3 py-2.5 text-left transition-colors hover:bg-muted/60 disabled:opacity-60",

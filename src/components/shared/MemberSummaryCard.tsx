@@ -53,7 +53,12 @@ export function MemberSummaryCard({ member, totalContributions, outstandingLoanB
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Employment Status</dt>
-          <dd className="text-sm font-medium text-foreground">{member.employmentStatus}</dd>
+          <dd className="mt-1">
+            <StatusBadge
+              label={member.employmentStatus?.trim() || "Not specified"}
+              tone={member.employmentStatus?.trim() ? "info" : "warning"}
+            />
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Contact Number</dt>

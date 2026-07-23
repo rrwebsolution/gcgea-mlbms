@@ -8,12 +8,13 @@ import { AlertBanner } from "@/components/shared/AlertBanner"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { StatusBadge } from "@/components/shared/StatusBadge"
+import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { PermissionMatrix } from "@/features/roles/components/PermissionMatrix"
 import { SidebarAccessPreview } from "@/features/users/components/SidebarAccessPreview"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { getUser, listAllUsers, updateUserPermissions } from "@/services/users.service"
@@ -101,7 +102,7 @@ export default function UserPermissionsPage() {
     toast.success(`Copied permission overrides from ${source.fullName}.`)
   }
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading user permissions…</p>
+  if (isLoading) return <ProfileSkeleton cards={2} />
   if (!user) return <EmptyState icon={UserCog} title="User not found" description="This user may have been removed." />
 
   return (
@@ -223,7 +224,7 @@ export default function UserPermissionsPage() {
         </TabsContent>
       </Tabs>
 
-      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
+      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:border sm:shadow-sm">
         <p className="text-xs font-medium text-muted-foreground">{isDirty ? "You have unsaved permission changes." : "No unsaved changes."}</p>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => setCopyDialogOpen(true)}>
@@ -261,14 +262,14 @@ export default function UserPermissionsPage() {
             <DialogTitle>Copy Permissions from Another User</DialogTitle>
             <DialogDescription>Only direct allow/deny overrides are copied — role assignments are not affected.</DialogDescription>
           </DialogHeader>
-          <Select value={copySourceId} onValueChange={(v) => setCopySourceId(v ?? "")}>
-            <SelectTrigger className="w-full"><SelectValue placeholder="Select a user" /></SelectTrigger>
-            <SelectContent>
-              {allUsers.filter((u) => u.id !== id).map((u) => (
-                <SelectItem key={u.id} value={u.id}>{u.fullName} ({u.username})</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CommandSelect
+            className="w-full"
+            value={copySourceId}
+            onValueChange={(v) => setCopySourceId(v ?? "")}
+            placeholder="Select a user"
+            searchPlaceholder="Search users…"
+            options={allUsers.filter((u) => u.id !== id).map((u) => ({ value: u.id, label: `${u.fullName} (${u.username})` }))}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCopyDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleCopyFrom} disabled={!copySourceId}>

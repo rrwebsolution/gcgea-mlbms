@@ -17,7 +17,7 @@ interface RoleMultiSelectProps {
 
 export function RoleMultiSelect({ roles, selectedIds, onChange, excludeId, placeholder = "Select additional roles…" }: RoleMultiSelectProps) {
   const [open, setOpen] = React.useState(false)
-  const options = roles.filter((r) => r.id !== excludeId)
+  const options = roles.filter((r) => r.status === "Active" && r.id !== excludeId)
   const selectedRoles = options.filter((r) => selectedIds.includes(r.id))
 
   function toggle(id: string) {

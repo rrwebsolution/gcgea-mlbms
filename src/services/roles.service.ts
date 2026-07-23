@@ -1,14 +1,5 @@
 import type { PaginatedResponse, PaginationParams, PermissionCode, Role } from "@/types"
-import { simulateDelay } from "./http"
-import { MOCK_ROLES } from "./mock-data/roles"
-import { paginate, sortBy } from "@/utils/paginate"
-import { readStorage, writeStorage, STORAGE_KEYS } from "@/lib/storage"
-
-let roles: Role[] = readStorage<Role[]>(STORAGE_KEYS.roles, MOCK_ROLES)
-
-function persist() {
-  writeStorage(STORAGE_KEYS.roles, roles)
-}
+import { api, getPaginated } from "@/lib/api"
 
 function slugify(input: string): string {
   return input
@@ -23,12 +14,17 @@ export function generateRoleCode(name: string): string {
   return slugify(name) || "new_role"
 }
 
+// Best-effort synchronous cache of the last successful listAllRoles() fetch —
+// backs isRoleNameTaken/isRoleCodeTaken/getAllRolesSync() for call sites that
+// need a role list without an explicit fetch. Empty until the first call resolves.
+let cachedRoles: Role[] = []
+
 export function isRoleNameTaken(name: string, excludeId?: string): boolean {
-  return roles.some((r) => r.id !== excludeId && r.name.trim().toLowerCase() === name.trim().toLowerCase())
+  return cachedRoles.some((r) => r.id !== excludeId && r.name.trim().toLowerCase() === name.trim().toLowerCase())
 }
 
 export function isRoleCodeTaken(code: string, excludeId?: string): boolean {
-  return roles.some((r) => r.id !== excludeId && r.code.toLowerCase() === code.toLowerCase())
+  return cachedRoles.some((r) => r.id !== excludeId && r.code.toLowerCase() === code.toLowerCase())
 }
 
 export interface RoleListParams extends PaginationParams {
@@ -37,27 +33,22 @@ export interface RoleListParams extends PaginationParams {
 }
 
 export async function listRoles(params: RoleListParams = {}): Promise<PaginatedResponse<Role>> {
-  let items = roles
-  if (params.search) {
-    const term = params.search.toLowerCase()
-    items = items.filter((r) => r.name.toLowerCase().includes(term) || r.code.toLowerCase().includes(term))
-  }
-  if (params.status) items = items.filter((r) => r.status === params.status)
-  if (params.roleType) items = items.filter((r) => (params.roleType === "System" ? r.isSystemRole : !r.isSystemRole))
-  items = sortBy(items, params.sortBy, params.sortDir)
-  return simulateDelay(paginate(items, params.page, params.perPage))
+  return getPaginated<Role>("/roles", params)
 }
 
 export async function listAllRoles(): Promise<Role[]> {
-  return simulateDelay(roles, 150)
+  const { data } = await api.get<Role[]>("/roles/all")
+  cachedRoles = data
+  return data
 }
 
 export function getAllRolesSync(): Role[] {
-  return roles
+  return cachedRoles
 }
 
 export async function getRole(id: string): Promise<Role | undefined> {
-  return simulateDelay(roles.find((r) => r.id === id))
+  const { data } = await api.get<Role>(`/roles/${id}`)
+  return data
 }
 
 export interface CreateRoleInput {
@@ -69,83 +60,30 @@ export interface CreateRoleInput {
 }
 
 export async function createRole(input: CreateRoleInput): Promise<Role> {
-  const now = new Date().toISOString()
-  const newRole: Role = {
-    id: `role-${Date.now()}`,
-    name: input.name,
-    code: input.code,
-    description: input.description ?? "",
-    isSystemRole: false,
-    status: input.status,
-    permissions: input.permissions,
-    userCount: 0,
-    createdAt: now,
-    updatedAt: now,
-  }
-  roles = [newRole, ...roles]
-  persist()
-  return simulateDelay(newRole, 400)
+  const { data } = await api.post<Role>("/roles", input)
+  return data
 }
 
 export async function updateRole(id: string, input: Partial<CreateRoleInput>): Promise<Role> {
-  const idx = roles.findIndex((r) => r.id === id)
-  if (idx === -1) throw new Error("Role not found")
-  const updated: Role = { ...roles[idx], ...input, updatedAt: new Date().toISOString() }
-  roles = roles.map((r, i) => (i === idx ? updated : r))
-  persist()
-  return simulateDelay(updated, 400)
+  const { data } = await api.put<Role>(`/roles/${id}`, input)
+  return data
 }
 
 export async function duplicateRole(id: string): Promise<Role> {
-  const source = roles.find((r) => r.id === id)
-  if (!source) throw new Error("Role not found")
-  let candidateName = `${source.name} (Copy)`
-  let suffix = 2
-  while (isRoleNameTaken(candidateName)) {
-    candidateName = `${source.name} (Copy ${suffix})`
-    suffix++
-  }
-  const now = new Date().toISOString()
-  const newRole: Role = {
-    id: `role-${Date.now()}`,
-    name: candidateName,
-    code: generateRoleCode(candidateName),
-    description: source.description,
-    isSystemRole: false,
-    status: "Active",
-    permissions: [...source.permissions],
-    userCount: 0,
-    createdAt: now,
-    updatedAt: now,
-  }
-  roles = [newRole, ...roles]
-  persist()
-  return simulateDelay(newRole, 400)
+  const { data } = await api.post<Role>(`/roles/${id}/duplicate`)
+  return data
 }
 
 export async function toggleRoleStatus(id: string): Promise<Role> {
-  const idx = roles.findIndex((r) => r.id === id)
-  if (idx === -1) throw new Error("Role not found")
-  const updated: Role = { ...roles[idx], status: roles[idx].status === "Active" ? "Inactive" : "Active", updatedAt: new Date().toISOString() }
-  roles = roles.map((r, i) => (i === idx ? updated : r))
-  persist()
-  return simulateDelay(updated, 300)
+  const { data } = await api.patch<Role>(`/roles/${id}/toggle-status`)
+  return data
 }
 
 export async function deleteRole(id: string): Promise<void> {
-  const role = roles.find((r) => r.id === id)
-  if (!role) throw new Error("Role not found")
-  if (role.isSystemRole) throw new Error("System roles cannot be deleted.")
-  roles = roles.filter((r) => r.id !== id)
-  persist()
-  await simulateDelay(null, 300)
+  await api.delete(`/roles/${id}`)
 }
 
 export async function updateRolePermissions(id: string, permissions: PermissionCode[]): Promise<Role> {
-  const idx = roles.findIndex((r) => r.id === id)
-  if (idx === -1) throw new Error("Role not found")
-  const updated: Role = { ...roles[idx], permissions, updatedAt: new Date().toISOString() }
-  roles = roles.map((r, i) => (i === idx ? updated : r))
-  persist()
-  return simulateDelay(updated, 400)
+  const { data } = await api.put<Role>(`/roles/${id}/permissions`, { permissions })
+  return data
 }

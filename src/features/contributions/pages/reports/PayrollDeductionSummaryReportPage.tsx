@@ -8,10 +8,10 @@ import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
 import { DataTable } from "@/components/shared/DataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllContributions, getContributionPeriods } from "@/services/contributions.service"
 import { formatCurrency, formatDateShort } from "@/utils/format"
@@ -109,13 +109,13 @@ export default function PayrollDeductionSummaryReportPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
             <Label>Contribution Period</Label>
-            <Select value={draft.period || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, period: v === "__all__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Periods">{(v: string) => (v === "__all__" ? "All Periods" : v)}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Periods</SelectItem>
-                {periods.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.period || "__all__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, period: v === "__all__" ? "" : v }))}
+              options={[{ value: "__all__", label: "All Periods" }, ...periods.map((p) => ({ value: p, label: p }))]}
+              placeholder="All Periods"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Office</Label>

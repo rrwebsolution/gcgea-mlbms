@@ -1,321 +1,529 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { CheckCircle2, Download, FileSpreadsheet, Loader2, XCircle } from "lucide-react"
 import { toast } from "sonner"
+import { CheckCircle2, Download, FileSpreadsheet, Loader2, XCircle } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FileUploader } from "@/components/shared/FileUploader"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { EmptyState } from "@/components/shared/EmptyState"
-import { ImportStepper } from "@/features/members/components/ImportStepper"
+import { SearchInput } from "@/components/shared/SearchInput"
+import { WizardStepIndicator } from "@/components/shared/WizardStepIndicator"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { parseCsv, downloadCsv, type ParsedCsv } from "@/utils/csv"
-import { MOCK_OFFICES } from "@/services/mock-data/offices"
+import { WORKBOOK_EXTENSIONS, WORKBOOK_MIME_TYPES } from "@/lib/upload-validation"
+import {
+  uploadMemberImportFile,
+  selectMemberImportWorksheet,
+  previewMemberImport,
+  resolveMemberImportOffice,
+  commitMemberImport,
+  downloadMemberImportReport,
+} from "@/services/member-import.service"
+import { OfficeAliasResolutionPanel } from "@/features/members/components/OfficeAliasResolutionPanel"
+import { DuplicateComparisonTable } from "@/features/members/components/DuplicateComparisonTable"
+import { formatDateShort } from "@/utils/format"
+import type {
+  MemberColumnMapping,
+  MemberImportCommitResponse,
+  MemberImportPreviewResponse,
+  MemberImportRowResult,
+  MemberImportSheetResponse,
+  MemberImportUploadResponse,
+  MemberTargetField,
+  MemberValidationCategory,
+  UnresolvedOfficeGroup,
+} from "@/types"
 
-interface TargetField {
-  key: string
-  label: string
-  required: boolean
-}
-
-const TARGET_FIELDS: TargetField[] = [
-  { key: "surname", label: "Surname", required: true },
-  { key: "firstName", label: "First Name", required: true },
-  { key: "middleName", label: "Middle Name", required: false },
-  { key: "sex", label: "Sex", required: false },
-  { key: "birthdate", label: "Birthdate", required: true },
-  { key: "permanentAddress", label: "Permanent Address", required: false },
-  { key: "cellphoneNumber", label: "Cellphone Number", required: false },
-  { key: "email", label: "Email Address", required: false },
-  { key: "nameOfSpouse", label: "Name of Spouse", required: false },
-  { key: "officeName", label: "Present Office", required: true },
-  { key: "position", label: "Occupation / Position", required: false },
-  { key: "dateOfRegularAppointment", label: "Date of Regular Appointment", required: false },
-  { key: "membershipType", label: "Membership Type", required: false },
-  { key: "membershipDate", label: "Date as GCGEA Member", required: true },
-  { key: "retireeStatus", label: "Retiree Status", required: false },
+const STEPS = [
+  "Upload Workbook",
+  "Select Worksheet",
+  "Detect Header Row",
+  "Map Columns",
+  "Preview Records",
+  "Validate & Clean",
+  "Resolve Offices",
+  "Resolve Duplicates",
+  "Review Beneficiaries",
+  "Review Legacy Loan Data",
+  "Confirm Import",
+  "Import Summary",
 ]
 
-type ValidationCategory =
-  | "Valid"
-  | "Missing Member Names"
-  | "Invalid Birthdates"
-  | "Missing Membership Dates"
-  | "Invalid Cellphone Numbers"
-  | "Unknown Office Names"
-  | "Duplicate Records"
-  | "Incomplete Records"
-
-interface ValidatedRow {
-  index: number
-  data: Record<string, string>
-  category: ValidationCategory
+const CATEGORY_TONE: Record<MemberValidationCategory, "success" | "warning" | "danger" | "info"> = {
+  New: "success",
+  Exact: "danger",
+  Probable: "warning",
+  Possible: "info",
+  Invalid: "danger",
 }
 
-const CATEGORY_TONE: Record<ValidationCategory, "success" | "danger" | "warning"> = {
-  Valid: "success",
-  "Missing Member Names": "danger",
-  "Invalid Birthdates": "danger",
-  "Missing Membership Dates": "danger",
-  "Invalid Cellphone Numbers": "warning",
-  "Unknown Office Names": "warning",
-  "Duplicate Records": "warning",
-  "Incomplete Records": "warning",
-}
+const ROWS_PER_PAGE = 10
 
-function isValidDate(value: string): boolean {
-  if (!value) return false
-  const date = new Date(value)
-  return !Number.isNaN(date.getTime())
-}
-
-function isValidMobile(value: string): boolean {
-  if (!value) return true
-  const digits = value.replace(/\D/g, "")
-  return /^09\d{9}$/.test(digits)
-}
-
-const KNOWN_OFFICES = new Set(MOCK_OFFICES.map((o) => o.name.toLowerCase()))
+// Stable reference so useMemo/derived arrays below don't recompute every
+// render just because previewResult is still null (before Step 5).
+const EMPTY_ROWS: MemberImportRowResult[] = []
 
 export default function MemberImportWizardPage() {
   const navigate = useNavigate()
+
   const [step, setStep] = React.useState(1)
+
+  // Step 1
   const [file, setFile] = React.useState<File | null>(null)
-  const [parsed, setParsed] = React.useState<ParsedCsv | null>(null)
-  const [mapping, setMapping] = React.useState<Record<string, string>>({})
-  const [validatedRows, setValidatedRows] = React.useState<ValidatedRow[]>([])
-  const [skipInvalid, setSkipInvalid] = React.useState(true)
-  const [isProcessing, setIsProcessing] = React.useState(false)
-  const [importedCount, setImportedCount] = React.useState(0)
+  const [fileResetKey, setFileResetKey] = React.useState(0)
+  const [isUploading, setIsUploading] = React.useState(false)
+  const [uploadProgress, setUploadProgress] = React.useState(0)
+  const [uploadResult, setUploadResult] = React.useState<MemberImportUploadResponse | null>(null)
 
-  async function handleFileSelect(selected: File | null) {
-    setFile(selected)
-    if (!selected) {
-      setParsed(null)
-      return
-    }
-    if (selected.name.toLowerCase().endsWith(".csv")) {
-      const text = await selected.text()
-      setParsed(parseCsv(text))
-    } else {
-      toast.info("Excel preview uses sample data in this demo. Connect the Laravel API to parse real .xls/.xlsx files.")
-      setParsed({
-        headers: ["Surname", "First Name", "Middle Name", "Sex", "Birthdate", "Present Office", "Cellphone Number", "Date as GCGEA Member"],
-        rows: [
-          { Surname: "Delos Reyes", "First Name": "Carmela", "Middle Name": "Santos", Sex: "Female", Birthdate: "1982-04-11", "Present Office": "City Health Office", "Cellphone Number": "09171234567", "Date as GCGEA Member": "2010-01-15" },
-          { Surname: "Bautista", "First Name": "Ramon", "Middle Name": "", Sex: "Male", Birthdate: "not a date", "Present Office": "Unknown Office", "Cellphone Number": "12345", "Date as GCGEA Member": "" },
-        ],
-      })
-    }
-  }
+  // Step 2
+  const [selectedSheet, setSelectedSheet] = React.useState<string | null>(null)
+  const [isSelectingSheet, setIsSelectingSheet] = React.useState(false)
+  const [sheetResult, setSheetResult] = React.useState<MemberImportSheetResponse | null>(null)
 
-  React.useEffect(() => {
-    if (!parsed) return
-    const initialMapping: Record<string, string> = {}
-    for (const field of TARGET_FIELDS) {
-      const match = parsed.headers.find((h) => h.toLowerCase().replace(/[^a-z]/g, "") === field.label.toLowerCase().replace(/[^a-z]/g, ""))
-      initialMapping[field.key] = match ?? "__none__"
-    }
-    setMapping(initialMapping)
-  }, [parsed])
+  // Step 4
+  const [mapping, setMapping] = React.useState<MemberColumnMapping>({})
+  const [isPreviewing, setIsPreviewing] = React.useState(false)
 
-  function runValidation() {
-    if (!parsed) return
-    const seen = new Set<string>()
-    const results: ValidatedRow[] = parsed.rows.map((row, index) => {
-      const get = (key: string) => {
-        const source = mapping[key]
-        return source && source !== "__none__" ? (row[source] ?? "").trim() : ""
+  // Step 5/6
+  const [previewResult, setPreviewResult] = React.useState<MemberImportPreviewResponse | null>(null)
+  const [filterCategory, setFilterCategory] = React.useState<MemberValidationCategory | "All">("All")
+  const [searchTerm, setSearchTerm] = React.useState("")
+  const [page, setPage] = React.useState(1)
+
+  // Shared row decisions: rowNumber -> 'create_new' | 'skip' | 'merge_into:{id}'
+  const [resolutions, setResolutions] = React.useState<Record<number, string>>({})
+
+  // Step 7
+  const [unresolvedOffices, setUnresolvedOffices] = React.useState<UnresolvedOfficeGroup[]>([])
+
+  // Step 11/12
+  const [confirmChecked, setConfirmChecked] = React.useState(false)
+  const [isCommitting, setIsCommitting] = React.useState(false)
+  const [commitResult, setCommitResult] = React.useState<MemberImportCommitResponse | null>(null)
+
+  const rows = previewResult?.rows ?? EMPTY_ROWS
+
+  async function handleUpload() {
+    if (!file) return
+    setIsUploading(true)
+    setUploadProgress(0)
+    try {
+      const result = await uploadMemberImportFile(file, setUploadProgress)
+      setUploadResult(result)
+      if (result.worksheets.length === 1) {
+        setSelectedSheet(result.worksheets[0].name)
       }
-      const surname = get("surname")
-      const firstName = get("firstName")
-      const birthdate = get("birthdate")
-      const membershipDate = get("membershipDate")
-      const cellphone = get("cellphoneNumber")
-      const office = get("officeName")
-      const email = get("email")
-
-      let category: ValidationCategory = "Valid"
-      const dupKey = `${surname.toLowerCase()}|${firstName.toLowerCase()}|${birthdate}`
-
-      if (!surname || !firstName) category = "Missing Member Names"
-      else if (!isValidDate(birthdate)) category = "Invalid Birthdates"
-      else if (!membershipDate || !isValidDate(membershipDate)) category = "Missing Membership Dates"
-      else if (!isValidMobile(cellphone)) category = "Invalid Cellphone Numbers"
-      else if (office && !KNOWN_OFFICES.has(office.toLowerCase())) category = "Unknown Office Names"
-      else if (seen.has(dupKey)) category = "Duplicate Records"
-      else if (!cellphone || !email) category = "Incomplete Records"
-
-      if (category !== "Duplicate Records") seen.add(dupKey)
-
-      return { index, data: row, category }
-    })
-    setValidatedRows(results)
-    setStep(4)
-  }
-
-  const summary = React.useMemo(() => {
-    const counts: Record<ValidationCategory, number> = {
-      Valid: 0,
-      "Missing Member Names": 0,
-      "Invalid Birthdates": 0,
-      "Missing Membership Dates": 0,
-      "Invalid Cellphone Numbers": 0,
-      "Unknown Office Names": 0,
-      "Duplicate Records": 0,
-      "Incomplete Records": 0,
+      setStep(2)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.")
+    } finally {
+      setIsUploading(false)
     }
-    for (const row of validatedRows) counts[row.category]++
+  }
+
+  async function handleSelectSheet() {
+    if (!uploadResult) return
+    setIsSelectingSheet(true)
+    try {
+      const result = await selectMemberImportWorksheet(uploadResult.token, selectedSheet)
+      setSheetResult(result)
+      setMapping(result.detectedMapping)
+      setStep(3)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not read this worksheet.")
+    } finally {
+      setIsSelectingSheet(false)
+    }
+  }
+
+  async function handlePreview() {
+    if (!uploadResult) return
+    setIsPreviewing(true)
+    try {
+      const result = await previewMemberImport(uploadResult.token, mapping)
+      setPreviewResult(result)
+      setUnresolvedOffices(result.unresolvedOffices)
+      setResolutions({})
+      setPage(1)
+      setStep(5)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Preview failed.")
+    } finally {
+      setIsPreviewing(false)
+    }
+  }
+
+  async function refreshPreview() {
+    if (!uploadResult) return
+    const result = await previewMemberImport(uploadResult.token, mapping)
+    setPreviewResult(result)
+    setUnresolvedOffices(result.unresolvedOffices)
+  }
+
+  async function handleOfficeResolve(input: Parameters<typeof resolveMemberImportOffice>[1]) {
+    if (!uploadResult) return
+    try {
+      const result = await resolveMemberImportOffice(uploadResult.token, input)
+      setUnresolvedOffices(result.unresolvedOffices)
+      await refreshPreview()
+      toast.success(`Office mapping applied to ${result.rowsResolved} row(s).`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not resolve this office.")
+    }
+  }
+
+  async function handleConfirmImport() {
+    if (!uploadResult) return
+    setIsCommitting(true)
+    try {
+      const result = await commitMemberImport(uploadResult.token, resolutions)
+      setCommitResult(result)
+      setStep(12)
+      toast.success(
+        result.summary.pendingReview > 0
+          ? `Imported member records were submitted for approval (${result.summary.pendingReview} pending).`
+          : `${result.summary.membersCreated} member(s) successfully imported, approved, and activated.`
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Import failed.")
+    } finally {
+      setIsCommitting(false)
+    }
+  }
+
+  function resetWizard() {
+    setStep(1)
+    setFile(null)
+    setFileResetKey((k) => k + 1)
+    setUploadResult(null)
+    setSelectedSheet(null)
+    setSheetResult(null)
+    setMapping({})
+    setPreviewResult(null)
+    setFilterCategory("All")
+    setSearchTerm("")
+    setPage(1)
+    setResolutions({})
+    setUnresolvedOffices([])
+    setConfirmChecked(false)
+    setCommitResult(null)
+  }
+
+  const summaryCounts = React.useMemo(() => {
+    const counts: Record<MemberValidationCategory, number> = { New: 0, Exact: 0, Probable: 0, Possible: 0, Invalid: 0 }
+    for (const r of rows) counts[r.category]++
     return counts
-  }, [validatedRows])
+  }, [rows])
 
-  const invalidRows = validatedRows.filter((r) => !["Valid", "Incomplete Records"].includes(r.category))
-  const importableRows = validatedRows.filter((r) => r.category === "Valid" || r.category === "Incomplete Records" || (!skipInvalid && r.category !== "Missing Member Names"))
+  // Search always runs against the full `rows` array (every record in this
+  // worksheet, already loaded client-side from the preview response) — not
+  // `pagedRows` — so it finds matches on any page, not just the one showing.
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+  const searchedRows = normalizedSearch
+    ? rows.filter((r) => {
+        const haystack = [r.data.first_name, r.data.last_name, r.data.middle_name, r.data.resolved_office_name, r.data.office_name_raw, r.data.position, r.data.email, r.data.cellphone_number]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+        return haystack.includes(normalizedSearch)
+      })
+    : rows
+  const visibleRows = filterCategory === "All" ? searchedRows : searchedRows.filter((r) => r.category === filterCategory)
+  const pagedRows = visibleRows.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE)
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / ROWS_PER_PAGE))
 
-  function handleConfirmImport() {
-    setIsProcessing(true)
-    setTimeout(() => {
-      setImportedCount(importableRows.length)
-      setIsProcessing(false)
-      setStep(7)
-    }, 900)
-  }
+  const invalidRows = rows.filter((r) => r.category === "Invalid")
+  const ambiguousRows = rows.filter((r) => ["Exact", "Probable", "Possible"].includes(r.category) && r.duplicateCandidates.length > 0)
+  const unresolvedAmbiguous = ambiguousRows.filter((r) => !resolutions[r.rowNumber])
+  const beneficiaryRows = rows.filter((r) => r.data.beneficiary_1 || r.data.beneficiary_2)
+  const legacyLoanRows = rows.filter((r) => r.data.legacy_loan_status !== "No legacy loan information")
 
-  function handleDownloadErrorReport() {
-    const headers = ["Row", "Category", ...(parsed?.headers ?? [])]
-    const rows = invalidRows.map((r) => [r.index + 2, r.category, ...(parsed?.headers ?? []).map((h) => r.data[h] ?? "")])
-    downloadCsv("gcgea-member-import-errors.csv", headers, rows)
-  }
+  const excludedCount = Object.values(resolutions).filter((a) => a === "skip").length
+  const importableCount = rows.filter((r) => {
+    if (resolutions[r.rowNumber] === "skip") return false
+    if (r.category === "Invalid") return false
+    return true
+  }).length
 
   return (
-    <div className="space-y-5">
-      <PageHeader title="Import Members" description="Bulk import existing GCGEA member records from a CSV or Excel spreadsheet." />
+    <div className="space-y-5 pb-10">
+      <PageHeader title="Member Profile Import" description="Import member records from the existing GCGEA Members Profile workbook — no changes to its layout required." />
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <ImportStepper currentStep={step} />
+        <WizardStepIndicator steps={STEPS} currentStep={step} />
       </div>
 
       {step === 1 && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 1 · Upload File</h2>
-          <FileUploader label="Member Spreadsheet" description="Accepted formats: CSV, XLS, XLSX" accept=".csv,.xls,.xlsx" fileName={file?.name} onFileSelect={handleFileSelect} required />
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 1 · Upload Workbook</h2>
+          <FileUploader
+            key={fileResetKey}
+            label="Members Profile Workbook"
+            description="Upload the existing GCGEA Members Profile file (XLSX, XLS, or CSV) — its layout does not need to change."
+            accept={WORKBOOK_MIME_TYPES}
+            acceptExtensions={WORKBOOK_EXTENSIONS}
+            fileName={file?.name}
+            status={isUploading ? "uploading" : "idle"}
+            progress={uploadProgress}
+            onUpload={setFile}
+            onRemove={() => {
+              setFile(null)
+              setFileResetKey((k) => k + 1)
+            }}
+            onReplace={setFile}
+            required
+          />
           <div className="mt-4 flex justify-end">
-            <Button disabled={!file} onClick={() => setStep(2)}>Continue</Button>
+            <Button disabled={!file || isUploading} onClick={handleUpload}>
+              {isUploading ? <Loader2 className="animate-spin" /> : null}
+              {isUploading ? "Uploading…" : "Continue"}
+            </Button>
           </div>
         </div>
       )}
 
-      {step === 2 && parsed && (
+      {step === 2 && uploadResult && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-1 text-sm font-semibold text-foreground">Step 2 · Preview Data</h2>
-          <p className="mb-3 text-xs text-muted-foreground">Showing {Math.min(parsed.rows.length, 10)} of {parsed.rows.length} row(s) detected.</p>
-          <div className="overflow-auto rounded-lg border border-border">
+          <h2 className="mb-1 text-sm font-semibold text-foreground">Step 2 · Select Worksheet</h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            This workbook has {uploadResult.worksheets.length} worksheet{uploadResult.worksheets.length === 1 ? "" : "s"}. Choose the one to import — importing is done one worksheet at a time.
+          </p>
+          <RadioGroup value={selectedSheet ?? ""} onValueChange={setSelectedSheet} className="space-y-2">
+            {uploadResult.worksheets.map((ws) => (
+              <Label
+                key={ws.name}
+                className="flex cursor-pointer items-center justify-between rounded-lg border border-border p-3 text-sm has-[[data-checked]]:border-primary has-[[data-checked]]:bg-primary/5"
+              >
+                <span className="flex items-center gap-3">
+                  <RadioGroupItem value={ws.name} />
+                  <span className="font-medium text-foreground">{ws.name}</span>
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {ws.totalRows} row(s) · {ws.totalColumns} column(s)
+                </span>
+              </Label>
+            ))}
+          </RadioGroup>
+          <div className="mt-4 flex justify-between">
+            <Button variant="outline" onClick={() => setStep(1)}>
+              Back
+            </Button>
+            <Button disabled={!selectedSheet || isSelectingSheet} onClick={handleSelectSheet}>
+              {isSelectingSheet ? <Loader2 className="animate-spin" /> : null}
+              {isSelectingSheet ? "Reading worksheet…" : "Continue"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && sheetResult && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 3 · Detect Header Row</h2>
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <p className="text-sm text-foreground">
+              Detected Header Row: <strong>{sheetResult.headerRowIndex}</strong>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {sheetResult.headerRowIndex > 1
+                ? `Row 1 looks like a title or office label, not column headers — row ${sheetResult.headerRowIndex} was used instead.`
+                : "Column headers start on the first row of this worksheet."}
+            </p>
+          </div>
+          <div className="mt-3 overflow-auto rounded-lg border border-border">
             <Table>
               <TableHeader>
-                <TableRow>{parsed.headers.map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow>
+                <TableRow>
+                  {sheetResult.headers.map((h) => (
+                    <TableHead key={h}>{h}</TableHead>
+                  ))}
+                </TableRow>
               </TableHeader>
               <TableBody>
-                {parsed.rows.slice(0, 10).map((row, i) => (
-                  <TableRow key={i}>{parsed.headers.map((h) => <TableCell key={h}>{row[h] || "—"}</TableCell>)}</TableRow>
+                {sheetResult.sampleRows.slice(0, 3).map((row, i) => (
+                  <TableRow key={i}>
+                    {sheetResult.headers.map((h) => (
+                      <TableCell key={h}>{row[h] != null ? String(row[h]) : "—"}</TableCell>
+                    ))}
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
           <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-            <Button onClick={() => setStep(3)}>Continue</Button>
+            <Button variant="outline" onClick={() => setStep(2)}>
+              Back
+            </Button>
+            <Button onClick={() => setStep(4)}>Continue</Button>
           </div>
         </div>
       )}
 
-      {step === 3 && parsed && (
+      {step === 4 && sheetResult && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-1 text-sm font-semibold text-foreground">Step 3 · Map Spreadsheet Columns</h2>
-          <p className="mb-3 text-xs text-muted-foreground">Match each system field to the corresponding column in your spreadsheet.</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {TARGET_FIELDS.map((field) => (
-              <div key={field.key} className="space-y-1.5">
-                <Label>
-                  {field.label} {field.required && <span className="text-destructive">*</span>}
-                </Label>
-                <Select value={mapping[field.key] ?? "__none__"} onValueChange={(v) => setMapping((prev) => ({ ...prev, [field.key]: v ?? "__none__" }))}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Do not import</SelectItem>
-                    {parsed.headers.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
+          <h2 className="mb-1 text-sm font-semibold text-foreground">Step 4 · Map Columns</h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Columns were auto-detected ({sheetResult.totalRows} row(s) found). Adjust any mapping below if needed.
+          </p>
+          {sheetResult.unmatchedHeaders.length > 0 && (
+            <p className="mb-3 text-xs text-muted-foreground">Ignored columns (not used): {sheetResult.unmatchedHeaders.join(", ")}</p>
+          )}
+          <div className="max-h-[28rem] overflow-auto rounded-lg border border-border">
+            <Table>
+              <TableHeader className="sticky top-0 bg-card">
+                <TableRow>
+                  <TableHead className="bg-card">System Field</TableHead>
+                  <TableHead className="bg-card">Required</TableHead>
+                  <TableHead className="bg-card">Spreadsheet Column</TableHead>
+                  <TableHead className="bg-card">Sample Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(Object.keys(sheetResult.targetFields) as MemberTargetField[]).map((field) => {
+                  const mappedHeader = mapping[field]
+                  const sample = mappedHeader ? sheetResult.sampleRows[0]?.[mappedHeader] : undefined
+                  const required = sheetResult.requiredFields.includes(field)
+                  return (
+                    <TableRow key={field}>
+                      <TableCell className="font-medium text-foreground">{sheetResult.targetFields[field]}</TableCell>
+                      <TableCell>{required ? <StatusBadge label="Required" tone="danger" /> : <StatusBadge label="Optional" tone="neutral" />}</TableCell>
+                      <TableCell>
+                        <CommandSelect
+                          size="sm"
+                          className="w-56"
+                          value={mapping[field] ?? "__none__"}
+                          onValueChange={(v) => setMapping((prev) => ({ ...prev, [field]: v === "__none__" ? null : v }))}
+                          options={[
+                            { value: "__none__", label: "Do not import" },
+                            ...sheetResult.headers.map((h) => ({ value: h, label: h })),
+                          ]}
+                        />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{sample != null ? String(sample) : "—"}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
           </div>
           <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
-            <Button onClick={runValidation}>Validate Records</Button>
-          </div>
-        </div>
-      )}
-
-      {step === 4 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 4 · Validation Results</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {(Object.keys(summary) as ValidationCategory[]).map((cat) => (
-              <div key={cat} className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">{cat}</p>
-                <p className="font-heading text-lg font-semibold text-foreground">{summary[cat]}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(3)}>Back</Button>
-            <Button onClick={() => setStep(5)}>Review Errors</Button>
+            <Button variant="outline" onClick={() => setStep(3)}>
+              Back
+            </Button>
+            <Button onClick={handlePreview} disabled={isPreviewing}>
+              {isPreviewing ? <Loader2 className="animate-spin" /> : null}
+              {isPreviewing ? "Validating…" : "Preview & Validate"}
+            </Button>
           </div>
         </div>
       )}
 
       {step === 5 && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-foreground">Step 5 · Review Errors</h2>
-            <Button variant="outline" size="sm" onClick={handleDownloadErrorReport} disabled={invalidRows.length === 0}>
-              <Download />
-              Download Error Report
-            </Button>
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 5 · Preview Records</h2>
+          <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {(Object.keys(summaryCounts) as MemberValidationCategory[]).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => {
+                  setFilterCategory(cat)
+                  setPage(1)
+                }}
+                className={`rounded-lg border p-3 text-left transition-colors ${filterCategory === cat ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
+              >
+                <p className="text-xs text-muted-foreground">{cat}</p>
+                <p className="font-heading text-lg font-semibold text-foreground">{summaryCounts[cat]}</p>
+              </button>
+            ))}
           </div>
-          {invalidRows.length === 0 ? (
-            <EmptyState icon={CheckCircle2} title="No blocking errors found" description="All records passed validation and are ready to import." />
-          ) : (
-            <div className="max-h-96 overflow-auto rounded-lg border border-border">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card">
-                  <TableRow>
-                    <TableHead className="bg-card">Row</TableHead>
-                    <TableHead className="bg-card">Category</TableHead>
-                    <TableHead className="bg-card">Surname</TableHead>
-                    <TableHead className="bg-card">First Name</TableHead>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setFilterCategory("All")
+              setPage(1)
+            }}
+            className="mb-3"
+          >
+            Show All ({rows.length})
+          </Button>
+          <SearchInput
+            value={searchTerm}
+            onChange={(v) => {
+              setSearchTerm(v)
+              setPage(1)
+            }}
+            placeholder="Search by name, office, position, email, or contact number…"
+            className="mb-3 max-w-sm"
+          />
+          {normalizedSearch && (
+            <p className="mb-3 text-xs text-muted-foreground">
+              {visibleRows.length} of {rows.length} record(s) match &quot;{searchTerm}&quot;
+              {filterCategory !== "All" ? ` in ${filterCategory}` : ""} — searched across every row in this worksheet, not just this page.
+            </p>
+          )}
+          <div className="max-h-[28rem] overflow-auto rounded-lg border border-border">
+            <Table>
+              <TableHeader className="sticky top-0 bg-card">
+                <TableRow>
+                  <TableHead className="bg-card">Row</TableHead>
+                  <TableHead className="bg-card">Full Name</TableHead>
+                  <TableHead className="bg-card">Office</TableHead>
+                  <TableHead className="bg-card">Position</TableHead>
+                  <TableHead className="bg-card">Birthdate</TableHead>
+                  <TableHead className="bg-card">Age</TableHead>
+                  <TableHead className="bg-card">Contact</TableHead>
+                  <TableHead className="bg-card">Sex</TableHead>
+                  <TableHead className="bg-card">Beneficiaries</TableHead>
+                  <TableHead className="bg-card">Legacy Loan</TableHead>
+                  <TableHead className="bg-card">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagedRows.map((r) => (
+                  <TableRow key={r.rowNumber}>
+                    <TableCell>{r.rowNumber + 1}</TableCell>
+                    <TableCell>
+                      {r.data.first_name} {r.data.last_name}
+                    </TableCell>
+                    <TableCell>{r.data.resolved_office_name ?? r.data.office_name_raw ?? "—"}</TableCell>
+                    <TableCell>{r.data.position ?? "—"}</TableCell>
+                    <TableCell>{r.data.birthdate ? formatDateShort(r.data.birthdate) : "—"}</TableCell>
+                    <TableCell>{r.data.computed_age ?? "—"}</TableCell>
+                    <TableCell>{r.data.cellphone_number ?? "—"}</TableCell>
+                    <TableCell>{r.data.sex ?? "—"}</TableCell>
+                    <TableCell>{[r.data.beneficiary_1, r.data.beneficiary_2].filter(Boolean).length}</TableCell>
+                    <TableCell>{r.data.legacy_loan_status === "No legacy loan information" ? "—" : r.data.legacy_loan_status}</TableCell>
+                    <TableCell>
+                      <StatusBadge label={r.category} tone={CATEGORY_TONE[r.category]} />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invalidRows.map((row) => (
-                    <TableRow key={row.index}>
-                      <TableCell>{row.index + 2}</TableCell>
-                      <TableCell><StatusBadge label={row.category} tone={CATEGORY_TONE[row.category]} /></TableCell>
-                      <TableCell>{row.data[mapping.surname] || "—"}</TableCell>
-                      <TableCell>{row.data[mapping.firstName] || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {totalPages > 1 && (
+            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
             </div>
           )}
-          <label className="mt-4 flex items-center gap-2 text-sm text-foreground">
-            <Checkbox checked={skipInvalid} onCheckedChange={(v) => setSkipInvalid(!!v)} />
-            Skip invalid records and import only valid / incomplete records
-          </label>
           <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(4)}>Back</Button>
+            <Button variant="outline" onClick={() => setStep(4)}>
+              Back
+            </Button>
             <Button onClick={() => setStep(6)}>Continue</Button>
           </div>
         </div>
@@ -323,44 +531,270 @@ export default function MemberImportWizardPage() {
 
       {step === 6 && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 6 · Confirm Import</h2>
-          <p className="mb-4 text-sm text-muted-foreground">
-            You are about to import <span className="font-semibold text-foreground">{importableRows.length}</span> member record(s) out of{" "}
-            <span className="font-semibold text-foreground">{validatedRows.length}</span> total row(s) detected.
-            {skipInvalid && invalidRows.length > 0 && ` ${invalidRows.length} invalid record(s) will be skipped.`}
-          </p>
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setStep(5)} disabled={isProcessing}>Back</Button>
-            <Button onClick={handleConfirmImport} disabled={isProcessing || importableRows.length === 0}>
-              {isProcessing ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />}
-              {isProcessing ? "Importing…" : "Confirm Import"}
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 6 · Validate &amp; Clean</h2>
+          {invalidRows.length === 0 ? (
+            <EmptyState icon={CheckCircle2} title="No invalid rows" description="Every row has the minimum required fields (surname, first name, birthdate)." />
+          ) : (
+            <div className="space-y-1.5">
+              <p className="mb-2 text-sm font-semibold text-destructive">Invalid Rows ({invalidRows.length}) — missing required data</p>
+              {invalidRows.map((r) => (
+                <div key={r.rowNumber} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2.5 text-sm">
+                  <span>
+                    Row {r.rowNumber + 1}: {r.data.first_name} {r.data.last_name} — {r.reasons.join(", ")}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setResolutions((prev) => ({ ...prev, [r.rowNumber]: prev[r.rowNumber] === "skip" ? "" : "skip" }))}
+                  >
+                    {resolutions[r.rowNumber] === "skip" ? "Restore" : "Exclude"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          {rows.some((r) => r.reasons.length > 0 && r.category !== "Invalid") && (
+            <div className="mt-4 space-y-1.5">
+              <p className="mb-2 text-sm font-semibold text-warning">Rows with warnings</p>
+              {rows
+                .filter((r) => r.reasons.length > 0 && r.category !== "Invalid")
+                .map((r) => (
+                  <div key={r.rowNumber} className="rounded-lg border border-warning/20 bg-warning/5 p-2.5 text-sm">
+                    Row {r.rowNumber + 1}: {r.data.first_name} {r.data.last_name} — {r.reasons.join("; ")}
+                  </div>
+                ))}
+            </div>
+          )}
+          <div className="mt-4 flex justify-between">
+            <Button variant="outline" onClick={() => setStep(5)}>
+              Back
             </Button>
+            <Button onClick={() => setStep(7)}>Continue</Button>
           </div>
         </div>
       )}
 
       {step === 7 && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 7 · Resolve Offices</h2>
+          <OfficeAliasResolutionPanel groups={unresolvedOffices} onResolve={handleOfficeResolve} />
+          <div className="mt-4 flex justify-between">
+            <Button variant="outline" onClick={() => setStep(6)}>
+              Back
+            </Button>
+            <Button onClick={() => setStep(8)} disabled={unresolvedOffices.length > 0}>
+              Continue
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {step === 8 && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 8 · Resolve Duplicates</h2>
+          {ambiguousRows.length === 0 ? (
+            <EmptyState icon={CheckCircle2} title="No possible duplicates" description="Every row is a new record with no matching existing member." />
+          ) : (
+            <div className="space-y-3">
+              {unresolvedAmbiguous.length > 0 && (
+                <p className="text-xs font-medium text-warning">{unresolvedAmbiguous.length} row(s) still need a decision.</p>
+              )}
+              {ambiguousRows.map((r) => (
+                <DuplicateComparisonTable
+                  key={r.rowNumber}
+                  row={r}
+                  resolution={resolutions[r.rowNumber]}
+                  onChange={(action) => setResolutions((prev) => ({ ...prev, [r.rowNumber]: action }))}
+                />
+              ))}
+            </div>
+          )}
+          <div className="mt-4 flex justify-between">
+            <Button variant="outline" onClick={() => setStep(7)}>
+              Back
+            </Button>
+            <Button onClick={() => setStep(9)}>Continue</Button>
+          </div>
+        </div>
+      )}
+
+      {step === 9 && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 9 · Review Beneficiaries</h2>
+          {beneficiaryRows.length === 0 ? (
+            <EmptyState title="No beneficiaries in this worksheet" description="Neither dependent/beneficiary column had any names to import." />
+          ) : (
+            <div className="overflow-auto rounded-lg border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead>Beneficiary 1</TableHead>
+                    <TableHead>Beneficiary 2</TableHead>
+                    <TableHead>Warning</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {beneficiaryRows.map((r) => {
+                    const duplicateWarning = r.reasons.find((reason) => reason.toLowerCase().includes("duplicate beneficiary"))
+                    return (
+                      <TableRow key={r.rowNumber}>
+                        <TableCell>
+                          {r.data.first_name} {r.data.last_name}
+                        </TableCell>
+                        <TableCell>{r.data.beneficiary_1 ?? "—"}</TableCell>
+                        <TableCell>{r.data.beneficiary_2 ?? "—"}</TableCell>
+                        <TableCell>{duplicateWarning ? <StatusBadge label="Duplicate Names" tone="warning" /> : "—"}</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            Relationships are unknown for imported beneficiaries and can be filled in later from the member&apos;s profile.
+          </p>
+          <div className="mt-4 flex justify-between">
+            <Button variant="outline" onClick={() => setStep(8)}>
+              Back
+            </Button>
+            <Button onClick={() => setStep(10)}>Continue</Button>
+          </div>
+        </div>
+      )}
+
+      {step === 10 && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 10 · Review Legacy Loan Data</h2>
+          {legacyLoanRows.length === 0 ? (
+            <EmptyState title="No legacy loan data" description="No rows have values in the CASH PABAON / Loan Start / Solidarity Assistance Loan columns." />
+          ) : (
+            <>
+              <p className="mb-3 text-sm text-muted-foreground">
+                These rows have legacy loan figures. They will be staged for manual review only — no active loan is created automatically.
+              </p>
+              <div className="overflow-auto rounded-lg border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Member</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Cash Pabaon</TableHead>
+                      <TableHead>Loan Start</TableHead>
+                      <TableHead>Solidarity Loan</TableHead>
+                      <TableHead>Months</TableHead>
+                      <TableHead>Monthly Amort</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {legacyLoanRows.map((r) => (
+                      <TableRow key={r.rowNumber}>
+                        <TableCell>
+                          {r.data.first_name} {r.data.last_name}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge label={r.data.legacy_loan_status} tone={r.data.legacy_loan_status === "Complete legacy loan information" ? "warning" : "info"} />
+                        </TableCell>
+                        <TableCell>{r.data.legacy_loan.cash_pabaon ?? "—"}</TableCell>
+                        <TableCell>{r.data.legacy_loan.loan_start ?? "—"}</TableCell>
+                        <TableCell>{r.data.legacy_loan.solidarity_assistance_loan ?? "—"}</TableCell>
+                        <TableCell>{r.data.legacy_loan.no_of_months ?? "—"}</TableCell>
+                        <TableCell>{r.data.legacy_loan.monthly_amort ?? "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+          <div className="mt-4 flex justify-between">
+            <Button variant="outline" onClick={() => setStep(9)}>
+              Back
+            </Button>
+            <Button onClick={() => setStep(11)}>Continue</Button>
+          </div>
+        </div>
+      )}
+
+      {step === 11 && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 11 · Confirm Import</h2>
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SummaryStat label="Total Rows" value={String(rows.length)} />
+            <SummaryStat label="New" value={String(summaryCounts.New)} />
+            <SummaryStat label="Possible Duplicates" value={String(summaryCounts.Possible + summaryCounts.Probable + summaryCounts.Exact)} />
+            <SummaryStat label="Invalid" value={String(summaryCounts.Invalid)} />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            You are about to import <strong className="text-foreground">{importableCount}</strong> record(s)
+            {excludedCount > 0 && (
+              <>
+                {" "}
+                (<strong className="text-foreground">{excludedCount}</strong> excluded)
+              </>
+            )}
+            . Imported members are <strong className="text-foreground">automatically approved and activated</strong> — this cannot be undone from this wizard.
+          </p>
+          <label className="mt-4 flex items-center gap-2 text-sm font-medium text-foreground">
+            <Checkbox checked={confirmChecked} onCheckedChange={(v) => setConfirmChecked(!!v)} />
+            I confirm that I have reviewed the member records and import decisions.
+          </label>
+          <div className="mt-4 flex justify-between">
+            <Button variant="outline" onClick={() => setStep(10)} disabled={isCommitting}>
+              Back
+            </Button>
+            <Button onClick={handleConfirmImport} disabled={!confirmChecked || isCommitting || importableCount === 0}>
+              {isCommitting ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />}
+              {isCommitting ? "Importing…" : "Confirm Import"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {step === 12 && commitResult && (
         <div className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
           <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-full bg-success/10 text-success">
             <CheckCircle2 className="size-7" />
           </div>
           <h2 className="font-heading text-lg font-semibold text-foreground">Import Complete</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Successfully imported <span className="font-semibold text-foreground">{importedCount}</span> member record(s).
-            {invalidRows.length > 0 && (
-              <span className="mt-1 flex items-center justify-center gap-1 text-warning">
-                <XCircle className="size-3.5" /> {invalidRows.length} record(s) were skipped due to validation errors.
-              </span>
-            )}
+            <strong className="text-foreground">{commitResult.summary.membersCreated}</strong> member(s) created,{" "}
+            <strong className="text-foreground">{commitResult.summary.membersMerged}</strong> merged,{" "}
+            <strong className="text-foreground">{commitResult.summary.beneficiariesCreated}</strong> beneficiary record(s), and{" "}
+            <strong className="text-foreground">{commitResult.summary.legacyLoanDraftsCreated}</strong> legacy loan draft(s) staged for review.
           </p>
-          <div className="mt-5 flex justify-center gap-2">
-            <Button variant="outline" onClick={() => { setStep(1); setFile(null); setParsed(null); setValidatedRows([]) }}>
-              Import Another File
+          {(commitResult.summary.membersSkipped > 0 || commitResult.summary.failedRows > 0) && (
+            <p className="mt-1 flex items-center justify-center gap-1 text-sm text-warning">
+              <XCircle className="size-3.5" /> {commitResult.summary.membersSkipped} skipped · {commitResult.summary.failedRows} failed
+            </p>
+          )}
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Button onClick={() => navigate("/members")}>View Imported Members</Button>
+            <Button
+              variant="outline"
+              onClick={() => uploadResult && downloadMemberImportReport(uploadResult.token, `member-import-${uploadResult.token}.csv`)}
+            >
+              <Download /> Download Import Report
             </Button>
-            <Button onClick={() => navigate("/members")}>Go to Members List</Button>
+            <Button variant="outline" onClick={() => navigate("/members/import-history")}>
+              View Import History
+            </Button>
+            <Button variant="outline" onClick={resetWizard}>
+              Import Another Workbook
+            </Button>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="font-heading text-lg font-semibold text-foreground">{value}</p>
     </div>
   )
 }

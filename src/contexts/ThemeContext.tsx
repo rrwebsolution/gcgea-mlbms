@@ -1,5 +1,6 @@
 import * as React from "react"
 import { readStorage, writeStorage, STORAGE_KEYS } from "@/lib/storage"
+import { applyAppearanceTheme, getAppearance } from "@/services/settings.service"
 
 export type ThemePreference = "light" | "dark" | "system"
 export type ResolvedTheme = "light" | "dark"
@@ -31,6 +32,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const resolved: ResolvedTheme = theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme
     setResolvedTheme(resolved)
     applyTheme(resolved)
+    applyAppearanceTheme(getAppearance())
   }, [theme])
 
   React.useEffect(() => {

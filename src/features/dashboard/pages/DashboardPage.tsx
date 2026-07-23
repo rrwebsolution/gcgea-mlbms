@@ -18,11 +18,14 @@ import {
   FileWarning,
   Activity,
   TrendingUp,
+  ClipboardCheck,
+  RotateCw,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ProfileCompleteness } from "@/components/shared/ProfileCompleteness"
+import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { DashboardListCard } from "@/features/dashboard/components/DashboardListCard"
 import { QuickActions } from "@/features/dashboard/components/QuickActions"
 import { MonthlyReleasesChart } from "@/features/dashboard/components/MonthlyReleasesChart"
@@ -32,6 +35,8 @@ import { HorizontalBarChart } from "@/features/dashboard/components/HorizontalBa
 import { MembershipGrowthChart } from "@/features/dashboard/components/MembershipGrowthChart"
 import * as dashboardService from "@/services/dashboard.service"
 import { profileCompleteness } from "@/services/members.service"
+import { listMyApprovals } from "@/services/approvals.service"
+import { APPROVAL_NAV_PERMISSIONS } from "@/constants/navigation"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { LOAN_STATUS_TONE, BENEFIT_STATUS_TONE } from "@/constants/status"
 
@@ -40,12 +45,12 @@ export default function DashboardPage() {
     queryKey: ["dashboard", "summary"],
     queryFn: dashboardService.getDashboardSummary,
   })
-  const { data: monthlyReleases = [] } = useQuery({ queryKey: ["dashboard", "monthly-releases"], queryFn: dashboardService.getMonthlyLoanReleases })
-  const { data: monthlyCollections = [] } = useQuery({ queryKey: ["dashboard", "monthly-collections"], queryFn: dashboardService.getMonthlyCollections })
-  const { data: loanStatusDist = [] } = useQuery({ queryKey: ["dashboard", "loan-status"], queryFn: dashboardService.getLoanStatusDistribution })
-  const { data: benefitDist = [] } = useQuery({ queryKey: ["dashboard", "benefit-dist"], queryFn: dashboardService.getBenefitDistributionByType })
-  const { data: membersPerOffice = [] } = useQuery({ queryKey: ["dashboard", "members-office"], queryFn: dashboardService.getMembersPerOffice })
-  const { data: membershipGrowth = [] } = useQuery({ queryKey: ["dashboard", "growth"], queryFn: dashboardService.getMembershipGrowthByYear })
+  const { data: monthlyReleases = [], isLoading: monthlyReleasesLoading } = useQuery({ queryKey: ["dashboard", "monthly-releases"], queryFn: dashboardService.getMonthlyLoanReleases })
+  const { data: monthlyCollections = [], isLoading: monthlyCollectionsLoading } = useQuery({ queryKey: ["dashboard", "monthly-collections"], queryFn: dashboardService.getMonthlyCollections })
+  const { data: loanStatusDist = [], isLoading: loanStatusDistLoading } = useQuery({ queryKey: ["dashboard", "loan-status"], queryFn: dashboardService.getLoanStatusDistribution })
+  const { data: benefitDist = [], isLoading: benefitDistLoading } = useQuery({ queryKey: ["dashboard", "benefit-dist"], queryFn: dashboardService.getBenefitDistributionByType })
+  const { data: membersPerOffice = [], isLoading: membersPerOfficeLoading } = useQuery({ queryKey: ["dashboard", "members-office"], queryFn: dashboardService.getMembersPerOffice })
+  const { data: membershipGrowth = [], isLoading: membershipGrowthLoading } = useQuery({ queryKey: ["dashboard", "growth"], queryFn: dashboardService.getMembershipGrowthByYear })
 
   const { data: recentLoans = [], isLoading: recentLoansLoading } = useQuery({ queryKey: ["dashboard", "recent-loans"], queryFn: () => dashboardService.getRecentLoanApplications() })
   const { data: recentPayments = [], isLoading: recentPaymentsLoading } = useQuery({ queryKey: ["dashboard", "recent-payments"], queryFn: () => dashboardService.getRecentPayments() })
@@ -54,6 +59,19 @@ export default function DashboardPage() {
   const { data: recentBenefits = [], isLoading: recentBenefitsLoading } = useQuery({ queryKey: ["dashboard", "recent-benefits"], queryFn: () => dashboardService.getRecentBenefitApplications() })
   const { data: recentMembers = [], isLoading: recentMembersLoading } = useQuery({ queryKey: ["dashboard", "recent-members"], queryFn: () => dashboardService.getRecentlyAddedMembers() })
   const { data: incompleteProfiles = [], isLoading: incompleteLoading } = useQuery({ queryKey: ["dashboard", "incomplete"], queryFn: () => dashboardService.getIncompleteProfiles() })
+
+  const { data: pendingApprovals, isLoading: pendingApprovalsLoading } = useQuery({
+    queryKey: ["my-approvals", "dashboard-pending"],
+    queryFn: () => listMyApprovals({ tab: "pending", perPage: 100 }),
+  })
+  const { data: recentApprovals, isLoading: recentApprovalsLoading } = useQuery({
+    queryKey: ["my-approvals", "dashboard-recent"],
+    queryFn: () => listMyApprovals({ tab: "approved", perPage: 5 }),
+  })
+  const pendingItems = pendingApprovals?.data ?? []
+  const awaitingReview = pendingItems.filter((item) => item.currentStageType === "review").length
+  const awaitingApproval = pendingItems.filter((item) => item.currentStageType === "approve").length
+  const awaitingRelease = pendingItems.filter((item) => item.currentStageType === "release").length
 
   return (
     <div className="space-y-8 pb-10">
@@ -67,6 +85,43 @@ export default function DashboardPage() {
         </div>
         <QuickActions />
       </section>
+
+      {/* APPROVAL WORKFLOW SECTION — only shown to users who hold any approval permission */}
+      <PermissionGuard anyOf={APPROVAL_NAV_PERMISSIONS}>
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <ClipboardCheck className="size-4 text-muted-foreground/85" />
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">Approval Workflow</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Pending My Action" value={String(pendingItems.length)} icon={ClipboardCheck} tone="warning" isLoading={pendingApprovalsLoading} />
+            <StatCard label="Awaiting Review" value={String(awaitingReview)} icon={FileClock} tone="info" isLoading={pendingApprovalsLoading} />
+            <StatCard label="Awaiting Approval" value={String(awaitingApproval)} icon={FileWarning} tone="warning" isLoading={pendingApprovalsLoading} />
+            <StatCard label="Awaiting Release" value={String(awaitingRelease)} icon={Banknote} tone="success" isLoading={pendingApprovalsLoading} />
+          </div>
+          <DashboardListCard
+            title="Recent Approvals"
+            icon={ClipboardCheck}
+            viewAllPath="/my-approvals"
+            isLoading={recentApprovalsLoading}
+            isEmpty={(recentApprovals?.data.length ?? 0) === 0}
+          >
+            {(recentApprovals?.data ?? []).map((item) => (
+              <Link
+                key={item.id}
+                to={`/approvals/${item.subjectType}/${item.subjectId}`}
+                className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3 text-sm hover:bg-muted/40 transition-colors"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{item.reference ?? item.title}</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">{item.memberName ?? item.title}</span>
+                </span>
+                <StatusBadge label={item.status} tone="success" />
+              </Link>
+            ))}
+          </DashboardListCard>
+        </section>
+      </PermissionGuard>
 
       {/* STAT CARDS SECTION */}
       <div className="space-y-6">
@@ -99,6 +154,21 @@ export default function DashboardPage() {
             <StatCard label="Monthly Contributions" value={formatCurrency(summary?.monthlyContributionsCollected ?? 0)} icon={Wallet} tone="primary" isLoading={summaryLoading} />
           </div>
         </section>
+
+        {/* Reloan & Eligibility Group */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <RotateCw className="size-4 text-muted-foreground/85" />
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">Reloan & Eligibility</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <StatCard label="Pending Reloan Apps" value={String(summary?.pendingReloanApplications ?? 0)} icon={RotateCw} tone="warning" isLoading={summaryLoading} />
+            <StatCard label="Reloans Awaiting Review" value={String(summary?.reloansAwaitingReview ?? 0)} icon={FileClock} tone="info" isLoading={summaryLoading} />
+            <StatCard label="Approved Reloans" value={String(summary?.approvedReloans ?? 0)} icon={ClipboardCheck} tone="success" isLoading={summaryLoading} />
+            <StatCard label="Reloans Awaiting Release" value={String(summary?.reloansAwaitingRelease ?? 0)} icon={Banknote} tone="gold" isLoading={summaryLoading} />
+            <StatCard label="Members Eligible This Month" value={String(summary?.membersBecomingLoanEligibleThisMonth ?? 0)} icon={UserPlus} tone="primary" isLoading={summaryLoading} />
+          </div>
+        </section>
       </div>
 
       {/* CHARTS SECTION */}
@@ -113,42 +183,42 @@ export default function DashboardPage() {
               <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Monthly Loan Releases</h4>
               <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">Loan Data</span>
             </div>
-            <MonthlyReleasesChart data={monthlyReleases} />
+            <MonthlyReleasesChart data={monthlyReleases} isLoading={monthlyReleasesLoading} />
           </div>
           <div className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:border-border/100 hover:shadow-md">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
               <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Monthly Collections</h4>
               <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">Collections Data</span>
             </div>
-            <MonthlyCollectionsChart data={monthlyCollections} />
+            <MonthlyCollectionsChart data={monthlyCollections} isLoading={monthlyCollectionsLoading} />
           </div>
           <div className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:border-border/100 hover:shadow-md">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
               <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Loan Status Distribution</h4>
               <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">Distribution</span>
             </div>
-            <LoanStatusChart data={loanStatusDist} />
+            <LoanStatusChart data={loanStatusDist} isLoading={loanStatusDistLoading} />
           </div>
           <div className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:border-border/100 hover:shadow-md">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
               <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Benefit Distribution by Type</h4>
               <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">Benefits Type</span>
             </div>
-            <HorizontalBarChart data={benefitDist.map((b) => ({ label: b.type, value: b.count }))} valueLabel="Applications" />
+            <HorizontalBarChart data={benefitDist.map((b) => ({ label: b.type, value: b.count }))} valueLabel="Applications" isLoading={benefitDistLoading} />
           </div>
           <div className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:border-border/100 hover:shadow-md">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
               <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Members per Office</h4>
               <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">Office Scope</span>
             </div>
-            <HorizontalBarChart data={membersPerOffice.map((o) => ({ label: o.office, value: o.count }))} valueLabel="Members" />
+            <HorizontalBarChart data={membersPerOffice.map((o) => ({ label: o.office, value: o.count }))} valueLabel="Members" isLoading={membersPerOfficeLoading} />
           </div>
           <div className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:border-border/100 hover:shadow-md">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
               <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Membership Growth by Year</h4>
               <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">Growth Trend</span>
             </div>
-            <MembershipGrowthChart data={membershipGrowth} />
+            <MembershipGrowthChart data={membershipGrowth} isLoading={membershipGrowthLoading} />
           </div>
         </div>
       </section>

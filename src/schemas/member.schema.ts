@@ -36,12 +36,13 @@ export const memberSchema = z.object({
     .regex(/^\d+$/, "Please select a valid office"),
   position: z.string().min(1, "Position is required"),
   dateOfRegularAppointment: z.string().min(1, "Date of regular appointment is required"),
-  employmentStatus: z.enum(["Permanent", "Casual", "Job Order", "Contractual", "Co-terminus"]),
+  employmentStatus: z.string().min(1, "Employment status is required"),
 
   // Section 3: Membership Information
   membershipType: z.enum(["Regular", "Associate", "Honorary"]),
   membershipDate: z.string().min(1, "Membership date is required"),
   membershipStatus: z.enum(["Active", "Inactive", "Suspended", "Terminated", "Deceased"]),
+  netPay: z.number().min(0, "Net pay must be zero or more").optional(),
   retireeStatus: z.enum(["Not Retired", "Retired"]),
   remarks: z.string().optional(),
 

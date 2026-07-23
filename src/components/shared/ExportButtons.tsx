@@ -11,6 +11,10 @@ interface ExportButtonsProps {
 }
 
 export function ExportButtons({ permission, label = "record(s)", onExportExcel, onExportPdf }: ExportButtonsProps) {
+  // Official PDF/Excel downloads belong in Report Center, where exports are
+  // generated from the backend Blade template.
+  if (!window.location.pathname.startsWith("/reports")) return null
+
   return (
     <>
       <PermissionButton

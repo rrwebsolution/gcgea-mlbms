@@ -43,7 +43,32 @@ export interface NumberingFormatsSettings {
   benefitRelease: NumberingFormatConfig
 }
 
+export interface ReloanPolicySettings {
+  reloanEnabled: boolean
+  reloanAllowAfterFullyPaid: boolean
+  /** Schema-ready, functionally unsupported this phase — reloan-while-active always requires full settlement before submission regardless of this flag. */
+  reloanAllowWhileActive: boolean
+  reloanMinPaidInstallments: number | null
+  reloanMinPaidPercentage: number | null
+  reloanRequireNoOverdue: boolean
+  reloanRequireNoPenalty: boolean
+  reloanDeductPreviousBalance: boolean
+  reloanMaxConcurrentActiveLoans: number
+  reloanRequireNewPayslip: boolean
+  reloanRequireNewAuthorization: boolean
+  reloanRequireNewPromissoryNote: boolean
+  reloanRequireFinalApproval: boolean
+  reloanRequireBoardResolutionAboveLimit: boolean
+}
+
 export interface LoanSettings {
+  /** Backend-enforced global floor for all loans — see settings.loan.update via loan-settings.service.ts. Not hardcoded in any frontend component. */
+  minimumMembershipMonths: number
+  requirePaidContributions: boolean
+  minimumPaidContributionMonths: number
+  requiredMonthlyDuesAmount: number
+  requireConsecutiveContributionMonths: boolean
+  applyContributionRuleToReloan: boolean
   defaultInterestMethod: string
   defaultInterestRate: number
   defaultProcessingFee: number
@@ -58,10 +83,13 @@ export interface LoanSettings {
   allowLoanRestructuring: boolean
   defaultPaymentMethod: string
   roundingRule: string
+  reloanPolicy: ReloanPolicySettings
 }
 
 export interface ContributionSettings {
   defaultMonthlyContribution: number
+  /** GCGEA Cash Pabaon Program (Board Resolution 06-2024) — default monthly contribution amount. */
+  defaultCashPabaonContribution: number
   contributionDueDay: number
   allowPartialContribution: boolean
   allowAdvanceContribution: boolean
@@ -118,6 +146,56 @@ export interface BackupSettings {
   includeAttachments: boolean
 }
 
+export interface ReportTemplateSettings {
+  countryLine: string
+  organizationLine: string
+  acronymLine: string
+  addressLine: string
+  leftLogo: string
+  rightLogo: string
+  showGeneratedDate: boolean
+  categoryTemplates: Record<ReportTemplateCategory, ReportCategoryTemplate>
+}
+
+export type ReportTemplateCategory = "member" | "contribution" | "loan" | "benefit" | "financial"
+export type ReportTemplatePreset = "classic" | "modern" | "compact"
+
+export interface ReportTextStyle {
+  fontFamily: "Arial" | "Georgia" | "Times New Roman" | "Courier New"
+  fontSize: number
+  fontWeight: "normal" | "bold"
+  fontStyle: "normal" | "italic"
+  textDecoration: "none" | "underline"
+  textColor: string
+  textAlignment: "left" | "center" | "right"
+}
+
+export interface ReportExportDesign {
+  preset: ReportTemplatePreset
+  primaryColor: string
+  headerBackground: string
+  bodyFontSize: number
+  bodyFontFamily: "Arial" | "Georgia" | "Times New Roman" | "Courier New"
+  bodyFontWeight: "normal" | "bold"
+  bodyFontStyle: "normal" | "italic"
+  bodyTextDecoration: "none" | "underline"
+  bodyTextColor: string
+  bodyTextAlignment: "left" | "center" | "right"
+  stripedRows: boolean
+  showBorders: boolean
+  titleAlignment: "left" | "center"
+  orientation: "portrait" | "landscape" | "auto"
+  paperSize: "a4" | "letter" | "legal"
+  captionText: string
+  noteText: string
+  captionStyle: ReportTextStyle
+  noteStyle: ReportTextStyle
+}
+
+export interface ReportCategoryTemplate extends ReportExportDesign {
+  excelTemplate: ReportExportDesign
+}
+
 export interface BackupHistoryEntry {
   id: string
   name: string
@@ -138,14 +216,23 @@ export interface SystemSettings {
   notification: NotificationSettings
   security: SecuritySettings
   backup: BackupSettings
+  reportTemplate: ReportTemplateSettings
 }
 
 export interface AppearanceSettings {
+  sidebarLogoUrl: string
   primaryColor: string
   secondaryColor: string
   accentColor: string
   sidebarColor: string
   backgroundColor: string
+  progressColorStart: string
+  progressColorMiddle: string
+  progressColorEnd: string
+  baseFontSize: number
+  fontWeight: 400 | 500 | 600 | 700
+  fontFamily: "geist" | "system" | "serif" | "monospace"
+  fontStyle: "normal" | "italic"
   borderRadius: number
   compactMode: boolean
   sidebarStyle: "expanded" | "collapsed"

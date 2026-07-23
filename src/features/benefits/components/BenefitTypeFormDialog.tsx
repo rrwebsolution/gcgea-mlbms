@@ -1,13 +1,13 @@
 import * as React from "react"
-import { useForm } from "react-hook-form"
+import { useFieldArray, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Loader2 } from "lucide-react"
+import { Loader2, Plus, Trash2 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Switch } from "@/components/ui/switch"
 import { benefitTypeSchema, type BenefitTypeFormValues } from "@/schemas/benefit-type.schema"
 import type { BenefitType } from "@/types"
@@ -24,6 +24,9 @@ const DEFAULT_VALUES: BenefitTypeFormValues = {
   description: "",
   defaultAmount: 0,
   maximumAmount: 0,
+  prorationBasis: null,
+  prorationTiers: [],
+  fyAmounts: [],
   eligibilityRequirements: "",
   requiredMembershipMonths: 0,
   frequencyLimit: "",
@@ -39,6 +42,9 @@ function toFormValues(benefitType?: BenefitType): BenefitTypeFormValues {
     description: benefitType.description,
     defaultAmount: benefitType.defaultAmount,
     maximumAmount: benefitType.maximumAmount,
+    prorationBasis: benefitType.prorationBasis ?? null,
+    prorationTiers: benefitType.prorationTiers.map((t) => ({ minMonths: t.minMonths, maxMonths: t.maxMonths, percentage: t.percentage })),
+    fyAmounts: benefitType.fyAmounts.map((fy) => ({ fiscalYear: fy.fiscalYear, baseAmount: fy.baseAmount })),
     eligibilityRequirements: benefitType.eligibilityRequirements,
     requiredMembershipMonths: benefitType.requiredMembershipMonths,
     frequencyLimit: benefitType.frequencyLimit,
@@ -51,6 +57,7 @@ function toFormValues(benefitType?: BenefitType): BenefitTypeFormValues {
 export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmit }: BenefitTypeFormDialogProps) {
   const {
     register,
+    control,
     handleSubmit,
     reset,
     watch,
@@ -60,6 +67,11 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
     resolver: zodResolver(benefitTypeSchema),
     defaultValues: DEFAULT_VALUES,
   })
+
+  const tiersArray = useFieldArray({ control, name: "prorationTiers" })
+  const fyAmountsArray = useFieldArray({ control, name: "fyAmounts" })
+  const isProrated = watch("prorationBasis") != null
+  const isFyScoped = watch("fyAmounts").length > 0
 
   // The requiredDocuments field is a string[] on the form, but authored as free text
   // (one document per line). This local state holds the raw textarea text so that a
@@ -87,6 +99,24 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
     )
   }
 
+  function toggleProrated(enabled: boolean) {
+    setValue("prorationBasis", enabled ? "dues" : null)
+    if (!enabled) {
+      setValue("prorationTiers", [])
+      setValue("fyAmounts", [])
+    } else if (tiersArray.fields.length === 0) {
+      tiersArray.append({ minMonths: 0, maxMonths: null, percentage: 100 })
+    }
+  }
+
+  function toggleFyScoped(enabled: boolean) {
+    if (enabled && fyAmountsArray.fields.length === 0) {
+      fyAmountsArray.append({ fiscalYear: new Date().getFullYear(), baseAmount: 0 })
+    } else if (!enabled) {
+      setValue("fyAmounts", [])
+    }
+  }
+
   async function handleFormSubmit(values: BenefitTypeFormValues) {
     await onSubmit(values)
     onOpenChange(false)
@@ -99,7 +129,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
           <DialogTitle>{benefitType ? "Edit Benefit Type" : "Add Benefit Type"}</DialogTitle>
           <DialogDescription>{benefitType ? "Update this benefit program's configuration." : "Configure a new benefit program for GCGEA members."}</DialogDescription>
         </DialogHeader>
-        <form className="space-y-4" onSubmit={handleSubmit(handleFormSubmit)} noValidate>
+        <form className="max-h-[70vh] space-y-4 overflow-y-auto pr-1" onSubmit={handleSubmit(handleFormSubmit)} noValidate>
           <div className="space-y-1.5">
             <Label htmlFor="benefit-type-name">
               Benefit Type Name <span className="text-destructive">*</span>
@@ -141,6 +171,118 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
               {errors.maximumAmount && <p className="text-xs font-medium text-destructive">{errors.maximumAmount.message}</p>}
             </div>
           </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <label className="flex items-center justify-between gap-2 text-sm font-medium text-foreground">
+              <span>Prorate by Contribution Months</span>
+              <Switch checked={isProrated} onCheckedChange={toggleProrated} />
+            </label>
+            {isProrated && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="benefit-type-proration-basis">Count Months Against</Label>
+                  <CommandSelect
+                    className="w-full"
+                    value={watch("prorationBasis") ?? "dues"}
+                    onValueChange={(v) => setValue("prorationBasis", v as "dues" | "pabaon")}
+                    options={[
+                      { value: "dues", label: "Monthly Dues Contributions" },
+                      { value: "pabaon", label: "Cash Pabaon Deductions" },
+                    ]}
+                    hideSearch
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label>Proration Tiers</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={() => tiersArray.append({ minMonths: 0, maxMonths: null, percentage: 0 })}>
+                      <Plus className="size-3.5" /> Add Tier
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {tiersArray.fields.map((field, index) => (
+                      <div key={field.id} className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Min months"
+                          className="w-24"
+                          {...register(`prorationTiers.${index}.minMonths`, { valueAsNumber: true })}
+                        />
+                        <span className="text-xs text-muted-foreground">to</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Max (blank=open)"
+                          className="w-28"
+                          {...register(`prorationTiers.${index}.maxMonths`, {
+                            setValueAs: (v) => (v === "" ? null : Number(v)),
+                          })}
+                        />
+                        <span className="text-xs text-muted-foreground">mos =</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step="0.01"
+                          placeholder="%"
+                          className="w-20"
+                          {...register(`prorationTiers.${index}.percentage`, { valueAsNumber: true })}
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                        <Button type="button" variant="ghost" size="icon-sm" onClick={() => tiersArray.remove(index)}>
+                          <Trash2 className="size-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="flex items-center justify-between gap-2 text-sm font-medium text-foreground">
+                  <span>Base Amount Escalates by Fiscal Year</span>
+                  <Switch checked={isFyScoped} onCheckedChange={toggleFyScoped} />
+                </label>
+                {isFyScoped && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label>Fiscal Year Amounts</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={() => fyAmountsArray.append({ fiscalYear: null, baseAmount: 0 })}>
+                        <Plus className="size-3.5" /> Add Year
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {fyAmountsArray.fields.map((field, index) => (
+                        <div key={field.id} className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            placeholder="Year (blank=beyond)"
+                            className="w-36"
+                            {...register(`fyAmounts.${index}.fiscalYear`, {
+                              setValueAs: (v) => (v === "" ? null : Number(v)),
+                            })}
+                          />
+                          <span className="text-xs text-muted-foreground">=</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            placeholder="Base amount"
+                            className="flex-1"
+                            {...register(`fyAmounts.${index}.baseAmount`, { valueAsNumber: true })}
+                          />
+                          <Button type="button" variant="ghost" size="icon-sm" onClick={() => fyAmountsArray.remove(index)}>
+                            <Trash2 className="size-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="benefit-type-eligibility">Eligibility Requirements</Label>
             <Textarea id="benefit-type-eligibility" rows={2} placeholder="e.g. Active member for at least 6 months" {...register("eligibilityRequirements")} />
@@ -177,15 +319,16 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="benefit-type-status">Status</Label>
-              <Select value={watch("status")} onValueChange={(v) => setValue("status", v as "Active" | "Inactive")}>
-                <SelectTrigger id="benefit-type-status" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full"
+                value={watch("status")}
+                onValueChange={(v) => setValue("status", v as "Active" | "Inactive")}
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                ]}
+                hideSearch
+              />
             </div>
             <label className="flex items-center gap-2 self-end pb-1.5 text-sm text-foreground">
               <Switch checked={watch("approvalRequired")} onCheckedChange={(v) => setValue("approvalRequired", v)} />

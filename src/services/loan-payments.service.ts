@@ -1,9 +1,8 @@
 import type { LoanPayment, PaginatedResponse, PaginationParams, PaymentMethod } from "@/types"
-import { api } from "@/lib/api"
+import { api, getPaginated } from "@/lib/api"
 
 export async function listLoanPayments(params: PaginationParams = {}): Promise<PaginatedResponse<LoanPayment>> {
-  const { data } = await api.get<PaginatedResponse<LoanPayment>>("/loan-payments", { params })
-  return data
+  return getPaginated<LoanPayment>("/loan-payments", params)
 }
 
 export interface CreateLoanPaymentInput {

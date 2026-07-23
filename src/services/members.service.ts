@@ -1,5 +1,5 @@
 import type { Member, PaginatedResponse, PaginationParams } from "@/types"
-import { api } from "@/lib/api"
+import { api, getPaginated } from "@/lib/api"
 
 export interface MemberListParams extends PaginationParams {
   office?: string
@@ -35,13 +35,11 @@ export function profileCompleteness(member: Member): number {
 }
 
 export async function listMembers(params: MemberListParams = {}): Promise<PaginatedResponse<Member>> {
-  const { data } = await api.get<PaginatedResponse<Member>>("/members", { params })
-  return data
+  return getPaginated<Member>("/members", params)
 }
 
 export async function listArchivedMembers(params: PaginationParams = {}): Promise<PaginatedResponse<Member>> {
-  const { data } = await api.get<PaginatedResponse<Member>>("/members/archived", { params })
-  return data
+  return getPaginated<Member>("/members/archived", params)
 }
 
 export async function getMember(id: string): Promise<Member | undefined> {
@@ -69,6 +67,7 @@ export interface CreateMemberInput {
   membershipType: Member["membershipType"]
   membershipDate: string
   membershipStatus: Member["membershipStatus"]
+  netPay?: number
   retireeStatus: Member["retireeStatus"]
   remarks?: string
   beneficiaries: { id?: string; fullName: string; relationship: string; birthdate: string; contactNumber?: string; address?: string; sharePercentage?: number }[]
@@ -81,6 +80,14 @@ export async function createMember(input: CreateMemberInput): Promise<Member> {
 
 export async function updateMember(id: string, input: CreateMemberInput): Promise<Member> {
   const { data } = await api.put<Member>(`/members/${id}`, input)
+  return data
+}
+
+export async function updateMemberMembershipStatus(
+  id: string,
+  membershipStatus: "Active" | "Inactive"
+): Promise<Member> {
+  const { data } = await api.patch<Member>(`/members/${id}/membership-status`, { membershipStatus })
   return data
 }
 
@@ -113,6 +120,16 @@ export async function archiveMember(id: string, reason: string): Promise<Member>
 
 export async function restoreMember(id: string): Promise<Member> {
   const { data } = await api.post<Member>(`/members/${id}/restore`)
+  return data
+}
+
+export async function approveMemberRegistration(id: string, remarks?: string): Promise<Member> {
+  const { data } = await api.post<Member>(`/members/${id}/approve`, { remarks })
+  return data
+}
+
+export async function rejectMemberRegistration(id: string, remarks: string): Promise<Member> {
+  const { data } = await api.post<Member>(`/members/${id}/reject`, { remarks })
   return data
 }
 
@@ -173,6 +190,20 @@ export async function listAllActiveMembers(): Promise<Member[]> {
 
 export function getAllActiveMembers(): Member[] {
   return cachedActiveMembers
+}
+
+export interface MemberLoanEligibility {
+  eligible: boolean
+  completedMonths: number
+  requiredMonths: number
+  eligibleOn: string
+  checks: { label: string; passed: boolean; detail: string }[]
+}
+
+/** Membership-duration-only eligibility snapshot — used by the Create Loan Application member selector's badge/filter. */
+export async function getMemberLoanEligibility(memberId: string): Promise<MemberLoanEligibility> {
+  const { data } = await api.get<MemberLoanEligibility>(`/members/${memberId}/loan-eligibility`)
+  return data
 }
 
 export { calculateAge } from "@/utils/format"

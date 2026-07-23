@@ -1,9 +1,12 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { format, parseISO } from "date-fns"
 import { formatCurrency } from "@/utils/format"
+import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
+import { usePageRefresh } from "@/contexts/PageRefreshContext"
 
 interface MonthlyReleasesChartProps {
   data: { month: string; amount: number }[]
+  isLoading?: boolean
 }
 
 function MonthTick(value: string) {
@@ -14,7 +17,10 @@ function MonthTick(value: string) {
   }
 }
 
-export function MonthlyReleasesChart({ data }: MonthlyReleasesChartProps) {
+export function MonthlyReleasesChart({ data, isLoading }: MonthlyReleasesChartProps) {
+  const { isRefreshing } = usePageRefresh()
+  if (isLoading || isRefreshing) return <ChartSkeleton variant="bars" height={260} />
+
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>

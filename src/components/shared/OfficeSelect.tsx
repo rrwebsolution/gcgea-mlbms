@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { listAllOffices } from "@/services/offices.service"
 
 interface OfficeSelectProps {
@@ -18,21 +18,17 @@ export function OfficeSelect({ value, onValueChange, placeholder = "Select offic
   const offices = (data ?? []).filter((o) => !activeOnly || o.status === "Active")
 
   return (
-    <Select value={value} onValueChange={(v) => onValueChange(v ?? "")} disabled={disabled}>
-      <SelectTrigger className={className ?? "w-full"}>
-        <SelectValue placeholder={placeholder}>
-          {(selectedValue: string) =>
-            offices.find((office) => (valueField === "id" ? office.id : office.name) === selectedValue)?.name ?? placeholder
-          }
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {offices.map((office) => (
-          <SelectItem key={office.id} value={valueField === "id" ? office.id : office.name}>
-            {office.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <CommandSelect
+      className={className ?? "w-full"}
+      value={value}
+      onValueChange={(v) => onValueChange(v ?? "")}
+      disabled={disabled}
+      placeholder={placeholder}
+      searchPlaceholder="Search offices…"
+      options={offices.map((office) => ({
+        value: valueField === "id" ? office.id : office.name,
+        label: office.name,
+      }))}
+    />
   )
 }

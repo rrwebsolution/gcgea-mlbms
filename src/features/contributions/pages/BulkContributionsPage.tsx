@@ -2,7 +2,7 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import type { ColumnDef, RowSelectionState } from "@tanstack/react-table"
-import { CheckCircle2, Loader2, Printer, Save, Users } from "lucide-react"
+import { CheckCircle2, Loader2, Save, Users } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
 import { SearchInput } from "@/components/shared/SearchInput"
@@ -11,19 +11,20 @@ import { Pagination } from "@/components/shared/Pagination"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { AlertBanner } from "@/components/shared/AlertBanner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { listMembers } from "@/services/members.service"
-import { bulkCreateContributions, hasExistingContribution, type BulkCreateResult } from "@/services/contributions.service"
+import { bulkCreateContributions, hasExistingContribution, defaultContributionAmountForType, type BulkCreateResult } from "@/services/contributions.service"
 import { paginate } from "@/utils/paginate"
 import { formatCurrency } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
-import type { MembershipStatus, PaymentMethod } from "@/types"
+import type { PaymentMethod } from "@/types"
 
 interface BulkRow {
   memberId: string
@@ -51,8 +52,9 @@ export default function BulkContributionsPage() {
 
   const [period, setPeriod] = React.useState(currentPeriod())
   const [office, setOffice] = React.useState("")
-  const [membershipStatus, setMembershipStatus] = React.useState<MembershipStatus>("Active")
-  const [defaultAmount, setDefaultAmount] = React.useState<number>(150)
+  const [defaultAmount, setDefaultAmount] = React.useState<number>(() => defaultContributionAmountForType("Monthly Dues") ?? 0)
+
+  /** Re-suggests the configured default amount whenever the type changes — same "never hardcoded" rule as the Add Contribution page. */
   const [paymentDate, setPaymentDate] = React.useState(() => new Date().toISOString().slice(0, 10))
   const [paymentMethod, setPaymentMethod] = React.useState<PaymentMethod>("Payroll Deduction")
   const [payrollReference, setPayrollReference] = React.useState("")
@@ -76,7 +78,7 @@ export default function BulkContributionsPage() {
     }
     setIsLoadingMembers(true)
     try {
-      const response = await listMembers({ office, membershipStatus, perPage: 500 })
+      const response = await listMembers({ office, membershipStatus: "Active", perPage: 500 })
       const loaded: BulkRow[] = response.data.map((m) => ({
         memberId: m.id,
         memberNumber: m.memberNumber,
@@ -87,7 +89,7 @@ export default function BulkContributionsPage() {
         originalAmount: defaultAmount,
         status: "Paid",
         remarks: "",
-        isDuplicate: hasExistingContribution(m.id, period),
+        isDuplicate: hasExistingContribution(m.id, period, "Monthly Dues"),
       }))
       setRows(loaded)
       setRowSelection(Object.fromEntries(loaded.map((r) => [r.memberId, true])))
@@ -138,6 +140,7 @@ export default function BulkContributionsPage() {
     try {
       const saveResult = await bulkCreateContributions({
         contributionPeriod: period,
+        contributionType: "Monthly Dues",
         paymentDate,
         paymentMethod,
         payrollReference: payrollReference || undefined,
@@ -147,7 +150,7 @@ export default function BulkContributionsPage() {
       })
       setResult(saveResult)
       setShowConfirm(false)
-      toast.success(`Saved ${saveResult.saved} contribution record(s).`)
+      toast.success(`Saved ${saveResult.saved} Monthly Dues and ${saveResult.cashPabaonSaved} Cash Pabaon deduction record(s).`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to save contributions.")
     } finally {
@@ -183,13 +186,17 @@ export default function BulkContributionsPage() {
       header: "Payment Status",
       enableSorting: false,
       cell: ({ row }) => (
-        <Select value={row.original.status} onValueChange={(v) => updateRow(row.original.memberId, { status: (v ?? "Paid") as "Paid" | "Unpaid" })}>
-          <SelectTrigger size="sm" className="w-28"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Paid">Paid</SelectItem>
-            <SelectItem value="Unpaid">Unpaid</SelectItem>
-          </SelectContent>
-        </Select>
+        <CommandSelect
+          size="sm"
+          className="w-28"
+          value={row.original.status}
+          onValueChange={(v) => updateRow(row.original.memberId, { status: (v ?? "Paid") as "Paid" | "Unpaid" })}
+          options={[
+            { value: "Paid", label: "Paid" },
+            { value: "Unpaid", label: "Unpaid" },
+          ]}
+          hideSearch
+        />
       ),
     },
     {
@@ -218,6 +225,12 @@ export default function BulkContributionsPage() {
       <PageHeader title="Bulk Contribution Entry" description="Record contributions for multiple members at once for a given period and office." />
 
       <FormSection title="Contribution Setup">
+        <AlertBanner
+          tone="info"
+          title="Monthly Dues"
+          description="Bulk entries are always recorded as Monthly Dues. With Payroll Deduction, the active Cash Pabaon default is automatically posted to Deduction Records for the same members and period."
+          className="mb-4"
+        />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
             <Label>Contribution Period <span className="text-destructive">*</span></Label>
@@ -229,13 +242,7 @@ export default function BulkContributionsPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Membership Status</Label>
-            <Select value={membershipStatus} onValueChange={(v) => setMembershipStatus((v ?? "Active") as MembershipStatus)}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
+            <Input value="Active Members Only" disabled />
           </div>
           <div className="space-y-1.5">
             <Label>Default Contribution Amount</Label>
@@ -247,12 +254,13 @@ export default function BulkContributionsPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Payment Method</Label>
-            <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod((v ?? "Payroll Deduction") as PaymentMethod)}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={paymentMethod}
+              onValueChange={(v) => setPaymentMethod((v ?? "Payroll Deduction") as PaymentMethod)}
+              options={PAYMENT_METHODS.map((m) => ({ value: m, label: m }))}
+              hideSearch
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Payroll Reference</Label>
@@ -326,14 +334,11 @@ export default function BulkContributionsPage() {
           </div>
           <p className="font-heading text-base font-semibold text-foreground">Batch Saved</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {result.saved} saved · {result.skippedDuplicates} skipped as duplicate · {result.failed} failed
+            {result.saved} Monthly Dues saved · {result.cashPabaonSaved} Cash Pabaon deductions saved · {result.skippedDuplicates} contribution duplicates skipped · {result.cashPabaonSkipped} deduction duplicates skipped · {result.failed} failed
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <Button onClick={() => navigate("/contributions")}>View Contribution Records</Button>
             <Button variant="outline" onClick={handleClear}>Create Another Batch</Button>
-            <Button variant="outline" onClick={() => window.print()}>
-              <Printer /> Print Batch Summary
-            </Button>
           </div>
         </div>
       )}

@@ -14,7 +14,7 @@ import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -174,15 +174,19 @@ export default function UsersPage() {
       <div className="rounded-xl border border-border bg-card shadow-sm">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
           <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search by name, username, email…" className="max-w-sm" />
-          <Select value={status || "all"} onValueChange={(v) => { setStatus(!v || v === "all" ? "" : v); setPage(1) }}>
-            <SelectTrigger className="w-36"><SelectValue placeholder="Status">{(v: string) => (v === "all" ? "All Statuses" : v)}</SelectValue></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="Active">Active</SelectItem>
-              <SelectItem value="Inactive">Inactive</SelectItem>
-              <SelectItem value="Disabled">Disabled</SelectItem>
-            </SelectContent>
-          </Select>
+          <CommandSelect
+            className="w-36"
+            value={status || "all"}
+            onValueChange={(v) => { setStatus(!v || v === "all" ? "" : v); setPage(1) }}
+            placeholder="Status"
+            options={[
+              { value: "all", label: "All Statuses" },
+              { value: "Active", label: "Active" },
+              { value: "Inactive", label: "Inactive" },
+              { value: "Disabled", label: "Disabled" },
+            ]}
+            hideSearch
+          />
         </div>
         <DataTable
           columns={columns}

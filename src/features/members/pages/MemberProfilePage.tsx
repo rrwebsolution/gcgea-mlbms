@@ -5,7 +5,6 @@ import {
   Banknote,
   FileText,
   Landmark,
-  Loader2,
   PencilLine,
   Plus,
   PrinterIcon,
@@ -19,14 +18,20 @@ import { EmptyState } from "@/components/shared/EmptyState"
 import { DocumentCard } from "@/components/shared/DocumentCard"
 import { DocumentGallery, type DocumentGalleryItem } from "@/components/shared/DocumentGallery"
 import { ImagePreviewDialog } from "@/components/shared/ImagePreviewDialog"
+import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
+import { IndeterminateBar } from "@/components/shared/loaders/IndeterminateBar"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ReloanButton } from "@/features/loans/components/ReloanButton"
 import { getMember, profileCompleteness } from "@/services/members.service"
 import { getAllContributions } from "@/services/contributions.service"
-import { getAllLoans } from "@/services/loans.service"
+import { listAllLoans } from "@/services/loans.service"
 import { listAllLoanPayments } from "@/services/loan-payments.service"
+import { listAllDeductions } from "@/services/deductions.service"
+import { listDeductionTypes } from "@/services/deduction-types.service"
 import { getAllBenefits } from "@/services/benefits.service"
 import { MEMBERSHIP_STATUS_TONE, LOAN_STATUS_TONE, BENEFIT_STATUS_TONE, CONTRIBUTION_STATUS_TONE } from "@/constants/status"
 import { calculateAge, calculateDurationLabel, formatCurrency, formatDateShort, initialsFromName } from "@/utils/format"
@@ -35,24 +40,21 @@ export default function MemberProfilePage() {
   const { id = "" } = useParams()
   const { data: member, isLoading } = useQuery({ queryKey: ["members", id], queryFn: () => getMember(id) })
   const { data: allPayments = [], isLoading: isLoadingPayments } = useQuery({ queryKey: ["loan-payments", "all"], queryFn: listAllLoanPayments })
+  const { data: allLoans = [] } = useQuery({ queryKey: ["loans", "all"], queryFn: listAllLoans })
+  const { data: allDeductions = [] } = useQuery({ queryKey: ["deductions", "all"], queryFn: listAllDeductions })
+  const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes })
   const [photoPreviewOpen, setPhotoPreviewOpen] = React.useState(false)
 
   useBreadcrumbExtra(member?.fullName)
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center" role="status">
-        <Loader2 className="size-8 animate-spin text-primary" aria-hidden="true" />
-        <span className="sr-only">Loading member profile</span>
-      </div>
-    )
-  }
+  if (isLoading) return <ProfileSkeleton cards={2} />
   if (!member) return <EmptyState icon={UserRound} title="Member not found" description="This member record may have been archived or removed." />
 
   const contributions = getAllContributions().filter((c) => c.memberId === member.id)
-  const loans = getAllLoans().filter((l) => l.memberId === member.id)
+  const loans = allLoans.filter((l) => l.memberId === member.id)
   const payments = allPayments.filter((p) => p.memberId === member.id)
   const benefits = getAllBenefits().filter((b) => b.memberId === member.id)
+  const memberDeductions = allDeductions.filter((deduction) => deduction.memberId === member.id)
 
   const outstandingBalance = loans.reduce((sum, l) => sum + l.outstandingBalance, 0)
   const totalContributions = contributions.filter((c) => c.status === "Posted").reduce((sum, c) => sum + c.amount, 0)
@@ -88,18 +90,18 @@ export default function MemberProfilePage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <PermissionButton 
-              permission="members.update" 
-              variant="outline" 
-              size="sm" 
+            <PermissionButton
+              permission="members.update"
+              variant="outline"
+              size="sm"
               className="h-9 gap-1.5 text-xs hover:bg-accent/80 active:scale-97 transition-all"
               render={<Link to={`/members/${member.id}/edit`} />}
             >
               <PencilLine className="size-3.5" /> Edit Profile
             </PermissionButton>
-            <PermissionButton 
-              permission="members.print" 
-              variant="outline" 
+            <PermissionButton
+              permission="members.print"
+              variant="outline"
               size="sm"
               className="h-9 gap-1.5 text-xs hover:bg-accent/80 active:scale-97 transition-all"
             >
@@ -163,6 +165,11 @@ export default function MemberProfilePage() {
           <TabsTrigger value="employment" className="text-xs font-semibold">Employment</TabsTrigger>
           <TabsTrigger value="beneficiaries" className="text-xs font-semibold">Beneficiaries</TabsTrigger>
           <TabsTrigger value="contributions" className="text-xs font-semibold">Contributions</TabsTrigger>
+          {deductionTypes.filter((deductionType) => deductionType.isActive).map((deductionType) => (
+            <TabsTrigger key={deductionType.id} value={`deduction-${deductionType.id}`} className="text-xs font-semibold">
+              {deductionType.name}
+            </TabsTrigger>
+          ))}
           <TabsTrigger value="loans" className="text-xs font-semibold">Loans</TabsTrigger>
           <TabsTrigger value="payments" className="text-xs font-semibold">Loan Payments</TabsTrigger>
           <TabsTrigger value="benefits" className="text-xs font-semibold">Benefits</TabsTrigger>
@@ -261,6 +268,46 @@ export default function MemberProfilePage() {
           )}
         </TabsContent>
 
+        {deductionTypes.filter((deductionType) => deductionType.isActive).map((deductionType) => {
+          const records = memberDeductions.filter((deduction) => deduction.deductionTypeId === deductionType.id)
+          return (
+            <TabsContent key={deductionType.id} value={`deduction-${deductionType.id}`} className="mt-4">
+              {records.length === 0 ? (
+                <EmptyState title={`No ${deductionType.name} deductions on record`} />
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Reference #</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Period</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Amount</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Payment Date</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Payroll Reference</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {records.map((deduction) => (
+                        <TableRow key={deduction.id}>
+                          <TableCell className="font-semibold text-foreground py-3">{deduction.referenceNumber}</TableCell>
+                          <TableCell className="py-3">{deduction.period}</TableCell>
+                          <TableCell className="py-3">{formatCurrency(deduction.amount)}</TableCell>
+                          <TableCell className="py-3">{formatDateShort(deduction.paymentDate)}</TableCell>
+                          <TableCell className="py-3">{deduction.payrollReference || "—"}</TableCell>
+                          <TableCell className="py-3">
+                            <StatusBadge label={deduction.status} tone={deduction.status === "Posted" ? "success" : "neutral"} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+          )
+        })}
+
         <TabsContent value="loans" className="mt-4">
           {loans.length === 0 ? (
             <EmptyState title="No loan applications on record" />
@@ -274,6 +321,7 @@ export default function MemberProfilePage() {
                     <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Requested Amount</TableHead>
                     <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Outstanding Balance</TableHead>
                     <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -281,11 +329,15 @@ export default function MemberProfilePage() {
                     <TableRow key={l.id}>
                       <TableCell className="py-3">
                         <Link to={`/loans/${l.id}`} className="font-semibold text-primary hover:underline">{l.applicationNumber}</Link>
+                        {l.applicationType === "reloan" && <span className="ml-1.5 text-xs text-muted-foreground">(Reloan #{l.reloanSequence ?? 1})</span>}
                       </TableCell>
                       <TableCell className="py-3">{l.loanTypeName}</TableCell>
                       <TableCell className="py-3">{formatCurrency(l.requestedAmount)}</TableCell>
                       <TableCell className="py-3">{formatCurrency(l.outstandingBalance)}</TableCell>
                       <TableCell className="py-3"><StatusBadge label={l.status} tone={LOAN_STATUS_TONE[l.status]} /></TableCell>
+                      <TableCell className="py-3 text-right">
+                        <ReloanButton loan={l} eligible={["Fully Paid", "Active", "Released"].includes(l.status)} />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -296,9 +348,13 @@ export default function MemberProfilePage() {
 
         <TabsContent value="payments" className="mt-4">
           {isLoadingPayments ? (
-            <div className="flex min-h-40 items-center justify-center animate-pulse" role="status">
-              <Loader2 className="size-7 animate-spin text-primary" aria-hidden="true" />
-              <span className="sr-only">Loading member loan payments</span>
+            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+              <IndeterminateBar className="rounded-none" />
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-full" />
+                ))}
+              </div>
             </div>
           ) : payments.length === 0 ? (
             <EmptyState title="No loan payments on record" />

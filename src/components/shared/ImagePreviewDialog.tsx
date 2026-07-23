@@ -2,6 +2,7 @@ import * as React from "react"
 import { ChevronLeft, ChevronRight, Maximize2, ZoomIn, ZoomOut } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { ImageWithSkeleton } from "@/components/shared/loaders/ImageWithSkeleton"
 import { cn } from "@/lib/utils"
 
 export interface ImagePreviewItem {
@@ -50,9 +51,11 @@ export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 
       <DialogContent className="flex h-[85vh] max-w-[calc(100%-2rem)] flex-col gap-3 sm:max-w-3xl">
         <DialogTitle className="truncate pr-8">{current.name}</DialogTitle>
         <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg bg-muted/40">
-          <img
+          <ImageWithSkeleton
+            key={current.url}
             src={current.url}
             alt={current.name}
+            containerClassName="h-full w-full flex items-center justify-center"
             className={cn("max-h-full max-w-full object-contain transition-transform duration-150", zoom > 1 && "cursor-move")}
             style={{ transform: `scale(${zoom})` }}
           />

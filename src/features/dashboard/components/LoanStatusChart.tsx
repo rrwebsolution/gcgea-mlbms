@@ -1,8 +1,11 @@
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { LOAN_STATUS_TONE, type StatusTone } from "@/constants/status"
+import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
+import { usePageRefresh } from "@/contexts/PageRefreshContext"
 
 interface LoanStatusChartProps {
   data: { status: string; count: number }[]
+  isLoading?: boolean
 }
 
 const TONE_COLOR: Record<StatusTone, string> = {
@@ -14,8 +17,11 @@ const TONE_COLOR: Record<StatusTone, string> = {
   gold: "var(--color-gold)",
 }
 
-export function LoanStatusChart({ data }: LoanStatusChartProps) {
+export function LoanStatusChart({ data, isLoading }: LoanStatusChartProps) {
+  const { isRefreshing } = usePageRefresh()
   const sorted = [...data].sort((a, b) => b.count - a.count)
+
+  if (isLoading || isRefreshing) return <ChartSkeleton variant="bars-horizontal" height={Math.max(220, sorted.length * 32)} />
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(220, sorted.length * 32)}>

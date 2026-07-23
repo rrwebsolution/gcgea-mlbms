@@ -7,6 +7,16 @@ export const IMAGE_EXTENSIONS = ["JPG", "JPEG", "PNG", "WEBP"]
 export const DOCUMENT_MIME_TYPES = ["application/pdf", ...IMAGE_MIME_TYPES]
 export const DOCUMENT_EXTENSIONS = ["PDF", ...IMAGE_EXTENSIONS]
 
+export const SPREADSHEET_MIME_TYPES = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+]
+export const SPREADSHEET_EXTENSIONS = ["XLSX", "XLS"]
+
+/** Adds CSV on top of SPREADSHEET_MIME_TYPES/EXTENSIONS for importers that accept it too (e.g. Member Import). */
+export const WORKBOOK_MIME_TYPES = [...SPREADSHEET_MIME_TYPES, "text/csv"]
+export const WORKBOOK_EXTENSIONS = [...SPREADSHEET_EXTENSIONS, "CSV"]
+
 export type UploadStatus = "idle" | "uploading" | "uploaded" | "failed" | "cancelled" | "rejected"
 
 export interface FileValidationResult {

@@ -11,7 +11,7 @@ import { DataTable } from "@/components/shared/DataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllLoans, getLoanTypesSync } from "@/services/loans.service"
 import { LOAN_STATUS_TONE } from "@/constants/status"
@@ -118,13 +118,13 @@ export default function OutstandingBalancesReportPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Loan Type</Label>
-            <Select value={draft.loanTypeId || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, loanTypeId: v === "__all__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Loan Types">{(v: string) => (v === "__all__" ? "All Loan Types" : (loanTypes.find((t) => t.id === v)?.name ?? v))}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Loan Types</SelectItem>
-                {loanTypes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.loanTypeId || "__all__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, loanTypeId: v === "__all__" ? "" : v }))}
+              options={[{ value: "__all__", label: "All Loan Types" }, ...loanTypes.map((t) => ({ value: t.id, label: t.name }))]}
+              placeholder="All Loan Types"
+            />
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">

@@ -12,6 +12,7 @@ import { listBenefitTypes, createBenefitType, updateBenefitType, deleteBenefitTy
 import { formatCurrency } from "@/utils/format"
 import type { BenefitType } from "@/types"
 import { BenefitTypeFormDialog } from "@/features/benefits/components/BenefitTypeFormDialog"
+import type { BenefitTypeFormValues } from "@/schemas/benefit-type.schema"
 
 export default function BenefitTypesPage() {
   const queryClient = useQueryClient()
@@ -30,7 +31,7 @@ export default function BenefitTypesPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: Partial<BenefitType> }) => updateBenefitType(id, values),
+    mutationFn: ({ id, values }: { id: string; values: BenefitTypeFormValues }) => updateBenefitType(id, values),
     onSuccess: () => {
       toast.success("Benefit type updated successfully.")
       queryClient.invalidateQueries({ queryKey: ["benefit-types"] })

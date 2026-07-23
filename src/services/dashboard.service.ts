@@ -12,6 +12,11 @@ export interface DashboardSummary {
   pendingBenefitApplications: number
   benefitsReleased: number
   monthlyContributionsCollected: number
+  pendingReloanApplications: number
+  reloansAwaitingReview: number
+  approvedReloans: number
+  reloansAwaitingRelease: number
+  membersBecomingLoanEligibleThisMonth: number
 }
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {

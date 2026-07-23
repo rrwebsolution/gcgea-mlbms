@@ -12,6 +12,7 @@ interface AuthContextValue {
   login: (credentials: LoginCredentials) => Promise<void>
   logout: () => Promise<void>
   dismissSessionExpired: () => void
+  updateCurrentUser: (user: AuthUser) => void
   hasPermission: (code: PermissionCode) => boolean
   hasAnyPermission: (codes: PermissionCode[]) => boolean
   hasAllPermissions: (codes: PermissionCode[]) => boolean
@@ -81,6 +82,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
   }, [])
 
+  const updateCurrentUser = React.useCallback((updatedUser: AuthUser) => {
+    setUser(updatedUser)
+  }, [])
+
   const hasPermission = React.useCallback(
     (code: PermissionCode) => Boolean(user?.permissions.includes(code)),
     [user]
@@ -115,12 +120,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       logout,
       dismissSessionExpired,
+      updateCurrentUser,
       hasPermission,
       hasAnyPermission,
       hasAllPermissions,
       hasRole,
     }),
-    [user, isInitializing, isLoggingIn, sessionExpired, login, logout, dismissSessionExpired, hasPermission, hasAnyPermission, hasAllPermissions, hasRole]
+    [user, isInitializing, isLoggingIn, sessionExpired, login, logout, dismissSessionExpired, updateCurrentUser, hasPermission, hasAnyPermission, hasAllPermissions, hasRole]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

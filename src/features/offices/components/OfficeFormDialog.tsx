@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { officeSchema, type OfficeFormValues } from "@/schemas/office.schema"
 import type { Office } from "@/types"
 
@@ -60,15 +60,16 @@ export function OfficeFormDialog({ open, onOpenChange, office, onSubmit }: Offic
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="office-status">Status</Label>
-              <Select value={watch("status")} onValueChange={(v) => setValue("status", v as "Active" | "Inactive")}>
-                <SelectTrigger id="office-status" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full"
+                value={watch("status")}
+                onValueChange={(v) => setValue("status", v as "Active" | "Inactive")}
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                ]}
+                hideSearch
+              />
             </div>
           </div>
           <div className="space-y-1.5">

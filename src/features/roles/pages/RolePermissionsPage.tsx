@@ -109,7 +109,7 @@ export default function RolePermissionsPage() {
         />
       </div>
 
-      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
+      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:border sm:shadow-sm">
         {isDirty ? (
           <p className="text-xs font-medium text-warning">You have unsaved permission changes.</p>
         ) : (

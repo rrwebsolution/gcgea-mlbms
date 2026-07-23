@@ -14,17 +14,37 @@ interface MemberSearchSelectProps {
   disabled?: boolean
   placeholder?: string
   selectedMember?: Member
+  /**
+   * Restricts results to this membership status — the common case for
+   * picking a member for a *new* record (loan, contribution). Pass `null`
+   * to search every member regardless of status, e.g. payroll import
+   * resolution, where the sheet may reference an Inactive/Suspended member.
+   */
+  membershipStatus?: string | null
+  perPage?: number
 }
 
-export function MemberSearchSelect({ value, onSelect, disabled, placeholder = "Search by name or member number…", selectedMember }: MemberSearchSelectProps) {
+export function MemberSearchSelect({
+  value,
+  onSelect,
+  disabled,
+  placeholder = "Search by name or member number…",
+  selectedMember,
+  membershipStatus = "Active",
+  perPage = 200,
+}: MemberSearchSelectProps) {
   const [open, setOpen] = React.useState(false)
 
   const { data, isLoading } = useQuery({
-    queryKey: ["members", "search-select"],
-    queryFn: () => listMembers({ perPage: 200, membershipStatus: "Active" }),
+    queryKey: ["members", "search-select", membershipStatus, perPage],
+    queryFn: () => listMembers({ perPage, ...(membershipStatus ? { membershipStatus } : {}) }),
   })
 
-  const members = data?.data ?? []
+  // Enforce the status client-side too, so inactive records never leak into
+  // transaction selectors if an endpoint ignores its status filter.
+  const members = (data?.data ?? []).filter((member) =>
+    membershipStatus ? member.membershipStatus === membershipStatus : true
+  )
   const selected = members.find((m) => m.id === value) ?? (selectedMember?.id === value ? selectedMember : undefined)
 
   return (
@@ -59,7 +79,7 @@ export function MemberSearchSelect({ value, onSelect, disabled, placeholder = "S
               {members.map((member) => (
                 <CommandItem
                   key={member.id}
-                  value={`${member.fullName} ${member.memberNumber}`}
+                  value={`${member.fullName} ${member.memberNumber} ${member.employeeNumber} ${member.officeName} ${member.position}`}
                   onSelect={() => {
                     onSelect(member.id)
                     setOpen(false)
@@ -67,7 +87,12 @@ export function MemberSearchSelect({ value, onSelect, disabled, placeholder = "S
                 >
                   <Check className={cn("size-4", member.id === value ? "opacity-100" : "opacity-0")} />
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate">{member.fullName}</span>
+                    <span className="truncate">
+                      {member.fullName}
+                      {member.membershipStatus !== "Active" && (
+                        <span className="ml-1.5 text-xs text-muted-foreground">({member.membershipStatus})</span>
+                      )}
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       {member.memberNumber} · {member.officeName}
                     </span>

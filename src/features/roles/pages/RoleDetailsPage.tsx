@@ -9,6 +9,7 @@ import { PermissionButton } from "@/components/shared/PermissionButton"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { ActivityTimeline, type TimelineEntry } from "@/components/shared/ActivityTimeline"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
@@ -56,7 +57,7 @@ export default function RoleDetailsPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Unable to delete role."),
   })
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading role…</p>
+  if (isLoading) return <ProfileSkeleton cards={2} showTabs={false} />
   if (!role) return <EmptyState icon={ShieldCheck} title="Role not found" description="This role may have been deleted." />
 
   const assignedUsers = allUsers.filter((u) => u.roleId === role.id || u.additionalRoleIds.includes(role.id))

@@ -1,8 +1,11 @@
 import { listAllActiveMembers } from "@/services/members.service"
 import { listAllContributions } from "@/services/contributions.service"
+import { listAllDeductions } from "@/services/deductions.service"
 import { listAllLoans } from "@/services/loans.service"
 import { listAllLoanPayments } from "@/services/loan-payments.service"
 import { listAllBenefits } from "@/services/benefits.service"
+import { listAllRoles } from "@/services/roles.service"
+import { listAllUsers } from "@/services/users.service"
 
 /**
  * Several pages read list data synchronously (e.g. duplicate-detection,
@@ -15,7 +18,10 @@ import { listAllBenefits } from "@/services/benefits.service"
 export function warmSyncCaches(): void {
   void listAllActiveMembers()
   void listAllContributions()
+  void listAllDeductions()
   void listAllLoans()
   void listAllLoanPayments()
   void listAllBenefits()
+  void listAllRoles()
+  void listAllUsers()
 }

@@ -8,6 +8,7 @@ export type EligibilityResult = "Eligible" | "Eligible with Warning" | "Not Elig
 interface EligibilityChecklistProps {
   items: EligibilityCheckItem[]
   result: EligibilityResult
+  columns?: 1 | 2
 }
 
 const RESULT_TONE: Record<EligibilityResult, "success" | "warning" | "danger"> = {
@@ -16,14 +17,14 @@ const RESULT_TONE: Record<EligibilityResult, "success" | "warning" | "danger"> =
   "Not Eligible": "danger",
 }
 
-export function EligibilityChecklist({ items, result }: EligibilityChecklistProps) {
+export function EligibilityChecklist({ items, result, columns = 1 }: EligibilityChecklistProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
         <span className="text-sm font-medium text-foreground">Overall Eligibility Result</span>
         <StatusBadge label={result} tone={RESULT_TONE[result]} className="h-6 px-3 text-xs" />
       </div>
-      <ul className="space-y-2">
+      <ul className={cn("grid gap-2", columns === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1")}>
         {items.map((item) => (
           <li
             key={item.label}

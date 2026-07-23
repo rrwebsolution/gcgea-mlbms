@@ -25,9 +25,12 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
       p("members.update", "Update Members", "members", "Edit member records"),
       p("members.archive", "Archive Members", "members", "Archive member records"),
       p("members.restore", "Restore Members", "members", "Restore archived members"),
-      p("members.import", "Import Members", "members", "Bulk import members"),
       p("members.export", "Export Members", "members", "Export member records"),
       p("members.print", "Print Members", "members", "Print member list/profile"),
+      p("members.review", "Review Members", "members", "Review submitted member registrations"),
+      p("members.approve", "Approve Members", "members", "Approve member registrations"),
+      p("members.reject", "Reject Members", "members", "Reject member registrations"),
+      p("members.auto_approve", "Auto Approve Members", "members", "Automatically approve new and imported members"),
     ],
   },
   {
@@ -79,6 +82,7 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
       p("loans.approve", "Approve Loans", "loans", "Approve loan applications"),
       p("loans.reject", "Reject Loans", "loans", "Reject loan applications"),
       p("loans.release", "Release Loans", "loans", "Release approved loans"),
+      p("loans.reloan", "Initiate Reloan", "loans", "Create a reloan application from an existing, eligible loan"),
       p("loans.cancel", "Cancel Loans", "loans", "Cancel loan applications"),
       p("loans.restructure", "Restructure Loans", "loans", "Restructure an existing loan"),
       p("loans.override_eligibility", "Override Loan Eligibility", "loans", "Override failed eligibility checks with a documented reason"),
@@ -170,6 +174,14 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
     ],
   },
   {
+    group: "approval_workflow",
+    label: "Approval Workflow",
+    permissions: [
+      p("approval_workflow.view", "View Approval Workflow", "approval_workflow", "View workflow stage configuration"),
+      p("approval_workflow.configure", "Configure Approval Workflow", "approval_workflow", "Create/edit workflow stage assignments"),
+    ],
+  },
+  {
     group: "drafts",
     label: "Drafts",
     permissions: [
@@ -183,6 +195,75 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
       p("drafts.duplicate", "Duplicate Drafts", "drafts", "Duplicate an existing draft"),
       p("drafts.transfer", "Transfer Draft Ownership", "drafts", "Transfer a draft to another user"),
       p("drafts.submit", "Submit Drafts", "drafts", "Finalize a draft into a real record"),
+    ],
+  },
+  {
+    group: "member_import",
+    label: "Member Import",
+    permissions: [
+      p("member_import.view", "View Member Imports", "member_import", "View member import history, batch detail, and error/audit reports"),
+      p("member_import.create", "Run Member Import", "member_import", "Upload a workbook, select a worksheet, map columns, preview/validate, and commit a member import batch"),
+      p("member_import.resolve_duplicates", "Resolve Member Duplicates", "member_import", "Act on possible/probable/exact duplicate-member matches during import, including merge decisions"),
+      p("member_import.manage_offices", "Manage Import Office Mapping", "member_import", "Create a new office or save an office alias while resolving unmapped office names during import"),
+    ],
+  },
+  {
+    group: "payroll_manual",
+    label: "Manual Payroll Entry",
+    permissions: [
+      p("payroll.manual.view", "View Manual Payroll", "payroll_manual", "View manual payroll deduction entries"),
+      p("payroll.manual.create", "Create Manual Payroll", "payroll_manual", "Create and save payroll deduction drafts"),
+      p("payroll.manual.edit", "Edit Manual Payroll", "payroll_manual", "Edit draft payroll deductions"),
+      p("payroll.manual.post", "Post Manual Payroll", "payroll_manual", "Post payroll deductions to financial ledgers"),
+      p("payroll.manual.delete", "Delete Manual Payroll", "payroll_manual", "Delete draft payroll deductions"),
+      p("payroll.manual.print", "Print Manual Payroll", "payroll_manual", "Print payroll deduction records"),
+      p("payroll.manual.override", "Override Payroll Amounts", "payroll_manual", "Override configured dues and Pabaon amounts"),
+    ],
+  },
+  {
+    group: "payroll_bulk",
+    label: "Bulk Payroll Entry",
+    permissions: [
+      p("payroll.bulk.view", "View Bulk Payroll", "payroll_bulk", "View bulk payroll deduction entries"),
+      p("payroll.bulk.create", "Create Bulk Payroll", "payroll_bulk", "Load members and save bulk payroll deduction drafts"),
+      p("payroll.bulk.edit", "Edit Bulk Payroll", "payroll_bulk", "Edit draft bulk payroll deductions"),
+      p("payroll.bulk.post", "Post Bulk Payroll", "payroll_bulk", "Post bulk payroll deductions to financial ledgers"),
+      p("payroll.bulk.delete", "Delete Bulk Payroll", "payroll_bulk", "Delete draft bulk payroll deductions"),
+      p("payroll.bulk.print", "Print Bulk Payroll", "payroll_bulk", "Print bulk payroll deduction records"),
+      p("payroll.bulk.override", "Override Bulk Payroll Amounts", "payroll_bulk", "Override configured dues and Pabaon amounts in bulk entry"),
+    ],
+  },
+  {
+    group: "payroll_import",
+    label: "Payroll Import",
+    permissions: [
+      p("payroll.import.view", "View Payroll Import", "payroll_import", "Access the Payroll Import screen and run imports"),
+      p("payroll.import.rollback", "Rollback Payroll Imports", "payroll_import", "Reverse a committed payroll import batch"),
+    ],
+  },
+  {
+    group: "payroll_history",
+    label: "Payroll History",
+    permissions: [
+      p("payroll.history.view", "View Payroll History", "payroll_history", "View unified payroll deduction history — manual, bulk, and imported"),
+    ],
+  },
+  {
+    group: "deduction_types",
+    label: "Deduction Types",
+    permissions: [
+      p("deduction_types.view", "View Deduction Types", "deduction_types", "View configured deduction types"),
+      p("deduction_types.create", "Create Deduction Types", "deduction_types", "Add deduction types"),
+      p("deduction_types.update", "Update Deduction Types", "deduction_types", "Edit deduction types"),
+      p("deduction_types.deactivate", "Deactivate Deduction Types", "deduction_types", "Enable/disable a deduction type"),
+    ],
+  },
+  {
+    group: "deductions",
+    label: "Deductions",
+    permissions: [
+      p("deductions.view", "View Deductions", "deductions", "View deduction records"),
+      p("deductions.void", "Void Deductions", "deductions", "Void posted deduction records"),
     ],
   },
   {
@@ -212,7 +293,7 @@ export const VIEW_ONLY_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.filt
   perm.code.endsWith(".view")
 ).map((perm) => perm.code)
 
-const ENCODER_SUFFIXES = ["view", "create", "update", "submit", "print", "import", "bulk_create"]
+const ENCODER_SUFFIXES = ["view", "create", "update", "submit", "print", "import", "bulk_create", "reloan"]
 export const ENCODER_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.filter((perm) =>
   ENCODER_SUFFIXES.some((suffix) => perm.code.endsWith(`.${suffix}`))
 ).map((perm) => perm.code)
@@ -224,7 +305,7 @@ export const APPROVER_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.filte
   perm.code === "members.view"
 ).map((perm) => perm.code)
 
-const FINANCIAL_GROUPS = ["contributions", "loan_payments", "reports"]
+const FINANCIAL_GROUPS = ["contributions", "loan_payments", "reports", "payroll_bulk", "payroll_import", "payroll_history", "deduction_types", "deductions"]
 export const FINANCIAL_PERMISSION_CODES: PermissionCode[] = ALL_PERMISSIONS.filter(
   (perm) => FINANCIAL_GROUPS.includes(perm.group) || perm.code === "dashboard.view" || perm.code === "members.view" || perm.code === "loans.view"
 ).map((perm) => perm.code)
@@ -266,18 +347,20 @@ export function permissionsForRole(role: string): PermissionCode[] {
       return [
         "dashboard.view",
         "members.view", "members.create", "members.update", "members.archive", "members.restore",
-        "members.import", "members.export", "members.print",
+        "members.export", "members.print",
+        "members.review", "members.approve", "members.reject", "members.auto_approve",
         "beneficiaries.view", "beneficiaries.create", "beneficiaries.update", "beneficiaries.delete",
         "offices.view",
         "reports.view", "reports.export", "reports.print", "reports.member",
         "drafts.view_own", "drafts.create", "drafts.update_own", "drafts.delete_own", "drafts.submit",
+        "member_import.view", "member_import.create", "member_import.resolve_duplicates", "member_import.manage_offices",
       ]
     case "Loan Officer":
       return [
         "dashboard.view",
         "members.view",
         "offices.view",
-        "loans.view", "loans.create", "loans.update", "loans.submit", "loans.print", "loans.export",
+        "loans.view", "loans.create", "loans.update", "loans.submit", "loans.review", "loans.reloan", "loans.print", "loans.export",
         "loan_payments.view", "loan_payments.create", "loan_payments.print_receipt",
         "reports.view", "reports.export", "reports.print", "reports.loan",
         "drafts.view_own", "drafts.create", "drafts.update_own", "drafts.delete_own", "drafts.submit",
@@ -292,14 +375,20 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "contributions.export", "contributions.print",
         "loan_payments.view", "loan_payments.create", "loan_payments.update", "loan_payments.void",
         "loan_payments.import", "loan_payments.print_receipt", "loan_payments.export",
+        "loans.view", "loans.release",
+        "benefits.view", "benefits.release",
         "reports.view", "reports.export", "reports.print", "reports.financial", "reports.contribution",
+        "payroll.manual.view", "payroll.manual.create", "payroll.manual.edit", "payroll.manual.post",
+        "payroll.bulk.view", "payroll.bulk.create", "payroll.bulk.edit", "payroll.bulk.post",
+        "payroll.import.view", "payroll.import.rollback", "payroll.history.view",
+        "deduction_types.view", "deductions.view", "deductions.void",
       ]
     case "Benefits Officer":
       return [
         "dashboard.view",
         "members.view",
         "offices.view",
-        "benefits.view", "benefits.create", "benefits.update", "benefits.submit", "benefits.print", "benefits.export",
+        "benefits.view", "benefits.create", "benefits.update", "benefits.submit", "benefits.review", "benefits.print", "benefits.export",
         "reports.view", "reports.export", "reports.print", "reports.benefit",
         "drafts.view_own", "drafts.create", "drafts.update_own", "drafts.delete_own", "drafts.submit",
       ]
@@ -308,9 +397,9 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "dashboard.view",
         "members.view",
         "offices.view",
-        "loans.view", "loans.review", "loans.recommend", "loans.approve", "loans.reject", "loans.release",
+        "loans.view", "loans.review", "loans.recommend", "loans.approve", "loans.reject",
         "loans.restructure", "loans.print", "loans.export",
-        "benefits.view", "benefits.review", "benefits.approve", "benefits.reject", "benefits.release",
+        "benefits.view", "benefits.review", "benefits.approve", "benefits.reject",
         "benefits.print", "benefits.export",
         "reports.view", "reports.export", "reports.print", "reports.loan", "reports.benefit",
       ]

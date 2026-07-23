@@ -8,7 +8,6 @@ import {
   Wallet,
   PlusCircle,
   ListChecks,
-  FileSpreadsheet,
   Landmark,
   FilePlus2,
   BadgeCheck,
@@ -24,6 +23,13 @@ import {
   KeyRound,
   History,
   SlidersHorizontal,
+  ClipboardCheck,
+  ReceiptText,
+  Workflow,
+  Banknote,
+  SquarePen,
+  Rows3,
+  Upload,
   type LucideIcon,
 } from "lucide-react"
 
@@ -32,10 +38,18 @@ export interface NavItem {
   path: string
   icon?: LucideIcon
   permission?: PermissionCode
+  /** Visible if the user holds ANY of these codes — for items multiple approver-type roles should see. */
+  anyOf?: PermissionCode[]
   children?: NavItem[]
   /** When collapsed, show each child as its own icon instead of a single group icon (used for Administration, which has no single landing page). */
   flattenWhenCollapsed?: boolean
 }
+
+export const APPROVAL_NAV_PERMISSIONS: PermissionCode[] = [
+  "loans.review", "loans.approve", "loans.release",
+  "benefits.review", "benefits.approve", "benefits.release",
+  "members.approve",
+]
 
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -57,7 +71,8 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "All Members", path: "/members", icon: Users, permission: "members.view" },
       { label: "Add Member", path: "/members/new", icon: UserPlus, permission: "members.create" },
-      { label: "Import Members", path: "/members/import", icon: UploadCloud, permission: "members.import" },
+      { label: "Import Members", path: "/members/import", icon: UploadCloud, permission: "member_import.create" },
+      { label: "Import History", path: "/members/import-history", icon: History, permission: "member_import.view" },
       { label: "Incomplete Profiles", path: "/members/incomplete", icon: AlertTriangle, permission: "members.view" },
       { label: "Member Drafts", path: "/members/drafts", icon: FileClock, permission: "members.view" },
       { label: "Archived Members", path: "/members/archived", icon: UserX, permission: "members.view" },
@@ -72,7 +87,6 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Contribution Records", path: "/contributions", icon: Wallet, permission: "contributions.view" },
       { label: "Record Contribution", path: "/contributions/new", icon: PlusCircle, permission: "contributions.create" },
       { label: "Bulk Contributions", path: "/contributions/bulk", icon: ListChecks, permission: "contributions.create" },
-      { label: "Payroll Import", path: "/contributions/import", icon: FileSpreadsheet, permission: "contributions.import" },
     ],
   },
   {
@@ -91,6 +105,18 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    label: "Payroll Deductions",
+    path: "/payroll-deductions/manual-entry",
+    icon: Banknote,
+    children: [
+      { label: "Manual Entry", path: "/payroll-deductions/manual-entry", icon: SquarePen, permission: "payroll.manual.view" },
+      { label: "Bulk Entry", path: "/payroll-deductions/bulk-entry", icon: Rows3, permission: "payroll.bulk.view" },
+      { label: "Payroll Import", path: "/payroll-deductions/import", icon: Upload, permission: "payroll.import.view" },
+      { label: "Deduction Records", path: "/payroll-deductions/records", icon: ReceiptText, permission: "deductions.view" },
+      { label: "Payroll History", path: "/payroll-deductions/history", icon: History, permission: "payroll.history.view" },
+    ],
+  },
+  {
     label: "Benefits",
     path: "/benefits",
     icon: HeartHandshake,
@@ -102,6 +128,12 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Released Benefits", path: "/benefits/released", icon: FileClock, permission: "benefits.view" },
       { label: "Benefit Types", path: "/benefits/types", icon: Gift, permission: "benefits.view" },
     ],
+  },
+  {
+    label: "My Approvals",
+    path: "/my-approvals",
+    icon: ClipboardCheck,
+    anyOf: APPROVAL_NAV_PERMISSIONS,
   },
   {
     label: "Reports",
@@ -118,6 +150,8 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Offices", path: "/admin/offices", icon: Building2, permission: "offices.view" },
       { label: "Users", path: "/admin/users", icon: ShieldCheck, permission: "users.view" },
       { label: "Roles & Permissions", path: "/admin/roles", icon: KeyRound, permission: "roles.view" },
+      { label: "Approval Workflow", path: "/admin/approval-workflow", icon: Workflow, permission: "approval_workflow.view" },
+      { label: "Deduction Types", path: "/payroll/deduction-types", icon: ReceiptText, permission: "deduction_types.view" },
       { label: "Audit Logs", path: "/admin/audit-logs", icon: History, permission: "audit_logs.view" },
       { label: "System Settings", path: "/admin/settings", icon: Settings2, permission: "settings.view" },
     ],

@@ -1,8 +1,26 @@
-import type { AppearanceSettings, NumberingFormatConfig, SystemSettings } from "@/types"
+import type { AppearanceSettings, NumberingFormatConfig, ReportCategoryTemplate, ReportExportDesign, SystemSettings } from "@/types"
 import { ORGANIZATION } from "@/constants/organization"
 
 function numberingDefault(prefix: string, sequenceLength = 6): NumberingFormatConfig {
   return { prefix, includeYear: prefix !== "GCGEA-MEM", yearFormat: "YYYY", separator: "-", sequenceLength, startingNumber: 1 }
+}
+
+function reportCategory(design: Omit<ReportExportDesign, "captionStyle" | "noteStyle">): ReportCategoryTemplate {
+  const completeDesign: ReportExportDesign = {
+    ...design,
+    captionStyle: { fontFamily: "Arial", fontSize: 9, fontWeight: "normal", fontStyle: "italic", textDecoration: "none", textColor: "#475569", textAlignment: "center" },
+    noteStyle: { fontFamily: "Arial", fontSize: 9, fontWeight: "normal", fontStyle: "italic", textDecoration: "none", textColor: "#475569", textAlignment: "left" },
+  }
+  return {
+    ...completeDesign,
+    captionStyle: { ...completeDesign.captionStyle },
+    noteStyle: { ...completeDesign.noteStyle },
+    excelTemplate: {
+      ...completeDesign,
+      captionStyle: { ...completeDesign.captionStyle },
+      noteStyle: { ...completeDesign.noteStyle },
+    },
+  }
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -38,6 +56,16 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     benefitRelease: numberingDefault("GCGEA-BENREL"),
   },
   loan: {
+    // minimumMembershipMonths and reloanPolicy below are placeholders only —
+    // the Loan Settings page overwrites them from the real API
+    // (loan-settings.service.ts) on load; this local default never reaches
+    // the backend's actual enforcement.
+    minimumMembershipMonths: 6,
+    requirePaidContributions: true,
+    minimumPaidContributionMonths: 6,
+    requiredMonthlyDuesAmount: 100,
+    requireConsecutiveContributionMonths: true,
+    applyContributionRuleToReloan: true,
     defaultInterestMethod: "Diminishing Balance",
     defaultInterestRate: 1.5,
     defaultProcessingFee: 200,
@@ -52,9 +80,26 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     allowLoanRestructuring: true,
     defaultPaymentMethod: "Payroll Deduction",
     roundingRule: "Round to nearest centavo",
+    reloanPolicy: {
+      reloanEnabled: true,
+      reloanAllowAfterFullyPaid: true,
+      reloanAllowWhileActive: true,
+      reloanMinPaidInstallments: 6,
+      reloanMinPaidPercentage: null,
+      reloanRequireNoOverdue: true,
+      reloanRequireNoPenalty: true,
+      reloanDeductPreviousBalance: false,
+      reloanMaxConcurrentActiveLoans: 1,
+      reloanRequireNewPayslip: true,
+      reloanRequireNewAuthorization: true,
+      reloanRequireNewPromissoryNote: true,
+      reloanRequireFinalApproval: true,
+      reloanRequireBoardResolutionAboveLimit: true,
+    },
   },
   contribution: {
     defaultMonthlyContribution: 150,
+    defaultCashPabaonContribution: 200,
     contributionDueDay: 5,
     allowPartialContribution: false,
     allowAdvanceContribution: true,
@@ -106,14 +151,38 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     retentionDays: 30,
     includeAttachments: false,
   },
+  reportTemplate: {
+    countryLine: "Republic of the Philippines",
+    organizationLine: "Gingoog City Government Employees Association",
+    acronymLine: "(GCGEA)",
+    addressLine: "City Hall Compound, Gingoog City",
+    leftLogo: "/logo.png",
+    rightLogo: "/city-seal-logo.png",
+    showGeneratedDate: true,
+    categoryTemplates: {
+      member: reportCategory({ preset: "classic", primaryColor: "#1E3A8A", headerBackground: "#E8EDF3", bodyFontSize: 9, bodyFontFamily: "Arial", bodyFontWeight: "normal", bodyFontStyle: "normal", bodyTextDecoration: "none", bodyTextColor: "#111111", bodyTextAlignment: "left", stripedRows: false, showBorders: true, titleAlignment: "center", orientation: "auto", paperSize: "a4", captionText: "", noteText: "" }),
+      contribution: reportCategory({ preset: "modern", primaryColor: "#166534", headerBackground: "#DCFCE7", bodyFontSize: 9, bodyFontFamily: "Arial", bodyFontWeight: "normal", bodyFontStyle: "normal", bodyTextDecoration: "none", bodyTextColor: "#111111", bodyTextAlignment: "left", stripedRows: true, showBorders: true, titleAlignment: "left", orientation: "auto", paperSize: "a4", captionText: "", noteText: "" }),
+      loan: reportCategory({ preset: "modern", primaryColor: "#9A3412", headerBackground: "#FFEDD5", bodyFontSize: 9, bodyFontFamily: "Arial", bodyFontWeight: "normal", bodyFontStyle: "normal", bodyTextDecoration: "none", bodyTextColor: "#111111", bodyTextAlignment: "left", stripedRows: true, showBorders: true, titleAlignment: "left", orientation: "landscape", paperSize: "legal", captionText: "", noteText: "" }),
+      benefit: reportCategory({ preset: "classic", primaryColor: "#7E22CE", headerBackground: "#F3E8FF", bodyFontSize: 9, bodyFontFamily: "Arial", bodyFontWeight: "normal", bodyFontStyle: "normal", bodyTextDecoration: "none", bodyTextColor: "#111111", bodyTextAlignment: "left", stripedRows: true, showBorders: true, titleAlignment: "center", orientation: "auto", paperSize: "a4", captionText: "", noteText: "" }),
+      financial: reportCategory({ preset: "compact", primaryColor: "#0F172A", headerBackground: "#E2E8F0", bodyFontSize: 8, bodyFontFamily: "Arial", bodyFontWeight: "normal", bodyFontStyle: "normal", bodyTextDecoration: "none", bodyTextColor: "#111111", bodyTextAlignment: "left", stripedRows: true, showBorders: true, titleAlignment: "left", orientation: "landscape", paperSize: "letter", captionText: "", noteText: "" }),
+    },
+  },
 }
 
 export const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
+  sidebarLogoUrl: "/logo.png",
   primaryColor: "#1E3A8A",
   secondaryColor: "#2563EB",
   accentColor: "#D4AF37",
   sidebarColor: "#0F172A",
   backgroundColor: "#F8FAFC",
+  progressColorStart: "#1E3A8A",
+  progressColorMiddle: "#D4AF37",
+  progressColorEnd: "#16A34A",
+  baseFontSize: 16,
+  fontWeight: 400,
+  fontFamily: "geist",
+  fontStyle: "normal",
   borderRadius: 10,
   compactMode: false,
   sidebarStyle: "expanded",

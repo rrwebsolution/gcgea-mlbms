@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom"
+import { Navigate, Route, Routes, useParams } from "react-router-dom"
 import { AppLayout } from "@/layouts/AppLayout"
 import { ProtectedRoute } from "@/routes/ProtectedRoute"
 import UnauthorizedPage from "@/pages/UnauthorizedPage"
@@ -11,10 +11,16 @@ import ChangePasswordPage from "@/features/auth/pages/ChangePasswordPage"
 import DashboardPage from "@/features/dashboard/pages/DashboardPage"
 import DraftCenterPage from "@/features/drafts/pages/DraftCenterPage"
 
+import MyApprovalsPage from "@/features/approvals/pages/MyApprovalsPage"
+import ApprovalDetailPage from "@/features/approvals/pages/ApprovalDetailPage"
+import ApprovalWorkflowConfigPage from "@/features/approval-workflow/pages/ApprovalWorkflowConfigPage"
+
 import MembersPage from "@/features/members/pages/MembersPage"
 import MemberRegistrationPage from "@/features/members/pages/MemberRegistrationPage"
 import MemberProfilePage from "@/features/members/pages/MemberProfilePage"
 import MemberImportWizardPage from "@/features/members/pages/MemberImportWizardPage"
+import MemberImportHistoryPage from "@/features/members/pages/MemberImportHistoryPage"
+import MemberImportBatchDetailPage from "@/features/members/pages/MemberImportBatchDetailPage"
 import IncompleteProfilesPage from "@/features/members/pages/IncompleteProfilesPage"
 import ArchivedMembersPage from "@/features/members/pages/ArchivedMembersPage"
 import MemberDraftsPage from "@/features/members/pages/MemberDraftsPage"
@@ -32,7 +38,6 @@ import ContributionsPage from "@/features/contributions/pages/ContributionsPage"
 import ContributionFormPage from "@/features/contributions/pages/ContributionFormPage"
 import ContributionDetailPage from "@/features/contributions/pages/ContributionDetailPage"
 import BulkContributionsPage from "@/features/contributions/pages/BulkContributionsPage"
-import PayrollImportPage from "@/features/contributions/pages/PayrollImportPage"
 import ContributionReportsPage from "@/features/contributions/pages/ContributionReportsPage"
 import MonthlyContributionsReportPage from "@/features/contributions/pages/reports/MonthlyContributionsReportPage"
 import ContributionsByOfficeReportPage from "@/features/contributions/pages/reports/ContributionsByOfficeReportPage"
@@ -46,6 +51,7 @@ import OverdueLoansPage from "@/features/loans/pages/OverdueLoansPage"
 import LoanTypesPage from "@/features/loans/pages/LoanTypesPage"
 import LoanDetailPage from "@/features/loans/pages/LoanDetailPage"
 import CreateLoanApplicationPage from "@/features/loans/pages/CreateLoanApplicationPage"
+import ReloanWizardPage from "@/features/loans/pages/ReloanWizardPage"
 import LoanDraftsPage from "@/features/loans/pages/LoanDraftsPage"
 import LoanApplicationsReportPage from "@/features/loans/pages/reports/LoanApplicationsReportPage"
 import ApprovedLoansReportPage from "@/features/loans/pages/reports/ApprovedLoansReportPage"
@@ -61,6 +67,14 @@ import MemberLoanLedgerReportPage from "@/features/loans/pages/reports/MemberLoa
 
 import LoanPaymentsPage from "@/features/loan-payments/pages/LoanPaymentsPage"
 import CreateLoanPaymentPage from "@/features/loan-payments/pages/CreateLoanPaymentPage"
+
+import PayrollImportWizardPage from "@/features/payroll/pages/PayrollImportWizardPage"
+import PayrollHistoryPage from "@/features/payroll/pages/PayrollHistoryPage"
+import PayrollImportBatchDetailPage from "@/features/payroll/pages/PayrollImportBatchDetailPage"
+import DeductionTypesPage from "@/features/payroll/pages/DeductionTypesPage"
+import ManualPayrollEntryPage from "@/features/payroll/pages/ManualPayrollEntryPage"
+import BulkPayrollEntryPage from "@/features/payroll/pages/BulkPayrollEntryPage"
+import DeductionRecordsPage from "@/features/payroll/pages/DeductionRecordsPage"
 
 import BenefitsPage from "@/features/benefits/pages/BenefitsPage"
 import ReleasedBenefitsPage from "@/features/benefits/pages/ReleasedBenefitsPage"
@@ -94,6 +108,12 @@ import RolePermissionsPage from "@/features/roles/pages/RolePermissionsPage"
 import AuditLogsPage from "@/features/audit-logs/pages/AuditLogsPage"
 import SettingsPage from "@/features/settings/pages/SettingsPage"
 import NotificationsPage from "@/features/notifications/pages/NotificationsPage"
+import { APPROVAL_NAV_PERMISSIONS } from "@/constants/navigation"
+
+function LegacyPayrollHistoryTokenRedirect() {
+  const { token } = useParams()
+  return <Navigate to={`/payroll-deductions/history/${token}`} replace />
+}
 
 export function AppRoutes() {
   return (
@@ -116,6 +136,14 @@ export function AppRoutes() {
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/drafts" element={<DraftCenterPage />} />
 
+          <Route element={<ProtectedRoute anyOf={APPROVAL_NAV_PERMISSIONS} />}>
+            <Route path="/my-approvals" element={<MyApprovalsPage />} />
+            <Route path="/approvals/:subjectType/:id" element={<ApprovalDetailPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="approval_workflow.view" />}>
+            <Route path="/admin/approval-workflow" element={<ApprovalWorkflowConfigPage />} />
+          </Route>
+
           <Route element={<ProtectedRoute permission="members.view" />}>
             <Route path="/members" element={<MembersPage />} />
             <Route path="/members/incomplete" element={<IncompleteProfilesPage />} />
@@ -129,8 +157,12 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission="members.update" />}>
             <Route path="/members/:id/edit" element={<MemberRegistrationPage />} />
           </Route>
-          <Route element={<ProtectedRoute permission="members.import" />}>
+          <Route element={<ProtectedRoute permission="member_import.create" />}>
             <Route path="/members/import" element={<MemberImportWizardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="member_import.view" />}>
+            <Route path="/members/import-history" element={<MemberImportHistoryPage />} />
+            <Route path="/members/import-history/:token" element={<MemberImportBatchDetailPage />} />
           </Route>
 
           <Route element={<ProtectedRoute permission="reports.view" />}>
@@ -158,9 +190,7 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission="contributions.update" />}>
             <Route path="/contributions/:id/edit" element={<ContributionFormPage />} />
           </Route>
-          <Route element={<ProtectedRoute permission="contributions.import" />}>
-            <Route path="/contributions/import" element={<PayrollImportPage />} />
-          </Route>
+          <Route path="/contributions/import" element={<Navigate to="/payroll-deductions/import" replace />} />
 
           <Route element={<ProtectedRoute permission="loans.view" />}>
             <Route path="/loans" element={<LoansPage />} />
@@ -176,6 +206,9 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission="loans.update" />}>
             <Route path="/loans/:id/edit" element={<CreateLoanApplicationPage />} />
           </Route>
+          <Route element={<ProtectedRoute permission="loans.reloan" />}>
+            <Route path="/loans/:id/reloan" element={<ReloanWizardPage />} />
+          </Route>
 
           <Route element={<ProtectedRoute permission="loan_payments.view" />}>
             <Route path="/loan-payments" element={<LoanPaymentsPage />} />
@@ -183,6 +216,32 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission="loan_payments.create" />}>
             <Route path="/loan-payments/new" element={<CreateLoanPaymentPage />} />
           </Route>
+
+          <Route element={<ProtectedRoute permission="payroll.history.view" />}>
+            <Route path="/payroll-deductions/history" element={<PayrollHistoryPage />} />
+            <Route path="/payroll-deductions/history/:token" element={<PayrollImportBatchDetailPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="payroll.manual.view" />}>
+            <Route path="/payroll-deductions/manual-entry" element={<ManualPayrollEntryPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="payroll.bulk.view" />}>
+            <Route path="/payroll-deductions/bulk-entry" element={<BulkPayrollEntryPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="payroll.import.view" />}>
+            <Route path="/payroll-deductions/import" element={<PayrollImportWizardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="deduction_types.view" />}>
+            <Route path="/payroll/deduction-types" element={<DeductionTypesPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="deductions.view" />}>
+            <Route path="/payroll-deductions/records" element={<DeductionRecordsPage />} />
+          </Route>
+          <Route path="/payroll-deductions/cash-pabaon" element={<Navigate to="/payroll-deductions/records" replace />} />
+
+          {/* Legacy payroll URLs — redirect to the new /payroll-deductions namespace */}
+          <Route path="/payroll/import" element={<Navigate to="/payroll-deductions/import" replace />} />
+          <Route path="/payroll/history" element={<Navigate to="/payroll-deductions/history" replace />} />
+          <Route path="/payroll/history/:token" element={<LegacyPayrollHistoryTokenRedirect />} />
 
           <Route element={<ProtectedRoute permission="benefits.view" />}>
             <Route path="/benefits" element={<BenefitsPage />} />

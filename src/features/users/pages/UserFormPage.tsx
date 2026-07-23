@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
 import { AlertBanner } from "@/components/shared/AlertBanner"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { FormSkeleton } from "@/components/shared/loaders/FormSkeleton"
 import { PermissionMatrix } from "@/features/roles/components/PermissionMatrix"
 import { RoleMultiSelect } from "@/features/users/components/RoleMultiSelect"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
@@ -17,7 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { userFormSchema, type UserFormValues } from "@/schemas/user.schema"
 import { createUser, getUser, isEmailTaken, isLastActiveSuperAdmin, isUsernameTaken, updateUser } from "@/services/users.service"
 import { listAllRoles } from "@/services/roles.service"
@@ -112,6 +113,7 @@ export default function UserFormPage() {
         username: values.username,
         email: values.email,
         contactNumber: values.contactNumber,
+        password: values.password || undefined,
         roleId: values.roleId,
         additionalRoleIds: values.additionalRoleIds,
         status: values.status,
@@ -145,6 +147,7 @@ export default function UserFormPage() {
     try {
       await createUser({
         fullName: values.fullName, username: values.username, email: values.email, contactNumber: values.contactNumber,
+        password: values.password,
         roleId: values.roleId, additionalRoleIds: values.additionalRoleIds, status: values.status,
         requirePasswordChange: values.requirePasswordChange, allowedPermissions, deniedPermissions, remarks: values.remarks,
       })
@@ -170,6 +173,7 @@ export default function UserFormPage() {
     try {
       const payload = {
         fullName: values.fullName, username: values.username, email: values.email, contactNumber: values.contactNumber,
+        password: values.password || undefined,
         roleId: values.roleId, additionalRoleIds: values.additionalRoleIds, status: values.status,
         requirePasswordChange: values.requirePasswordChange, allowedPermissions, deniedPermissions, remarks: values.remarks,
       }
@@ -183,7 +187,7 @@ export default function UserFormPage() {
   }
 
   if (isEdit && isLoadingUser) {
-    return <p className="text-sm text-muted-foreground">Loading user…</p>
+    return <FormSkeleton fields={["text", "text", "text", "select", "select", "checkbox"]} columns={2} />
   }
 
   return (
@@ -241,14 +245,15 @@ export default function UserFormPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Primary Role <span className="text-destructive">*</span></Label>
-              <Select value={roleId} onValueChange={(v) => setValue("roleId", v ?? "", { shouldDirty: true, shouldValidate: true })} disabled={isProtectedSuperAdmin}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select a role" /></SelectTrigger>
-                <SelectContent>
-                  {allRoles.filter((r) => r.status === "Active").map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full"
+                value={roleId}
+                onValueChange={(v) => setValue("roleId", v ?? "", { shouldDirty: true, shouldValidate: true })}
+                disabled={isProtectedSuperAdmin}
+                placeholder="Select a role"
+                searchPlaceholder="Search roles…"
+                options={allRoles.filter((r) => r.status === "Active").map((r) => ({ value: r.id, label: r.name }))}
+              />
               {errors.roleId && <p className="text-xs font-medium text-destructive">{errors.roleId.message}</p>}
             </div>
             <div className="space-y-1.5">
@@ -269,14 +274,18 @@ export default function UserFormPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Account Status</Label>
-              <Select value={watch("status")} onValueChange={(v) => setValue("status", v as UserFormValues["status"], { shouldDirty: true })} disabled={isProtectedSuperAdmin}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Disabled">Disabled</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full"
+                value={watch("status")}
+                onValueChange={(v) => setValue("status", v as UserFormValues["status"], { shouldDirty: true })}
+                disabled={isProtectedSuperAdmin}
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                  { value: "Disabled", label: "Disabled" },
+                ]}
+                hideSearch
+              />
             </div>
             <label className="flex items-center gap-2 self-end pb-1.5 text-sm text-foreground">
               <Checkbox checked={watch("requirePasswordChange")} onCheckedChange={(v) => setValue("requirePasswordChange", !!v, { shouldDirty: true })} />
@@ -309,7 +318,7 @@ export default function UserFormPage() {
           />
         </FormSection>
 
-        <div className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
+        <div className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:border sm:shadow-sm">
           <Button type="button" variant="outline" onClick={() => (isDirty ? setShowLeaveConfirm(true) : navigate("/admin/users"))} disabled={isSubmitting}>
             Cancel
           </Button>

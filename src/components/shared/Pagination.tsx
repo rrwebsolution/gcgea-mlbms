@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import type { PaginationMeta } from "@/types"
 
 interface PaginationProps {
@@ -23,18 +23,14 @@ export function Pagination({ meta, onPageChange, onPerPageChange, perPageOptions
         <span className="font-medium">
           Showing <span className="font-bold text-foreground">{start}</span>–<span className="font-bold text-foreground">{end}</span> of <span className="font-bold text-foreground">{totalRecords}</span>
         </span>
-        <Select value={String(perPage)} onValueChange={(v) => onPerPageChange(Number(v))}>
-          <SelectTrigger size="sm" className="ml-1 h-7 w-[100px] text-xs bg-background border-border/80 hover:bg-accent/80 active:scale-98 transition-all">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {perPageOptions.map((option) => (
-              <SelectItem key={option} value={String(option)} className="text-xs">
-                {option} / page
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <CommandSelect
+          size="sm"
+          className="ml-1 h-7 w-[100px] text-xs bg-background border-border/80 hover:bg-accent/80 active:scale-98 transition-all"
+          value={String(perPage)}
+          onValueChange={(v) => onPerPageChange(Number(v))}
+          options={perPageOptions.map((option) => ({ value: String(option), label: `${option} / page` }))}
+          hideSearch
+        />
       </div>
 
       {/* Right Slot: Navigation Controls */}

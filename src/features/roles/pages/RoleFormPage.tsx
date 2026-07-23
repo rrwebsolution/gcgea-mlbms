@@ -9,13 +9,14 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
 import { AlertBanner } from "@/components/shared/AlertBanner"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { FormSkeleton } from "@/components/shared/loaders/FormSkeleton"
 import { PermissionMatrix } from "@/features/roles/components/PermissionMatrix"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { roleFormSchema, type RoleFormValues } from "@/schemas/role.schema"
 import {
   createRole,
@@ -144,7 +145,7 @@ export default function RoleFormPage() {
   }
 
   if (isEdit && isLoadingRole) {
-    return <p className="text-sm text-muted-foreground">Loading role…</p>
+    return <FormSkeleton fields={["text", "text", "select"]} columns={2} />
   }
 
   return (
@@ -206,40 +207,38 @@ export default function RoleFormPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="role-status">Status</Label>
-              <Select value={watch("status")} onValueChange={(v) => setValue("status", v as "Active" | "Inactive", { shouldDirty: true })}>
-                <SelectTrigger id="role-status" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full"
+                value={watch("status")}
+                onValueChange={(v) => setValue("status", v as "Active" | "Inactive", { shouldDirty: true })}
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                ]}
+                hideSearch
+              />
             </div>
           </div>
         </FormSection>
 
         <FormSection title="Permission Preset" description="Choose a starting point, then fine-tune individual permissions below.">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Select value={preset} onValueChange={(v) => applyPreset(v as PermissionPreset)} disabled={isSuperAdmin}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PERMISSION_PRESETS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={preset}
+              onValueChange={(v) => applyPreset(v as PermissionPreset)}
+              disabled={isSuperAdmin}
+              options={PERMISSION_PRESETS.map((opt) => ({ value: opt.value, label: opt.label }))}
+            />
             {preset === "copy_existing" && (
-              <Select value={copySourceId} onValueChange={(v) => applyCopySource(v ?? "")}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select a role to copy from" /></SelectTrigger>
-                <SelectContent>
-                  {allRoles.filter((r) => r.id !== id).map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.name} ({r.permissions.length} permissions)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full"
+                value={copySourceId}
+                onValueChange={(v) => applyCopySource(v ?? "")}
+                placeholder="Select a role to copy from"
+                searchPlaceholder="Search roles…"
+                options={allRoles.filter((r) => r.id !== id).map((r) => ({ value: r.id, label: `${r.name} (${r.permissions.length} permissions)` }))}
+              />
             )}
           </div>
           {preset !== "custom" && <p className="mt-2 text-xs text-muted-foreground">{PERMISSION_PRESETS.find((p) => p.value === preset)?.description}</p>}
@@ -256,7 +255,7 @@ export default function RoleFormPage() {
           />
         </FormSection>
 
-        <div className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
+        <div className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:border sm:shadow-sm">
           <Button
             type="button"
             variant="outline"

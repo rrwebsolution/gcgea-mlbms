@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { DialogSkeleton } from "@/components/shared/loaders/DialogSkeleton"
 import { listAllUsers } from "@/services/users.service"
 import { USER_STATUS_TONE } from "@/constants/status"
 import { initialsFromName } from "@/utils/format"
@@ -16,7 +17,7 @@ interface AssignedUsersDialogProps {
 }
 
 export function AssignedUsersDialog({ open, onOpenChange, role }: AssignedUsersDialogProps) {
-  const { data: users = [] } = useQuery({ queryKey: ["users", "all"], queryFn: listAllUsers, enabled: open })
+  const { data: users = [], isLoading } = useQuery({ queryKey: ["users", "all"], queryFn: listAllUsers, enabled: open })
   const assigned = role ? users.filter((u) => u.roleId === role.id || u.additionalRoleIds.includes(role.id)) : []
 
   return (
@@ -26,7 +27,9 @@ export function AssignedUsersDialog({ open, onOpenChange, role }: AssignedUsersD
           <DialogTitle>Users assigned to {role?.name}</DialogTitle>
           <DialogDescription>{assigned.length} user{assigned.length !== 1 ? "s" : ""} currently hold this role, as primary or additional.</DialogDescription>
         </DialogHeader>
-        {assigned.length === 0 ? (
+        {isLoading ? (
+          <DialogSkeleton rows={4} />
+        ) : assigned.length === 0 ? (
           <EmptyState title="No users assigned" description="No user currently has this role." className="border-none" />
         ) : (
           <ul className="max-h-80 space-y-1 overflow-auto">

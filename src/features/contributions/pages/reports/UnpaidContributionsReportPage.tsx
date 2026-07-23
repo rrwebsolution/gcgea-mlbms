@@ -8,9 +8,9 @@ import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
 import { DataTable } from "@/components/shared/DataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllContributions, getContributionPeriods } from "@/services/contributions.service"
 import { getAllActiveMembers } from "@/services/members.service"
@@ -105,12 +105,13 @@ export default function UnpaidContributionsReportPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Contribution Period</Label>
-            <Select value={draft.period || "__none__"} onValueChange={(v) => setDraft((f) => ({ ...f, period: v === "__none__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select a period" /></SelectTrigger>
-              <SelectContent>
-                {periods.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.period || "__none__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, period: v === "__none__" ? "" : v }))}
+              options={periods.map((p) => ({ value: p, label: p }))}
+              placeholder="Select a period"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Office</Label>

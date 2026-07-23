@@ -14,6 +14,7 @@ export interface AuditLog {
 }
 
 export type NotificationType =
+  | "approval_pending"
   | "loan_submitted"
   | "loan_for_approval"
   | "loan_approved"
@@ -37,4 +38,6 @@ export interface AppNotification {
   isRead: boolean
   createdAt: string
   link?: string
+  subjectType?: string
+  subjectId?: string
 }

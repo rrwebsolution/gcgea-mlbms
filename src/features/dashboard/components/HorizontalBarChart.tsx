@@ -1,13 +1,19 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
+import { usePageRefresh } from "@/contexts/PageRefreshContext"
 
 interface HorizontalBarChartProps {
   data: { label: string; value: number }[]
   valueLabel?: string
   color?: string
+  isLoading?: boolean
 }
 
-export function HorizontalBarChart({ data, valueLabel = "Count", color = "var(--color-primary)" }: HorizontalBarChartProps) {
+export function HorizontalBarChart({ data, valueLabel = "Count", color = "var(--color-primary)", isLoading }: HorizontalBarChartProps) {
+  const { isRefreshing } = usePageRefresh()
   const sorted = [...data].sort((a, b) => b.value - a.value)
+
+  if (isLoading || isRefreshing) return <ChartSkeleton variant="bars-horizontal" height={Math.max(220, sorted.length * 32)} />
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(220, sorted.length * 32)}>

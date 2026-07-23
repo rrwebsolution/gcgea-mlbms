@@ -9,6 +9,7 @@ interface SidebarAccessPreviewProps {
 
 function isVisible(item: NavItem, granted: Set<PermissionCode>): boolean {
   if (item.children) return item.children.some((c) => isVisible(c, granted))
+  if (item.anyOf) return item.anyOf.some((code) => granted.has(code))
   return item.permission ? granted.has(item.permission) : true
 }
 

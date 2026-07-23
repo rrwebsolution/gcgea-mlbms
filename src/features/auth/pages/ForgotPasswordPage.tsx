@@ -40,7 +40,7 @@ export default function ForgotPasswordPage() {
 
   if (isSent) {
     return (
-      <AuthLayout title="Check Your Email">
+      <AuthLayout variant="hero" title="Check Your Email" description="Password reset instructions have been requested.">
         <div className="space-y-4 text-center">
           <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-success/10 text-success">
             <MailCheck className="size-6" />
@@ -57,17 +57,17 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthLayout title="Forgot Password" description="Enter your registered email address and we'll send you reset instructions.">
+    <AuthLayout variant="hero" title="Forgot Password" description="Enter your registered email address and we'll send you reset instructions.">
       <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
         {formError && <AlertBanner tone="danger" title="Request failed" description={formError} />}
         <div className="space-y-1.5">
-          <Label htmlFor="email">
+          <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wide text-foreground/85 dark:text-white/85">
             Email Address <span className="text-destructive">*</span>
           </Label>
-          <Input id="email" type="email" autoComplete="email" placeholder="you@gcgea.gingoog.gov.ph" aria-invalid={!!errors.email} {...register("email")} />
+          <Input id="email" type="email" autoComplete="email" placeholder="you@gcgea.gingoog.gov.ph" aria-invalid={!!errors.email} className="h-10 transition-all duration-200 focus-visible:ring-primary/50" {...register("email")} />
           {errors.email && <p className="text-xs font-medium text-destructive">{errors.email.message}</p>}
         </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting} aria-busy={isSubmitting}>
+        <Button type="submit" className="h-10 w-full font-medium shadow-md transition-all active:scale-[0.98]" disabled={isSubmitting} aria-busy={isSubmitting}>
           {isSubmitting ? <Loader2 className="animate-spin" /> : <Send />}
           {isSubmitting ? "Sending…" : "Send Reset Instructions"}
         </Button>

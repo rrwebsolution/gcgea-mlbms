@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "react-router-dom"
 import { Bell, CheckCheck, Loader2 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { EmptyState } from "@/components/shared/EmptyState"
@@ -12,10 +13,11 @@ import { cn } from "@/lib/utils"
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [unreadOnly, setUnreadOnly] = React.useState(false)
   const [markingId, setMarkingId] = React.useState<string | null>(null)
   const [isMarkingAllRead, setIsMarkingAllRead] = React.useState(false)
-  const { data: notifications = [] } = useQuery({ queryKey: ["notifications"], queryFn: listNotifications })
+  const { data: notifications = [] } = useQuery({ queryKey: ["notifications"], queryFn: listNotifications, refetchInterval: 30_000, refetchOnWindowFocus: true })
 
   const filtered = unreadOnly ? notifications.filter((n) => !n.isRead) : notifications
   const unreadCount = notifications.filter((n) => !n.isRead).length
@@ -28,6 +30,11 @@ export default function NotificationsPage() {
     } finally {
       setMarkingId(null)
     }
+  }
+
+  async function openNotification(notification: (typeof notifications)[number]) {
+    if (!notification.isRead) await handleMarkRead(notification.id)
+    if (notification.link) navigate(notification.link)
   }
 
   async function handleMarkAllRead() {
@@ -67,7 +74,7 @@ export default function NotificationsPage() {
               <li key={n.id}>
                 <button
                   type="button"
-                  onClick={() => handleMarkRead(n.id)}
+                  onClick={() => openNotification(n)}
                   disabled={markingId === n.id}
                   className={cn("flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-muted/50 disabled:opacity-60", !n.isRead && "bg-primary/5")}
                 >

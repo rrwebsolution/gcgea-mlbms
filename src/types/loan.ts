@@ -2,6 +2,21 @@ import type { PaymentMethod } from "./common"
 
 export type InterestMethod = "Flat Interest" | "Diminishing Balance" | "Zero Interest" | "Custom"
 
+export interface LoanTypeIncomeBracket {
+  id: string
+  minNetPay: number
+  /** null = open-ended ("and above"). */
+  maxNetPay: number | null
+  loanableAmount: number
+}
+
+/** Shape for creating/replacing a loan type's income brackets — no `id`, the backend full-replace-syncs these on every save. */
+export interface LoanTypeIncomeBracketInput {
+  minNetPay: number
+  maxNetPay?: number | null
+  loanableAmount: number
+}
+
 export interface LoanType {
   id: string
   name: string
@@ -11,6 +26,10 @@ export interface LoanType {
   defaultInterestRate: number
   interestMethod: InterestMethod
   processingFee: number
+  /** 1%-of-gross-style service charge, additive to processingFee — see GCGEA Resolution No. 24-2026, Table 3. */
+  serviceChargePercent?: number | null
+  /** When non-empty, the loanable amount is tiered by the member's net take-home pay instead of the flat min/maxAmount range. */
+  incomeBrackets: LoanTypeIncomeBracket[]
   maxTermMonths: number
   requiredMembershipMonths: number
   requiredContributionMonths: number
@@ -37,6 +56,10 @@ export interface EligibilityCheckItem {
   passed: boolean
   detail: string
 }
+
+export type LoanApplicationType = "new" | "reloan"
+
+export type PreviousObligationSettlementMethod = "full_payment_required" | "deducted"
 
 export interface LoanApplication {
   id: string
@@ -77,9 +100,22 @@ export interface LoanApplication {
   draftCurrentStep?: number
   assignedOfficer: string
 
+  applicationType: LoanApplicationType
+  /** Set only when applicationType is "reloan". */
+  previousLoanId?: string
+  previousLoanReference?: string
+  rootLoanId?: string
+  reloanSequence?: number
+  currentNetTakeHomePay?: number
+
   eligibility: EligibilityCheckItem[]
   eligibilityOverridden: boolean
   eligibilityOverrideReason?: string
+  /** Reloan Policy settings in effect at submission time — set only for reloans. */
+  reloanPolicySnapshot?: Record<string, unknown>
+  previousObligationAmount?: number
+  previousObligationSettlementMethod?: PreviousObligationSettlementMethod | null
+  previousObligationSettledAt?: string
 
   requirements: LoanRequirementItem[]
 

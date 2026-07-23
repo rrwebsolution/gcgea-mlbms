@@ -1,5 +1,10 @@
-import type { BenefitApplication, BenefitType, PaginatedResponse, PaginationParams } from "@/types"
-import { api } from "@/lib/api"
+import type { ApprovalHistoryEntry, BenefitApplication, BenefitType, BenefitTypeFyAmountInput, BenefitTypeProrationTierInput, PaginatedResponse, PaginationParams } from "@/types"
+import { api, getPaginated } from "@/lib/api"
+
+type BenefitTypeInput = Omit<BenefitType, "id" | "prorationTiers" | "fyAmounts"> & {
+  prorationTiers: BenefitTypeProrationTierInput[]
+  fyAmounts: BenefitTypeFyAmountInput[]
+}
 
 export interface BenefitListParams extends PaginationParams {
   status?: string
@@ -7,12 +12,41 @@ export interface BenefitListParams extends PaginationParams {
 }
 
 export async function listBenefits(params: BenefitListParams = {}): Promise<PaginatedResponse<BenefitApplication>> {
-  const { data } = await api.get<PaginatedResponse<BenefitApplication>>("/benefits", { params })
-  return data
+  return getPaginated<BenefitApplication>("/benefits", params)
 }
 
 export async function getBenefit(id: string): Promise<BenefitApplication | undefined> {
   const { data } = await api.get<BenefitApplication>(`/benefits/${id}`)
+  return data
+}
+
+export async function getBenefitApprovalHistory(id: string): Promise<ApprovalHistoryEntry[]> {
+  const { data } = await api.get<ApprovalHistoryEntry[]>(`/approvals/benefits/${id}/history`)
+  return data
+}
+
+export async function reviewBenefit(id: string, remarks?: string): Promise<BenefitApplication> {
+  const { data } = await api.post<BenefitApplication>(`/benefits/${id}/review`, { remarks })
+  return data
+}
+
+export async function approveBenefit(id: string, remarks?: string): Promise<BenefitApplication> {
+  const { data } = await api.post<BenefitApplication>(`/benefits/${id}/approve`, { remarks })
+  return data
+}
+
+export async function rejectBenefit(id: string, remarks: string): Promise<BenefitApplication> {
+  const { data } = await api.post<BenefitApplication>(`/benefits/${id}/reject`, { remarks })
+  return data
+}
+
+export async function returnBenefitForRevision(id: string, remarks: string): Promise<BenefitApplication> {
+  const { data } = await api.post<BenefitApplication>(`/benefits/${id}/return`, { remarks })
+  return data
+}
+
+export async function releaseBenefit(id: string, remarks?: string): Promise<BenefitApplication> {
+  const { data } = await api.post<BenefitApplication>(`/benefits/${id}/release`, { remarks })
   return data
 }
 
@@ -31,12 +65,12 @@ export function getBenefitTypesSync(): BenefitType[] {
   return cachedBenefitTypes
 }
 
-export async function createBenefitType(input: Omit<BenefitType, "id">): Promise<BenefitType> {
+export async function createBenefitType(input: BenefitTypeInput): Promise<BenefitType> {
   const { data } = await api.post<BenefitType>("/benefit-types", input)
   return data
 }
 
-export async function updateBenefitType(id: string, input: Partial<Omit<BenefitType, "id">>): Promise<BenefitType> {
+export async function updateBenefitType(id: string, input: Partial<BenefitTypeInput>): Promise<BenefitType> {
   const { data } = await api.put<BenefitType>(`/benefit-types/${id}`, input)
   return data
 }
@@ -87,4 +121,9 @@ export async function updateBenefitApplication(id: string, input: CreateBenefitA
   const { data } = await api.put<BenefitApplication>(`/benefits/${id}`, input)
   cachedBenefits = cachedBenefits.map((b) => (b.id === data.id ? data : b))
   return data
+}
+
+export async function deleteBenefitApplication(id: string): Promise<void> {
+  await api.delete(`/benefits/${id}`)
+  cachedBenefits = cachedBenefits.filter((benefit) => benefit.id !== id)
 }

@@ -3,9 +3,9 @@ import LoanStatusReportPage from "./LoanStatusReportPage"
 export default function ActiveLoansReportPage() {
   return (
     <LoanStatusReportPage
-      status="Active"
+      statuses={["Active", "Released"]}
       title="Active Loans"
-      description="Loans currently active and being repaid, filterable by office, loan type, and date."
+      description="New loans and reloans that are released or currently active and being repaid."
     />
   )
 }

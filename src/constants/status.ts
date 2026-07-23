@@ -1,3 +1,5 @@
+import type { PayrollEntryType } from "@/types/payroll-history"
+
 export type StatusTone = "neutral" | "success" | "warning" | "danger" | "info" | "gold"
 
 export const LOAN_STATUS_TONE: Record<string, StatusTone> = {
@@ -62,4 +64,19 @@ export const USER_STATUS_TONE: Record<string, StatusTone> = {
 export const OFFICE_STATUS_TONE: Record<string, StatusTone> = {
   Active: "success",
   Inactive: "neutral",
+}
+
+export const PAYROLL_ENTRY_TYPE_TONE: Record<PayrollEntryType, StatusTone> = {
+  "Manual Entry": "info",
+  "Bulk Entry": "gold",
+  "Excel Import": "success",
+}
+
+export const PAYROLL_HISTORY_STATUS_TONE: Record<string, StatusTone> = {
+  Draft: "neutral",
+  Posted: "success",
+  Uploaded: "neutral",
+  Previewed: "info",
+  Committed: "success",
+  RolledBack: "warning",
 }

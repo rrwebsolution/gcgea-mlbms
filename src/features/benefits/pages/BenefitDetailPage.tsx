@@ -6,41 +6,21 @@ import { StatusBadge } from "@/components/shared/StatusBadge"
 import { PrintButton } from "@/components/shared/PrintButton"
 import { ApprovalTimeline } from "@/components/shared/ApprovalTimeline"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getBenefit } from "@/services/benefits.service"
+import { getBenefit, getBenefitApprovalHistory } from "@/services/benefits.service"
 import { BENEFIT_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
-import type { ApprovalHistoryEntry, BenefitApplication } from "@/types"
-
-function buildHistory(benefit: BenefitApplication): ApprovalHistoryEntry[] {
-  const history: ApprovalHistoryEntry[] = []
-  const included = ["Submitted", "Under Review", "For Approval", "Approved", "Rejected", "Released", "Completed", "Cancelled"]
-  if (included.includes(benefit.status) || benefit.status !== "Draft") {
-    history.push({ id: "h1", action: "Submitted", performedBy: benefit.createdBy, performedAt: benefit.applicationDate, remarks: "Application encoded and submitted for review." })
-  }
-  if (["Approved", "Released", "Completed"].includes(benefit.status)) {
-    history.push({ id: "h2", action: "Approved", performedBy: "Reynaldo C. Mag-abo", performedAt: benefit.applicationDate, remarks: `Approved amount: ${formatCurrency(benefit.approvedAmount ?? benefit.requestedAmount)}` })
-  }
-  if (benefit.status === "Rejected") {
-    history.push({ id: "h2", action: "Rejected", performedBy: "Reynaldo C. Mag-abo", performedAt: benefit.applicationDate, remarks: benefit.rejectionReason })
-  }
-  if (["Released", "Completed"].includes(benefit.status)) {
-    history.push({ id: "h3", action: "Released", performedBy: "Girlie B. Nacua", performedAt: benefit.releaseDate ?? benefit.applicationDate, remarks: "Benefit released to member/beneficiary." })
-  }
-  if (benefit.status === "Cancelled") {
-    history.push({ id: "h2", action: "Cancelled", performedBy: benefit.createdBy, performedAt: benefit.updatedAt, remarks: benefit.cancellationReason })
-  }
-  return history
-}
 
 export default function BenefitDetailPage() {
   const { id = "" } = useParams()
   const { data: benefit, isLoading } = useQuery({ queryKey: ["benefits", id], queryFn: () => getBenefit(id) })
+  const { data: history = [] } = useQuery({ queryKey: ["benefits", id, "history"], queryFn: () => getBenefitApprovalHistory(id) })
 
   useBreadcrumbExtra(benefit?.applicationNumber)
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading benefit application…</p>
+  if (isLoading) return <ProfileSkeleton cards={2} />
   if (!benefit) return <EmptyState icon={HeartHandshake} title="Benefit application not found" description="This benefit application may have been removed." />
 
   return (
@@ -106,7 +86,7 @@ export default function BenefitDetailPage() {
 
         <TabsContent value="approvals" className="mt-4">
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <ApprovalTimeline history={buildHistory(benefit)} />
+            <ApprovalTimeline history={history} />
           </div>
         </TabsContent>
       </Tabs>

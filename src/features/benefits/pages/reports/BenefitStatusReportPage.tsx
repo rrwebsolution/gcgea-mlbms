@@ -12,7 +12,7 @@ import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllBenefits, getBenefitTypesSync } from "@/services/benefits.service"
 import { BENEFIT_STATUS_TONE } from "@/constants/status"
@@ -151,13 +151,13 @@ export default function BenefitStatusReportPage({ status, title, description }: 
           </div>
           <div className="space-y-1.5">
             <Label>Benefit Type</Label>
-            <Select value={draft.benefitTypeId || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, benefitTypeId: v === "__all__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Types">{(v: string) => (v === "__all__" ? "All Types" : (benefitTypes.find((t) => t.id === v)?.name ?? v))}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Types</SelectItem>
-                {benefitTypes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.benefitTypeId || "__all__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, benefitTypeId: v === "__all__" ? "" : v }))}
+              options={[{ value: "__all__", label: "All Types" }, ...benefitTypes.map((t) => ({ value: t.id, label: t.name }))]}
+              placeholder="All Types"
+            />
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">

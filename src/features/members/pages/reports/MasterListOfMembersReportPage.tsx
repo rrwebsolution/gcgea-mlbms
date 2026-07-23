@@ -11,7 +11,7 @@ import { DataTable } from "@/components/shared/DataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllActiveMembers } from "@/services/members.service"
 import { MEMBERSHIP_STATUS_TONE } from "@/constants/status"
@@ -93,28 +93,36 @@ export default function MasterListOfMembersReportPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Sex</Label>
-            <Select value={draft.sex || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, sex: v === "__all__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All">{(v: string) => (v === "__all__" ? "All" : v)}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All</SelectItem>
-                <SelectItem value="Male">Male</SelectItem>
-                <SelectItem value="Female">Female</SelectItem>
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.sex || "__all__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, sex: v === "__all__" ? "" : (v ?? "") }))}
+              options={[
+                { value: "__all__", label: "All" },
+                { value: "Male", label: "Male" },
+                { value: "Female", label: "Female" },
+              ]}
+              placeholder="All"
+              hideSearch
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Membership Status</Label>
-            <Select value={draft.membershipStatus || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, membershipStatus: v === "__all__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Statuses">{(v: string) => (v === "__all__" ? "All Statuses" : v)}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Statuses</SelectItem>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Inactive">Inactive</SelectItem>
-                <SelectItem value="Suspended">Suspended</SelectItem>
-                <SelectItem value="Terminated">Terminated</SelectItem>
-                <SelectItem value="Deceased">Deceased</SelectItem>
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.membershipStatus || "__all__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, membershipStatus: v === "__all__" ? "" : (v ?? "") }))}
+              options={[
+                { value: "__all__", label: "All Statuses" },
+                { value: "Active", label: "Active" },
+                { value: "Inactive", label: "Inactive" },
+                { value: "Suspended", label: "Suspended" },
+                { value: "Terminated", label: "Terminated" },
+                { value: "Deceased", label: "Deceased" },
+              ]}
+              placeholder="All Statuses"
+              hideSearch
+            />
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">

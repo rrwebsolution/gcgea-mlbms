@@ -2,19 +2,18 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Loader2, PencilLine, Plus, Power, Users as UsersIcon } from "lucide-react"
+import { Loader2, PencilLine, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { DataTable } from "@/components/shared/DataTable"
 import { Pagination } from "@/components/shared/Pagination"
-import { StatusBadge } from "@/components/shared/StatusBadge"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { ExportButtons } from "@/components/shared/ExportButtons"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { listOffices, createOffice, updateOffice, toggleOfficeStatus } from "@/services/offices.service"
-import { OFFICE_STATUS_TONE } from "@/constants/status"
 import { formatDateShort } from "@/utils/format"
 import type { Office } from "@/types"
 import { OfficeFormDialog } from "@/features/offices/components/OfficeFormDialog"
@@ -64,8 +63,44 @@ export default function OfficesPage() {
     { accessorKey: "code", header: "Office Code", cell: ({ row }) => <span className="font-medium text-foreground">{row.original.code}</span> },
     { accessorKey: "name", header: "Office Name" },
     { accessorKey: "description", header: "Description", cell: ({ row }) => <span className="text-muted-foreground">{row.original.description || "—"}</span> },
-    { accessorKey: "memberCount", header: "Members" },
-    { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={OFFICE_STATUS_TONE[row.original.status]} /> },
+    {
+      accessorKey: "memberCount",
+      header: "Members",
+      cell: ({ row }) => (
+        <Button
+          variant="link"
+          className="h-auto p-0 font-semibold"
+          onClick={() => navigate(`/members?office=${encodeURIComponent(row.original.name)}`)}
+          aria-label={`View ${row.original.memberCount} members from ${row.original.name}`}
+        >
+          {row.original.memberCount}
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const isPending = toggleMutation.isPending && toggleMutation.variables === row.original.id
+        return (
+          <div className="flex items-center gap-2">
+            <PermissionGuard
+              anyOf={["offices.activate", "offices.deactivate"]}
+              fallback={<span className="text-sm font-medium">{row.original.status}</span>}
+            >
+              <Switch
+                checked={row.original.status === "Active"}
+                disabled={isPending}
+                onCheckedChange={() => toggleMutation.mutate(row.original.id)}
+                aria-label={row.original.status === "Active" ? "Deactivate office" : "Activate office"}
+              />
+              <span className="text-sm font-medium">{row.original.status}</span>
+              {isPending && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+            </PermissionGuard>
+          </div>
+        )
+      },
+    },
     { accessorKey: "createdAt", header: "Date Created", cell: ({ row }) => formatDateShort(row.original.createdAt) },
     {
       id: "actions",
@@ -73,9 +108,6 @@ export default function OfficesPage() {
       enableHiding: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" onClick={() => navigate(`/members?office=${encodeURIComponent(row.original.name)}`)} aria-label="View members">
-            <UsersIcon />
-          </Button>
           <PermissionGuard permission="offices.update">
             <Button
               variant="ghost"
@@ -87,17 +119,6 @@ export default function OfficesPage() {
               aria-label="Edit office"
             >
               <PencilLine />
-            </Button>
-          </PermissionGuard>
-          <PermissionGuard anyOf={["offices.activate", "offices.deactivate"]}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={toggleMutation.isPending && toggleMutation.variables === row.original.id}
-              onClick={() => toggleMutation.mutate(row.original.id)}
-              aria-label={row.original.status === "Active" ? "Deactivate office" : "Activate office"}
-            >
-              {toggleMutation.isPending && toggleMutation.variables === row.original.id ? <Loader2 className="animate-spin" /> : <Power />}
             </Button>
           </PermissionGuard>
         </div>

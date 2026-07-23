@@ -45,27 +45,45 @@ function flatten(items: NavItem[], trail: BreadcrumbEntry[] = []): FlatNode[] {
 }
 
 const FLAT_NODES = flatten(NAV_ITEMS)
+const DASHBOARD_CRUMB: BreadcrumbEntry = { label: "Dashboard", path: "/dashboard" }
+
+function withDashboard(trail: BreadcrumbEntry[]): BreadcrumbEntry[] {
+  if (trail.length === 0 || trail[0]?.path === "/dashboard" || trail[0]?.label === "Dashboard") {
+    return trail
+  }
+  return [DASHBOARD_CRUMB, ...trail]
+}
 
 export function useBreadcrumbs(): BreadcrumbEntry[] {
   const location = useLocation()
   const { extra } = useBreadcrumbContext()
   const pathname = location.pathname
+  const officeFilter = new URLSearchParams(location.search).get("office")
+
+  // Preserve the navigation context when the user opens an office's member list
+  // from Office Management. This gives them a direct breadcrumb back to Offices.
+  if (pathname === "/members" && officeFilter) {
+    return withDashboard([
+      { label: "Offices", path: "/admin/offices" },
+      { label: `Members: ${officeFilter}` },
+    ])
+  }
 
   const exact = FLAT_NODES.find((n) => n.path === pathname)
   if (exact) {
     const trail = exact.trail
-    if (extra) return [...trail.slice(0, -1), { ...trail[trail.length - 1] }, { label: extra }]
-    return trail
+    if (extra) return withDashboard([...trail.slice(0, -1), { ...trail[trail.length - 1] }, { label: extra }])
+    return withDashboard(trail)
   }
 
-  if (REPORT_TRAILS[pathname]) return REPORT_TRAILS[pathname]
-  if (STATIC_TRAILS[pathname]) return STATIC_TRAILS[pathname]
+  if (REPORT_TRAILS[pathname]) return withDashboard(REPORT_TRAILS[pathname])
+  if (STATIC_TRAILS[pathname]) return withDashboard(STATIC_TRAILS[pathname])
 
   const prefixMatches = FLAT_NODES.filter((n) => n.path !== "/" && pathname.startsWith(n.path + "/"))
   const best = prefixMatches.sort((a, b) => b.path.length - a.path.length)[0]
   if (best) {
-    return extra ? [...best.trail, { label: extra }] : [...best.trail, { label: "Details" }]
+    return withDashboard(extra ? [...best.trail, { label: extra }] : [...best.trail, { label: "Details" }])
   }
 
-  return []
+  return [DASHBOARD_CRUMB]
 }

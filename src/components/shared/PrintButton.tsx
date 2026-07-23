@@ -10,6 +10,10 @@ interface PrintButtonProps {
 }
 
 export function PrintButton({ permission, label = "Print", onPrint }: PrintButtonProps) {
+  if (!window.location.pathname.startsWith("/reports")) {
+    return null
+  }
+
   return (
     <PermissionButton
       permission={permission}

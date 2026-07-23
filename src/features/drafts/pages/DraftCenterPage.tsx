@@ -10,7 +10,7 @@ import { Pagination } from "@/components/shared/Pagination"
 import { StatCard } from "@/components/shared/StatCard"
 import { DraftStatusBadge } from "@/components/shared/DraftStatusBadge"
 import { DraftCompletionBar } from "@/components/shared/DraftCompletionBar"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
 import { listMembers } from "@/services/members.service"
 import { listLoans } from "@/services/loans.service"
@@ -202,17 +202,19 @@ export default function DraftCenterPage() {
               placeholder="Search by reference, record, or creator…" 
               className="max-w-sm" 
             />
-            <Select value={moduleFilter} onValueChange={(v) => { setModuleFilter((v || "all") as DraftModule | "all"); setPage(1) }}>
-              <SelectTrigger className="w-40 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all">
-                <SelectValue placeholder="All Modules">{(v: string) => (v === "all" ? "All Modules" : v)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="text-xs">All Modules</SelectItem>
-                <SelectItem value="Member" className="text-xs">Member</SelectItem>
-                <SelectItem value="Loan" className="text-xs">Loan</SelectItem>
-                <SelectItem value="Benefit" className="text-xs">Benefit</SelectItem>
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-40 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
+              value={moduleFilter}
+              onValueChange={(v) => { setModuleFilter((v || "all") as DraftModule | "all"); setPage(1) }}
+              placeholder="All Modules"
+              options={[
+                { value: "all", label: "All Modules" },
+                { value: "Member", label: "Member" },
+                { value: "Loan", label: "Loan" },
+                { value: "Benefit", label: "Benefit" },
+              ]}
+              hideSearch
+            />
           </div>
           
           <Button

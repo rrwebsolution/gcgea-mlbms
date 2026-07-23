@@ -1,4 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios"
+import type { PaginatedResponse, PaginationParams } from "@/types"
 
 /**
  * Centralized Axios client for the Laravel Sanctum API. Cookie/session based
@@ -17,6 +18,67 @@ export const api = axios.create({
     "Content-Type": "application/json",
   },
 })
+
+const GLOBAL_SEARCH_PAGE_SIZE = 10_000
+
+/**
+ * Fetches list endpoints normally, but makes text searches global. Some API
+ * endpoints apply their search after slicing the requested page, which means a
+ * match on another page is invisible. During a search we request the complete
+ * filtered set first, then paginate those matches on the client.
+ */
+export async function getPaginated<T>(url: string, params: PaginationParams = {}): Promise<PaginatedResponse<T>> {
+  const search = typeof params.search === "string" ? params.search.trim() : ""
+
+  if (!search) {
+    const { data } = await api.get<PaginatedResponse<T>>(url, { params })
+    return data
+  }
+
+  const requestedPage = Math.max(1, Number(params.page) || 1)
+  const requestedPerPage = Math.max(1, Number(params.perPage) || 10)
+  // Deliberately omit `search` here. This avoids endpoints that search only
+  // inside the requested page instead of across the complete filtered query.
+  const filterParams = { ...params }
+  delete filterParams.search
+  const { data: firstBatch } = await api.get<PaginatedResponse<T>>(url, {
+    params: { ...filterParams, page: 1, perPage: GLOBAL_SEARCH_PAGE_SIZE },
+  })
+
+  const remainingBatches = firstBatch.meta.totalPages > 1
+    ? await Promise.all(
+        Array.from({ length: firstBatch.meta.totalPages - 1 }, (_, index) =>
+          api.get<PaginatedResponse<T>>(url, {
+            params: { ...filterParams, page: index + 2, perPage: GLOBAL_SEARCH_PAGE_SIZE },
+          })
+        )
+      )
+    : []
+
+  const allRecords = [firstBatch.data, ...remainingBatches.map(({ data }) => data.data)].flat()
+  const normalizedSearch = search.toLocaleLowerCase().replace(/\s+/g, " ")
+  const compactSearch = normalizedSearch.replace(/[^\p{L}\p{N}]/gu, "")
+  const matches = allRecords.filter((record) => {
+    const searchableText = Object.values(record as Record<string, unknown>)
+      .filter((value) => typeof value === "string" || typeof value === "number")
+      .join(" ")
+      .toLocaleLowerCase()
+      .replace(/\s+/g, " ")
+    return searchableText.includes(normalizedSearch) || (
+      compactSearch.length > 0 && searchableText.replace(/[^\p{L}\p{N}]/gu, "").includes(compactSearch)
+    )
+  })
+
+  const totalRecords = matches.length
+  const totalPages = Math.max(1, Math.ceil(totalRecords / requestedPerPage))
+  const currentPage = Math.min(requestedPage, totalPages)
+  const start = (currentPage - 1) * requestedPerPage
+
+  return {
+    data: matches.slice(start, start + requestedPerPage),
+    meta: { currentPage, perPage: requestedPerPage, totalRecords, totalPages },
+  }
+}
 
 /** Root origin (no trailing `/api`) — Sanctum's CSRF-cookie route lives outside the `/api` prefix. */
 function apiRootOrigin(): string {

@@ -2,6 +2,8 @@ import * as React from "react"
 import { ShieldCheck } from "lucide-react"
 import { ORGANIZATION } from "@/constants/organization"
 import { cn } from "@/lib/utils"
+import { getAppearance } from "@/services/settings.service"
+import type { AppearanceSettings } from "@/types"
 
 interface BrandLogoProps {
   className?: string
@@ -14,6 +16,17 @@ interface BrandLogoProps {
  */
 export function BrandLogo({ className }: BrandLogoProps) {
   const [failed, setFailed] = React.useState(false)
+  const [logoUrl, setLogoUrl] = React.useState(() => getAppearance().sidebarLogoUrl || ORGANIZATION.logoPath)
+
+  React.useEffect(() => {
+    function handleAppearanceChange(event: Event) {
+      const appearance = (event as CustomEvent<AppearanceSettings>).detail
+      setFailed(false)
+      setLogoUrl(appearance.sidebarLogoUrl || ORGANIZATION.logoPath)
+    }
+    window.addEventListener("gcgea:appearance-changed", handleAppearanceChange)
+    return () => window.removeEventListener("gcgea:appearance-changed", handleAppearanceChange)
+  }, [])
 
   if (failed) {
     return (
@@ -25,7 +38,7 @@ export function BrandLogo({ className }: BrandLogoProps) {
 
   return (
     <img
-      src={ORGANIZATION.logoPath}
+      src={logoUrl}
       alt={`${ORGANIZATION.acronym} logo`}
       className={cn("shrink-0 object-contain", className)}
       onError={() => setFailed(true)}

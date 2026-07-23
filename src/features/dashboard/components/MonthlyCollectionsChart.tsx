@@ -1,9 +1,12 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { format, parseISO } from "date-fns"
 import { formatCurrency } from "@/utils/format"
+import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
+import { usePageRefresh } from "@/contexts/PageRefreshContext"
 
 interface MonthlyCollectionsChartProps {
   data: { month: string; contributions: number; loanPayments: number }[]
+  isLoading?: boolean
 }
 
 function MonthTick(value: string) {
@@ -14,7 +17,10 @@ function MonthTick(value: string) {
   }
 }
 
-export function MonthlyCollectionsChart({ data }: MonthlyCollectionsChartProps) {
+export function MonthlyCollectionsChart({ data, isLoading }: MonthlyCollectionsChartProps) {
+  const { isRefreshing } = usePageRefresh()
+  if (isLoading || isRefreshing) return <ChartSkeleton variant="area" height={260} />
+
   return (
     <ResponsiveContainer width="100%" height={260}>
       <LineChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>

@@ -8,7 +8,6 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { DataTable } from "@/components/shared/DataTable"
 import { Pagination } from "@/components/shared/Pagination"
-import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ProfileCompleteness } from "@/components/shared/ProfileCompleteness"
 import { DraftStatusBadge } from "@/components/shared/DraftStatusBadge"
 import { DraftCompletionBar } from "@/components/shared/DraftCompletionBar"
@@ -17,18 +16,20 @@ import { PrintButton } from "@/components/shared/PrintButton"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { DeleteOrArchiveDialog } from "@/components/shared/DeleteOrArchiveDialog"
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import {
   archiveMember,
   listArchivedMembers,
   listMembers,
   profileCompleteness,
   restoreMember,
+  updateMemberMembershipStatus,
 } from "@/services/members.service"
-import { MEMBERSHIP_STATUS_TONE } from "@/constants/status"
 import { calculateAge, calculateDurationLabel, formatDateShort, initialsFromName } from "@/utils/format"
 import type { Member } from "@/types"
 
@@ -55,6 +56,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
   const [archiveTarget, setArchiveTarget] = React.useState<Member | null>(null)
   const [restoreTarget, setRestoreTarget] = React.useState<Member | null>(null)
+  const [deactivateTarget, setDeactivateTarget] = React.useState<Member | null>(null)
 
   const sortBy = sorting[0]?.id
   const sortDir = sorting[0] ? (sorting[0].desc ? "desc" : "asc") : undefined
@@ -94,6 +96,19 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
       toast.success("Member restored successfully.")
       queryClient.invalidateQueries({ queryKey: ["members"] })
       setRestoreTarget(null)
+    },
+  })
+
+  const membershipStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "Active" | "Inactive" }) =>
+      updateMemberMembershipStatus(id, status),
+    onSuccess: (member) => {
+      toast.success(`${member.fullName} is now ${member.membershipStatus.toLowerCase()}.`)
+      queryClient.invalidateQueries({ queryKey: ["members"] })
+      setDeactivateTarget(null)
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Unable to update membership status.")
     },
   })
 
@@ -144,7 +159,39 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
     { accessorKey: "cellphoneNumber", header: "Contact Number" },
     { accessorKey: "membershipDate", header: "Membership Date", cell: ({ row }) => formatDateShort(row.original.membershipDate) },
     { id: "membershipLength", header: "Membership Length", enableSorting: false, cell: ({ row }) => calculateDurationLabel(row.original.membershipDate) },
-    { accessorKey: "membershipStatus", header: "Membership Status", cell: ({ row }) => <StatusBadge label={row.original.membershipStatus} tone={MEMBERSHIP_STATUS_TONE[row.original.membershipStatus]} /> },
+    {
+      accessorKey: "membershipStatus",
+      header: "Membership Status",
+      cell: ({ row }) => {
+        const member = row.original
+        const isActive = member.membershipStatus === "Active"
+        const isUpdating = membershipStatusMutation.isPending && membershipStatusMutation.variables?.id === member.id
+        return (
+          <PermissionGuard
+            permission="members.update"
+            fallback={<span className="text-sm font-medium">{member.membershipStatus}</span>}
+          >
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={isActive}
+                disabled={isUpdating || archived || draftsOnly}
+                aria-label={`Set ${member.fullName} membership status`}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    membershipStatusMutation.mutate({ id: member.id, status: "Active" })
+                  } else {
+                    setDeactivateTarget(member)
+                  }
+                }}
+              />
+              <span className={isActive ? "text-sm font-semibold text-success" : "text-sm font-medium text-muted-foreground"}>
+                {member.membershipStatus}
+              </span>
+            </div>
+          </PermissionGuard>
+        )
+      },
+    },
     { accessorKey: "retireeStatus", header: "Retiree Status" },
     {
       id: "profileCompleteness",
@@ -212,7 +259,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
             <>
               <PrintButton permission="members.print" label="Print List" />
               <ExportButtons permission="members.export" label="members" />
-              <PermissionButton permission="members.import" variant="outline" render={<Link to="/members/import" />}>
+              <PermissionButton permission="member_import.create" variant="outline" render={<Link to="/members/import" />}>
                 <UploadCloud />
                 Import Members
               </PermissionButton>
@@ -236,33 +283,45 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
           {!archived && !draftsOnly && (
             <>
               <OfficeSelect value={office} onValueChange={updateOfficeFilter} placeholder="All Offices" className="w-40" />
-              <Select value={sex || "all"} onValueChange={(v) => { setSex(!v || v === "all" ? "" : v); setPage(1) }}>
-                <SelectTrigger className="w-32"><SelectValue placeholder="Sex">{(v: string) => (v === "all" ? "All Sexes" : v)}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sexes</SelectItem>
-                  <SelectItem value="Male">Male</SelectItem>
-                  <SelectItem value="Female">Female</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={membershipStatus || "all"} onValueChange={(v) => { setMembershipStatus(!v || v === "all" ? "" : v); setPage(1) }}>
-                <SelectTrigger className="w-44"><SelectValue placeholder="Membership Status">{(v: string) => (v === "all" ? "All Statuses" : v)}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Suspended">Suspended</SelectItem>
-                  <SelectItem value="Terminated">Terminated</SelectItem>
-                  <SelectItem value="Deceased">Deceased</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={retireeStatus || "all"} onValueChange={(v) => { setRetireeStatus(!v || v === "all" ? "" : v); setPage(1) }}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="Retiree Status">{(v: string) => (v === "all" ? "All" : v)}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="Not Retired">Not Retired</SelectItem>
-                  <SelectItem value="Retired">Retired</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-32"
+                value={sex || "all"}
+                onValueChange={(v) => { setSex(!v || v === "all" ? "" : v); setPage(1) }}
+                options={[
+                  { value: "all", label: "All Sexes" },
+                  { value: "Male", label: "Male" },
+                  { value: "Female", label: "Female" },
+                ]}
+                placeholder="Sex"
+                hideSearch
+              />
+              <CommandSelect
+                className="w-44"
+                value={membershipStatus || "all"}
+                onValueChange={(v) => { setMembershipStatus(!v || v === "all" ? "" : v); setPage(1) }}
+                options={[
+                  { value: "all", label: "All Statuses" },
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                  { value: "Suspended", label: "Suspended" },
+                  { value: "Terminated", label: "Terminated" },
+                  { value: "Deceased", label: "Deceased" },
+                ]}
+                placeholder="Membership Status"
+                hideSearch
+              />
+              <CommandSelect
+                className="w-40"
+                value={retireeStatus || "all"}
+                onValueChange={(v) => { setRetireeStatus(!v || v === "all" ? "" : v); setPage(1) }}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "Not Retired", label: "Not Retired" },
+                  { value: "Retired", label: "Retired" },
+                ]}
+                placeholder="Retiree Status"
+                hideSearch
+              />
             </>
           )}
           {selectedCount > 0 && (
@@ -312,6 +371,21 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
         mode="restore"
         isLoading={restoreMutation.isPending}
         onConfirm={() => restoreTarget && restoreMutation.mutate(restoreTarget.id)}
+      />
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        onOpenChange={(open) => !open && setDeactivateTarget(null)}
+        title="Set member as inactive?"
+        description={
+          deactivateTarget
+            ? `Are you sure you want to set ${deactivateTarget.fullName} as inactive? The member will no longer be treated as an active member for transactions and eligibility checks.`
+            : undefined
+        }
+        confirmLabel="Yes, Set Inactive"
+        confirmingLabel="Updating..."
+        destructive
+        isLoading={membershipStatusMutation.isPending}
+        onConfirm={() => deactivateTarget && membershipStatusMutation.mutate({ id: deactivateTarget.id, status: "Inactive" })}
       />
     </div>
   )

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { UploadStatusBadge } from "@/components/shared/UploadStatusBadge"
 import { ImagePreviewDialog } from "@/components/shared/ImagePreviewDialog"
 import { PDFPreviewDialog } from "@/components/shared/PDFPreviewDialog"
+import { ImageWithSkeleton } from "@/components/shared/loaders/ImageWithSkeleton"
 import { isDuplicateFile, isImageFile, isPdfFile, validateFile, DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, MAX_UPLOAD_SIZE_MB, type UploadStatus } from "@/lib/upload-validation"
 import { cn } from "@/lib/utils"
 
@@ -60,7 +61,12 @@ export function DocumentCard({
     <div className={cn("flex items-start gap-3 rounded-lg border border-border bg-card p-3", className)}>
       {isImage ? (
         <button type="button" onClick={() => setPreviewOpen(true)} className="shrink-0">
-          <img src={fileUrl} alt={fileName} className="size-11 rounded-lg border border-border object-cover" />
+          <ImageWithSkeleton
+            src={fileUrl}
+            alt={fileName}
+            containerClassName="size-11 overflow-hidden rounded-lg border border-border"
+            className="size-11 object-cover"
+          />
         </button>
       ) : (
         <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">

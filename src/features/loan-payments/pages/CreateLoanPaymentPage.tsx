@@ -12,10 +12,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { getMember } from "@/services/members.service"
 import { listAllLoans } from "@/services/loans.service"
 import { createLoanPayment } from "@/services/loan-payments.service"
+import { getLoanSettings } from "@/services/loan-settings.service"
 import { formatCurrency } from "@/utils/format"
 import type { PaymentMethod } from "@/types"
 
@@ -27,6 +28,18 @@ export default function CreateLoanPaymentPage() {
   const [searchParams] = useSearchParams()
   const [memberId, setMemberId] = React.useState(() => searchParams.get("member") ?? "")
   const [loanId, setLoanId] = React.useState("")
+
+  // Re-sync whenever the URL's ?member= changes — the lazy initializer above
+  // only fires on first mount, so navigating here again from e.g. Member
+  // Profile's "Record Payment" link while this page is already mounted
+  // (same route, only the query differs) would otherwise be ignored.
+  React.useEffect(() => {
+    const paramMemberId = searchParams.get("member")
+    if (paramMemberId && paramMemberId !== memberId) {
+      setMemberId(paramMemberId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
   const [paymentDate, setPaymentDate] = React.useState(() => new Date().toISOString().slice(0, 10))
   const [amountPaid, setAmountPaid] = React.useState<number>()
   const [penalty, setPenalty] = React.useState<number>(0)
@@ -38,10 +51,19 @@ export default function CreateLoanPaymentPage() {
 
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
   const { data: loans = [] } = useQuery({ queryKey: ["loans", "all"], queryFn: listAllLoans })
+  const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
   const activeLoans = loans.filter((loan) => loan.memberId === memberId && ["Released", "Active", "Overdue", "Restructured"].includes(loan.status) && loan.outstandingBalance > 0)
   const selectedLoan = activeLoans.find((loan) => loan.id === loanId)
   const totalOutstanding = activeLoans.reduce((sum, loan) => sum + loan.outstandingBalance, 0)
   const canSave = !!member && !!selectedLoan && !!amountPaid && amountPaid > 0 && amountPaid - penalty > 0 && amountPaid - penalty <= selectedLoan.outstandingBalance && !!paymentDate && !!officialReceiptNumber.trim()
+
+  React.useEffect(() => {
+    if (!selectedLoan || !loanSettings) return
+    const configuredPenalty = selectedLoan.status === "Overdue"
+      ? Math.round(selectedLoan.monthlyAmortization * loanSettings.defaultPenaltyRate) / 100
+      : 0
+    setPenalty(configuredPenalty)
+  }, [selectedLoan?.id, selectedLoan?.status, selectedLoan?.monthlyAmortization, loanSettings])
 
   function selectMember(id: string) {
     setMemberId(id)
@@ -80,15 +102,36 @@ export default function CreateLoanPaymentPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Loan Account <span className="text-destructive">*</span></Label>
-              <Select value={loanId} onValueChange={(value) => { setLoanId(value ?? ""); const loan = activeLoans.find((item) => item.id === value); setAmountPaid(loan ? Math.min(loan.monthlyAmortization, loan.outstandingBalance) : undefined) }} disabled={!activeLoans.length}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select an active loan" /></SelectTrigger>
-                <SelectContent>{activeLoans.map((loan) => <SelectItem key={loan.id} value={loan.id}>{loan.applicationNumber} · {loan.loanTypeName} · Balance {formatCurrency(loan.outstandingBalance)}</SelectItem>)}</SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full"
+                value={loanId}
+                onValueChange={(value) => { setLoanId(value); const loan = activeLoans.find((item) => item.id === value); setAmountPaid(loan ? Math.min(loan.monthlyAmortization, loan.outstandingBalance) : undefined) }}
+                disabled={!activeLoans.length}
+                placeholder="Select an active loan"
+                options={activeLoans.map((loan) => ({ value: loan.id, label: `${loan.applicationNumber} · ${loan.loanTypeName} · Balance ${formatCurrency(loan.outstandingBalance)}` }))}
+              />
             </div>
             <div className="space-y-1.5"><Label>Payment Date <span className="text-destructive">*</span></Label><Input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></div>
             <div className="space-y-1.5"><Label>Amount Paid <span className="text-destructive">*</span></Label><CurrencyInput value={amountPaid} onChange={setAmountPaid} /></div>
-            <div className="space-y-1.5"><Label>Penalty</Label><CurrencyInput value={penalty} onChange={(value) => setPenalty(value ?? 0)} /></div>
-            <div className="space-y-1.5"><Label>Payment Method</Label><Select value={paymentMethod} onValueChange={(value) => setPaymentMethod((value ?? "Payroll Deduction") as PaymentMethod)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAYMENT_METHODS.map((method) => <SelectItem key={method} value={method}>{method}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5">
+              <Label>Penalty</Label>
+              <CurrencyInput value={penalty} onChange={(value) => setPenalty(value ?? 0)} />
+              <p className="text-xs text-muted-foreground">
+                {selectedLoan?.status === "Overdue"
+                  ? `${loanSettings?.defaultPenaltyRate ?? 0}% of monthly amortization, from Loan Settings.`
+                  : "No automatic penalty because this loan is not overdue."}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Payment Method</Label>
+              <CommandSelect
+                className="w-full"
+                value={paymentMethod}
+                onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+                options={PAYMENT_METHODS.map((method) => ({ value: method, label: method }))}
+                hideSearch
+              />
+            </div>
             <div className="space-y-1.5"><Label>Official Receipt Number <span className="text-destructive">*</span></Label><Input value={officialReceiptNumber} onChange={(event) => setOfficialReceiptNumber(event.target.value)} placeholder="e.g. OR-2026-000123" /></div>
             <div className="space-y-1.5"><Label>Payroll Reference</Label><Input value={payrollReference} onChange={(event) => setPayrollReference(event.target.value)} placeholder="Optional" /></div>
             <div className="space-y-1.5 sm:col-span-2"><Label>Remarks</Label><Textarea rows={2} value={remarks} onChange={(event) => setRemarks(event.target.value)} /></div>
@@ -97,7 +140,7 @@ export default function CreateLoanPaymentPage() {
         </FormSection>
       )}
 
-      <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
+      <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:mx-0 sm:border sm:shadow-sm">
         <Button variant="outline" onClick={() => navigate(-1)} disabled={isSaving}>Cancel</Button>
         <Button onClick={handleSave} disabled={!canSave || isSaving} aria-busy={isSaving}>{isSaving ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Save aria-hidden="true" />}{isSaving ? "Saving…" : "Record Payment"}</Button>
       </div>

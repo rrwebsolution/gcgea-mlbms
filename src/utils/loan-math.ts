@@ -1,4 +1,4 @@
-import type { AmortizationEntry, InterestMethod } from "@/types"
+import type { AmortizationEntry, InterestMethod, LoanTypeIncomeBracket } from "@/types"
 import { addMonths, format } from "date-fns"
 
 export interface LoanComputationInput {
@@ -8,12 +8,15 @@ export interface LoanComputationInput {
   processingFee: number
   interestMethod: InterestMethod
   firstDueDate: Date
+  /** 1%-of-gross-style service charge, additive to processingFee — see GCGEA Resolution No. 24-2026, Table 3. */
+  serviceChargePercent?: number | null
 }
 
 export interface LoanComputationResult {
   principal: number
   totalInterest: number
   processingFee: number
+  serviceCharge: number
   netProceeds: number
   totalAmountPayable: number
   monthlyAmortization: number
@@ -21,8 +24,19 @@ export interface LoanComputationResult {
   schedule: AmortizationEntry[]
 }
 
+/**
+ * Mirrors app/Services/LoanIncomeBracketService.php for a live preview of the
+ * loanable amount while encoding an income-bracketed loan application (e.g.
+ * Solidarity Cash Assistance Loan — GCGEA Resolution No. 24-2026, Table 3).
+ * The server remains authoritative and recomputes this on submit.
+ */
+export function bracketForNetPay(brackets: LoanTypeIncomeBracket[], netPay: number): LoanTypeIncomeBracket | null {
+  return brackets.find((b) => netPay >= b.minNetPay && (b.maxNetPay === null || netPay <= b.maxNetPay)) ?? null
+}
+
 export function computeLoan(input: LoanComputationInput): LoanComputationResult {
-  const { principal, annualRatePercent, termMonths, processingFee, interestMethod, firstDueDate } = input
+  const { principal, annualRatePercent, termMonths, processingFee, interestMethod, firstDueDate, serviceChargePercent } = input
+  const serviceCharge = serviceChargePercent ? Math.round(principal * (serviceChargePercent / 100) * 100) / 100 : 0
   const monthlyRate = annualRatePercent / 100
 
   let totalInterest = 0
@@ -98,7 +112,7 @@ export function computeLoan(input: LoanComputationInput): LoanComputationResult 
     totalInterest = Math.round(totalInterest * 100) / 100
   }
 
-  const netProceeds = Math.round((principal - processingFee) * 100) / 100
+  const netProceeds = Math.round((principal - processingFee - serviceCharge) * 100) / 100
   const totalAmountPayable = Math.round((principal + totalInterest) * 100) / 100
   const monthlyAmortization = schedule.length > 0 ? schedule[0].amountDue : 0
   const maturityDate = schedule.length > 0 ? schedule[schedule.length - 1].dueDate : format(firstDueDate, "yyyy-MM-dd")
@@ -107,6 +121,7 @@ export function computeLoan(input: LoanComputationInput): LoanComputationResult 
     principal,
     totalInterest,
     processingFee,
+    serviceCharge,
     netProceeds,
     totalAmountPayable,
     monthlyAmortization,

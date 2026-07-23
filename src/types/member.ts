@@ -2,7 +2,7 @@ import type { CivilStatus, Sex } from "./common"
 
 export type MembershipStatus = "Active" | "Inactive" | "Suspended" | "Terminated" | "Deceased"
 export type RetireeStatus = "Not Retired" | "Retired"
-export type EmploymentStatus = "Permanent" | "Casual" | "Job Order" | "Contractual" | "Co-terminus"
+export type EmploymentStatus = string
 export type MembershipType = "Regular" | "Associate" | "Honorary"
 
 export interface Beneficiary {
@@ -69,6 +69,8 @@ export interface Member {
   membershipType: MembershipType
   membershipDate: string
   membershipStatus: MembershipStatus
+  /** Monthly net take-home pay — drives income-bracketed loan products (e.g. Solidarity Cash Assistance Loan). Optional; not every member has this on file. */
+  netPay?: number | null
   retireeStatus: RetireeStatus
   remarks?: string
 
@@ -79,11 +81,22 @@ export interface Member {
   archivedAt?: string
   archivedReason?: string
 
+  /** Set when this member was created by Member Profile Import — see membershipStatus="Pending" + approvalStatus="pending" until reviewed. */
+  importedFromBatchId?: string | null
+
   /** Draft bookkeeping — see the Save as Draft system (useDraft, MemberRegistrationPage). */
   isDraft: boolean
   draftReferenceNo?: string
   draftCompletionPercentage?: number
   draftCurrentStep?: number
+
+  /** Registration approval progress — absent until the member has been submitted at least once. */
+  approvalStatus?: "pending" | "approved" | "rejected" | "returned"
+  registrationStatus?: "pending_approval" | "approved" | "rejected" | "returned_for_revision"
+  approvalSource?: "manual" | "import" | "auto_approved"
+  submittedAt?: string
+  approvedAt?: string
+  approvedByUserId?: string
 
   createdAt: string
   updatedAt: string

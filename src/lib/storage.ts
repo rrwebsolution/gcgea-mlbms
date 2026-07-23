@@ -7,8 +7,6 @@
 
 export const STORAGE_KEYS = {
   session: "gcgea_mock_session",
-  roles: "gcgea_roles",
-  users: "gcgea_users",
   themePreference: "gcgea_theme_preference",
   sidebarCollapsed: "gcgea_sidebar_collapsed",
   recentSearches: "gcgea_recent_searches",

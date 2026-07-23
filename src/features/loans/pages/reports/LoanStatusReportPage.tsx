@@ -12,7 +12,7 @@ import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllLoans, getLoanTypesSync } from "@/services/loans.service"
 import { LOAN_STATUS_TONE } from "@/constants/status"
@@ -52,21 +52,25 @@ interface OfficeCount {
 
 interface LoanStatusReportPageProps {
   status?: LoanStatus
+  statuses?: LoanStatus[]
   title: string
   description: string
 }
 
-export default function LoanStatusReportPage({ status, title, description }: LoanStatusReportPageProps) {
+export default function LoanStatusReportPage({ status, statuses, title, description }: LoanStatusReportPageProps) {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
   const [applied, setApplied] = React.useState<Filters | null>(null)
 
   const loanTypes = React.useMemo(() => getLoanTypesSync(), [])
+  const hasFixedStatuses = Boolean(status || statuses?.length)
 
   const rows = React.useMemo<LoanApplication[]>(() => {
     if (!applied) return []
     return getAllLoans()
       .filter((l) => {
-        if (status) {
+        if (statuses) {
+          if (!statuses.includes(l.status)) return false
+        } else if (status) {
           if (l.status !== status) return false
         } else if (applied.status && l.status !== applied.status) {
           return false
@@ -78,7 +82,7 @@ export default function LoanStatusReportPage({ status, title, description }: Loa
         return true
       })
       .sort((a, b) => b.applicationDate.localeCompare(a.applicationDate))
-  }, [applied, status])
+  }, [applied, status, statuses])
 
   const officeChartData = React.useMemo<OfficeCount[]>(() => {
     const map = new Map<string, number>()
@@ -135,6 +139,11 @@ export default function LoanStatusReportPage({ status, title, description }: Loa
     { accessorKey: "memberName", header: "Member" },
     { accessorKey: "officeName", header: "Office" },
     { accessorKey: "loanTypeName", header: "Loan Type" },
+    {
+      accessorKey: "applicationType",
+      header: "Application Type",
+      cell: ({ row }) => row.original.applicationType === "reloan" ? "Reloan" : "New Loan",
+    },
     { accessorKey: "requestedAmount", header: "Requested", cell: ({ row }) => formatCurrency(row.original.requestedAmount) },
     { accessorKey: "outstandingBalance", header: "Outstanding", cell: ({ row }) => formatCurrency(row.original.outstandingBalance) },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={LOAN_STATUS_TONE[row.original.status]} /> },
@@ -150,31 +159,31 @@ export default function LoanStatusReportPage({ status, title, description }: Loa
       <PageHeader title={title} description={description} />
 
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${status ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}>
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${hasFixedStatuses ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}>
           <div className="space-y-1.5">
             <Label>Office</Label>
             <OfficeSelect value={draft.office} onValueChange={(v) => setDraft((f) => ({ ...f, office: v }))} placeholder="All Offices" activeOnly={false} />
           </div>
           <div className="space-y-1.5">
             <Label>Loan Type</Label>
-            <Select value={draft.loanTypeId || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, loanTypeId: v === "__all__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Loan Types">{(v: string) => (v === "__all__" ? "All Loan Types" : (loanTypes.find((t) => t.id === v)?.name ?? v))}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Loan Types</SelectItem>
-                {loanTypes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.loanTypeId || "__all__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, loanTypeId: v === "__all__" ? "" : v }))}
+              options={[{ value: "__all__", label: "All Loan Types" }, ...loanTypes.map((t) => ({ value: t.id, label: t.name }))]}
+              placeholder="All Loan Types"
+            />
           </div>
-          {!status && (
+          {!hasFixedStatuses && (
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select value={draft.status || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, status: v === "__all__" ? "" : (v ?? "") }))}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="All Statuses">{(v: string) => (v === "__all__" ? "All Statuses" : v)}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All Statuses</SelectItem>
-                  {ALL_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full"
+                value={draft.status || "__all__"}
+                onValueChange={(v) => setDraft((f) => ({ ...f, status: v === "__all__" ? "" : v }))}
+                options={[{ value: "__all__", label: "All Statuses" }, ...ALL_STATUSES.map((s) => ({ value: s, label: s }))]}
+                placeholder="All Statuses"
+              />
             </div>
           )}
           <div className="space-y-1.5">

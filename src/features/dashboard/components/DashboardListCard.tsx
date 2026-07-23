@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { usePageRefresh } from "@/contexts/PageRefreshContext"
 
 interface DashboardListCardProps {
   title: string
@@ -17,6 +18,8 @@ interface DashboardListCardProps {
 }
 
 export function DashboardListCard({ title, icon: Icon, viewAllPath, isLoading, isEmpty, emptyLabel = "Nothing to show right now.", className, children }: DashboardListCardProps) {
+  const { isRefreshing } = usePageRefresh()
+  const showSkeleton = Boolean(isLoading || isRefreshing)
   return (
     <div className={cn("flex flex-col rounded-xl border border-border bg-card shadow-sm", className)}>
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -31,7 +34,7 @@ export function DashboardListCard({ title, icon: Icon, viewAllPath, isLoading, i
         )}
       </div>
       <div className="flex-1 divide-y divide-border">
-        {isLoading ? (
+        {showSkeleton ? (
           <div className="space-y-3 p-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-10 w-full" />

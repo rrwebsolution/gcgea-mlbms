@@ -3,20 +3,19 @@ import { Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Ban, Download, Eye, History, Pencil, Plus, Printer, Wallet, Banknote, Users, UserX, CalendarClock } from "lucide-react"
+import { Ban, Eye, History, Pencil, Plus, Wallet, Banknote, Users, UserX, CalendarClock } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { DataTable } from "@/components/shared/DataTable"
 import { Pagination } from "@/components/shared/Pagination"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { StatCard } from "@/components/shared/StatCard"
-import { ExportButtons } from "@/components/shared/ExportButtons"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { VoidTransactionDialog } from "@/components/shared/VoidTransactionDialog"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,11 +26,11 @@ import { listContributions, getAllContributions, getContributionPeriods, voidCon
 import { getAllActiveMembers } from "@/services/members.service"
 import { CONTRIBUTION_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
-import { downloadCsv } from "@/utils/csv"
 import { useAuth } from "@/contexts/AuthContext"
-import type { Contribution, PaymentMethod } from "@/types"
+import type { Contribution, ContributionType, PaymentMethod } from "@/types"
 
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
+const CONTRIBUTION_TYPES: ContributionType[] = ["Monthly Dues", "Cash Pabaon", "Savings"]
 
 function currentPeriod(): string {
   const now = new Date()
@@ -46,6 +45,7 @@ export default function ContributionsPage() {
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
   const [period, setPeriod] = React.useState("")
+  const [contributionType, setContributionType] = React.useState("")
   const [office, setOffice] = React.useState("")
   const [paymentMethod, setPaymentMethod] = React.useState("")
   const [status, setStatus] = React.useState("")
@@ -56,8 +56,20 @@ export default function ContributionsPage() {
   const [isVoiding, setIsVoiding] = React.useState(false)
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["contributions", { search, page, perPage, period, office, paymentMethod, status, dateFrom, dateTo }],
-    queryFn: () => listContributions({ search, page, perPage, period: period || undefined, office: office || undefined, paymentMethod: paymentMethod || undefined, status: status || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+    queryKey: ["contributions", { search, page, perPage, period, contributionType, office, paymentMethod, status, dateFrom, dateTo }],
+    queryFn: () =>
+      listContributions({
+        search,
+        page,
+        perPage,
+        period: period || undefined,
+        contributionType: (contributionType || undefined) as ContributionType | undefined,
+        office: office || undefined,
+        paymentMethod: paymentMethod || undefined,
+        status: status || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      }),
   })
 
   const periods = React.useMemo(() => getContributionPeriods(), [data])
@@ -95,16 +107,6 @@ export default function ContributionsPage() {
     }
   }
 
-  function handleExportCsv() {
-    const rows = data?.data ?? []
-    downloadCsv(
-      "contribution-records.csv",
-      ["Reference #", "Member #", "Member Name", "Office", "Period", "Amount", "Payment Method", "Payment Date", "Status", "Encoded By"],
-      rows.map((c) => [c.referenceNumber, c.memberNumber, c.memberName, c.officeName, c.contributionPeriod, c.amount.toFixed(2), c.paymentMethod, c.paymentDate, c.status, c.encodedBy])
-    )
-    toast.success("Contribution records exported to CSV.")
-  }
-
   const columns: ColumnDef<Contribution, unknown>[] = [
     {
       accessorKey: "referenceNumber",
@@ -118,6 +120,7 @@ export default function ContributionsPage() {
     { accessorKey: "memberNumber", header: "Member #" },
     { accessorKey: "memberName", header: "Member Name" },
     { accessorKey: "officeName", header: "Office" },
+    { accessorKey: "contributionType", header: "Type" },
     { accessorKey: "contributionPeriod", header: "Period" },
     { accessorKey: "amount", header: "Amount", cell: ({ row }) => formatCurrency(row.original.amount) },
     { accessorKey: "paymentMethod", header: "Payment Method" },
@@ -157,9 +160,6 @@ export default function ContributionsPage() {
                   <Pencil className="size-3.5 mr-2" /> Edit Records
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => toast.info("Preparing receipt for printing…")} className="text-xs">
-                <Printer className="size-3.5 mr-2" /> Print Receipt
-              </DropdownMenuItem>
               {c.status === "Posted" && (
                 <DropdownMenuItem variant="destructive" onClick={() => setVoidTarget(c)} className="text-xs">
                   <Ban className="size-3.5 mr-2" /> Void Transaction
@@ -179,25 +179,6 @@ export default function ContributionsPage() {
         description="View and manage GCGEA member contribution records."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <PermissionButton 
-              permission="contributions.print" 
-              variant="outline" 
-              size="sm" 
-              className="h-9 gap-1.5 text-xs hover:bg-accent/80 active:scale-97 transition-all" 
-              onClick={() => window.print()}
-            >
-              <Printer className="size-3.5" /> Print
-            </PermissionButton>
-            <PermissionButton 
-              permission="contributions.export" 
-              variant="outline" 
-              size="sm" 
-              className="h-9 gap-1.5 text-xs hover:bg-accent/80 active:scale-97 transition-all" 
-              onClick={handleExportCsv}
-            >
-              <Download className="size-3.5" /> Export CSV
-            </PermissionButton>
-            <ExportButtons permission="contributions.export" label="contribution records" />
             <PermissionButton 
               permission="contributions.create" 
               className="h-9 gap-1.5 text-xs shadow-sm active:scale-97 transition-all" 
@@ -238,41 +219,52 @@ export default function ContributionsPage() {
             placeholder="Search by member, reference #…" 
             className="max-w-xs" 
           />
-          <Select value={period || "__all__"} onValueChange={(v) => { setPeriod(v === "__all__" ? "" : (v ?? "")); setPage(1) }}>
-            <SelectTrigger size="sm" className="w-40 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all">
-              <SelectValue placeholder="All Periods">{(v: string) => (v === "__all__" ? "All Periods" : v)}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__" className="text-xs">All Periods</SelectItem>
-              {periods.map((p) => <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <OfficeSelect 
-            value={office} 
+          <CommandSelect
+            size="sm"
+            className="w-40 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
+            value={period || "__all__"}
+            onValueChange={(v) => { setPeriod(v === "__all__" ? "" : v); setPage(1) }}
+            options={[{ value: "__all__", label: "All Periods" }, ...periods.map((p) => ({ value: p, label: p }))]}
+            placeholder="All Periods"
+          />
+          <CommandSelect
+            size="sm"
+            className="w-40 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
+            value={contributionType || "__all__"}
+            onValueChange={(v) => { setContributionType(v === "__all__" ? "" : v); setPage(1) }}
+            options={[{ value: "__all__", label: "All Types" }, ...CONTRIBUTION_TYPES.map((t) => ({ value: t, label: t }))]}
+            placeholder="All Types"
+            hideSearch
+          />
+          <OfficeSelect
+            value={office}
             onValueChange={(v) => { setOffice(v); setPage(1) }} 
             placeholder="All Offices" 
             activeOnly={false} 
             className="w-44 text-xs h-9 bg-background border-border/85 hover:bg-accent/40 active:scale-99 transition-all" 
           />
-          <Select value={paymentMethod || "__all__"} onValueChange={(v) => { setPaymentMethod(v === "__all__" ? "" : (v ?? "")); setPage(1) }}>
-            <SelectTrigger size="sm" className="w-44 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all">
-              <SelectValue placeholder="All Payment Methods">{(v: string) => (v === "__all__" ? "All Payment Methods" : v)}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__" className="text-xs">All Payment Methods</SelectItem>
-              {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={status || "__all__"} onValueChange={(v) => { setStatus(v === "__all__" ? "" : (v ?? "")); setPage(1) }}>
-            <SelectTrigger size="sm" className="w-32 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all">
-              <SelectValue placeholder="All Statuses">{(v: string) => (v === "__all__" ? "All Statuses" : v)}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__" className="text-xs">All Statuses</SelectItem>
-              <SelectItem value="Posted" className="text-xs">Posted</SelectItem>
-              <SelectItem value="Voided" className="text-xs">Voided</SelectItem>
-            </SelectContent>
-          </Select>
+          <CommandSelect
+            size="sm"
+            className="w-44 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
+            value={paymentMethod || "__all__"}
+            onValueChange={(v) => { setPaymentMethod(v === "__all__" ? "" : v); setPage(1) }}
+            options={[{ value: "__all__", label: "All Payment Methods" }, ...PAYMENT_METHODS.map((m) => ({ value: m, label: m }))]}
+            placeholder="All Payment Methods"
+            hideSearch
+          />
+          <CommandSelect
+            size="sm"
+            className="w-32 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
+            value={status || "__all__"}
+            onValueChange={(v) => { setStatus(v === "__all__" ? "" : v); setPage(1) }}
+            options={[
+              { value: "__all__", label: "All Statuses" },
+              { value: "Posted", label: "Posted" },
+              { value: "Voided", label: "Voided" },
+            ]}
+            placeholder="All Statuses"
+            hideSearch
+          />
           
           {/* Custom Integrated Datepicker Box */}
           <div className="flex items-center gap-1 bg-background border border-border/85 rounded-lg px-2.5 shadow-sm h-9">
@@ -293,12 +285,12 @@ export default function ContributionsPage() {
             />
           </div>
           
-          {(period || office || paymentMethod || status || dateFrom || dateTo) && (
+          {(period || contributionType || office || paymentMethod || status || dateFrom || dateTo) && (
             <Button
               variant="ghost"
               size="sm"
               className="h-9 px-3 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive active:scale-97 transition-all duration-150"
-              onClick={() => { setPeriod(""); setOffice(""); setPaymentMethod(""); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1) }}
+              onClick={() => { setPeriod(""); setContributionType(""); setOffice(""); setPaymentMethod(""); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1) }}
             >
               Clear Filters
             </Button>

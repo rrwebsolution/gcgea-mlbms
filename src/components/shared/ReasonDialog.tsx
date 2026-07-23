@@ -21,6 +21,8 @@ interface ReasonDialogProps {
   reasonLabel?: string
   reasonPlaceholder?: string
   confirmLabel?: string
+  /** Label shown in place of `confirmLabel` while `isLoading` (e.g. "Rolling Back…"). Defaults to `confirmLabel` unchanged. */
+  confirmingLabel?: string
   destructive?: boolean
   isLoading?: boolean
   onConfirm: (reason: string) => void
@@ -34,6 +36,7 @@ export function ReasonDialog({
   reasonLabel = "Reason",
   reasonPlaceholder = "Provide a reason for this action…",
   confirmLabel = "Confirm",
+  confirmingLabel,
   destructive,
   isLoading,
   onConfirm,
@@ -82,8 +85,8 @@ export function ReasonDialog({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
           <AlertDialogAction variant={destructive ? "destructive" : "default"} disabled={isLoading} onClick={handleConfirm}>
-            {isLoading && <Loader2 className="animate-spin" />}
-            {confirmLabel}
+            {isLoading && <Loader2 className="animate-spin" aria-hidden="true" />}
+            {isLoading && confirmingLabel ? confirmingLabel : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

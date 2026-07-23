@@ -1,10 +1,16 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
+import { usePageRefresh } from "@/contexts/PageRefreshContext"
 
 interface MembershipGrowthChartProps {
   data: { year: string; count: number }[]
+  isLoading?: boolean
 }
 
-export function MembershipGrowthChart({ data }: MembershipGrowthChartProps) {
+export function MembershipGrowthChart({ data, isLoading }: MembershipGrowthChartProps) {
+  const { isRefreshing } = usePageRefresh()
+  if (isLoading || isRefreshing) return <ChartSkeleton variant="area" height={260} />
+
   return (
     <ResponsiveContainer width="100%" height={260}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>

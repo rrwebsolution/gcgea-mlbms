@@ -3,17 +3,23 @@ import { SidebarProvider } from "@/contexts/SidebarContext"
 import { BreadcrumbProvider } from "@/contexts/BreadcrumbContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppBackground } from "@/components/shared/AppBackground"
+import { RouteProgressBar } from "@/components/shared/loaders/RouteProgressBar"
 import { Sidebar } from "@/layouts/Sidebar"
 import { MobileSidebar } from "@/layouts/MobileSidebar"
 import { Topbar } from "@/layouts/Topbar"
 import { Footer } from "@/layouts/Footer"
 import { SessionExpiredModal } from "@/layouts/SessionExpiredModal"
+import { ReportPrintTools } from "@/features/reports/components/ReportPrintTools"
+import { PageRefreshProvider } from "@/contexts/PageRefreshContext"
 
 export function AppLayout() {
   return (
     <SidebarProvider>
       <BreadcrumbProvider>
+        <PageRefreshProvider>
         <TooltipProvider delay={200}>
+          <RouteProgressBar />
+          <ReportPrintTools />
           <div className="flex min-h-svh">
             <AppBackground intensity="subtle" position="fixed" />
             <Sidebar />
@@ -28,6 +34,7 @@ export function AppLayout() {
           </div>
           <SessionExpiredModal />
         </TooltipProvider>
+        </PageRefreshProvider>
       </BreadcrumbProvider>
     </SidebarProvider>
   )

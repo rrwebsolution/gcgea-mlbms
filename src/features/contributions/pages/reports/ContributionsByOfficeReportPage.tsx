@@ -7,10 +7,10 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { DataTable } from "@/components/shared/DataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllContributions, getContributionPeriods } from "@/services/contributions.service"
 import { formatCurrency } from "@/utils/format"
@@ -28,6 +28,7 @@ const EMPTY_FILTERS: Filters = { dateFrom: "", dateTo: "", period: "" }
 
 interface OfficeRow {
   office: string
+  memberNames: string
   amount: number
   count: number
   members: number
@@ -50,16 +51,17 @@ export default function ContributionsByOfficeReportPage() {
       return true
     })
     const totalCollected = filtered.reduce((sum, c) => sum + c.amount, 0)
-    const map = new Map<string, { amount: number; count: number; members: Set<string> }>()
+    const map = new Map<string, { amount: number; count: number; members: Set<string>; memberNames: Set<string> }>()
     for (const c of filtered) {
-      const entry = map.get(c.officeName) ?? { amount: 0, count: 0, members: new Set<string>() }
+      const entry = map.get(c.officeName) ?? { amount: 0, count: 0, members: new Set<string>(), memberNames: new Set<string>() }
       entry.amount += c.amount
       entry.count += 1
       entry.members.add(c.memberId)
+      entry.memberNames.add(c.memberName)
       map.set(c.officeName, entry)
     }
     return Array.from(map.entries())
-      .map(([office, v]) => ({ office, amount: v.amount, count: v.count, members: v.members.size, share: totalCollected > 0 ? (v.amount / totalCollected) * 100 : 0 }))
+      .map(([office, v]) => ({ office, memberNames: Array.from(v.memberNames).sort().map((name) => `* ${name}`).join("\n"), amount: v.amount, count: v.count, members: v.members.size, share: totalCollected > 0 ? (v.amount / totalCollected) * 100 : 0 }))
       .sort((a, b) => b.amount - a.amount)
   }, [applied])
 
@@ -93,8 +95,8 @@ export default function ContributionsByOfficeReportPage() {
 
   const columns: ColumnDef<OfficeRow, unknown>[] = [
     { accessorKey: "office", header: "Office" },
+    { accessorKey: "memberNames", header: "Member Name(s)", cell: ({ row }) => <span className="whitespace-pre-line">{row.original.memberNames}</span> },
     { accessorKey: "members", header: "Contributing Members" },
-    { accessorKey: "count", header: "Contributions" },
     { accessorKey: "amount", header: "Total Collected", cell: ({ row }) => formatCurrency(row.original.amount) },
     { accessorKey: "share", header: "Share", cell: ({ row }) => `${row.original.share.toFixed(1)}%` },
   ]
@@ -119,13 +121,13 @@ export default function ContributionsByOfficeReportPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Contribution Period</Label>
-            <Select value={draft.period || "__all__"} onValueChange={(v) => setDraft((f) => ({ ...f, period: v === "__all__" ? "" : (v ?? "") }))}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All Periods">{(v: string) => (v === "__all__" ? "All Periods" : v)}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Periods</SelectItem>
-                {periods.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CommandSelect
+              className="w-full"
+              value={draft.period || "__all__"}
+              onValueChange={(v) => setDraft((f) => ({ ...f, period: v === "__all__" ? "" : v }))}
+              options={[{ value: "__all__", label: "All Periods" }, ...periods.map((p) => ({ value: p, label: p }))]}
+              placeholder="All Periods"
+            />
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">

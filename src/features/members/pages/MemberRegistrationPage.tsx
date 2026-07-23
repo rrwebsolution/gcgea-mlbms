@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Save, Sparkles, User, FileText, Briefcase, Calendar, FilePlus2 } from "lucide-react"
+import { Loader2, Save, Sparkles, User, FileText, Briefcase, FilePlus2, Landmark } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
@@ -12,6 +12,7 @@ import { FileUploader } from "@/components/shared/FileUploader"
 import { DocumentGallery, type DocumentGalleryItem } from "@/components/shared/DocumentGallery"
 import { AddressCommandSelect } from "@/components/shared/AddressCommandSelect"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { FormSkeleton } from "@/components/shared/loaders/FormSkeleton"
 import { SaveDraftButton } from "@/components/shared/SaveDraftButton"
 import { DraftStatusBadge } from "@/components/shared/DraftStatusBadge"
 import { DraftCompletionBar } from "@/components/shared/DraftCompletionBar"
@@ -22,10 +23,11 @@ import { useDraft } from "@/hooks/useDraft"
 import { useAutosaveDraft } from "@/hooks/useAutosaveDraft"
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CommandSelect } from "@/components/shared/CommandSelect"
 import { memberSchema, type MemberFormValues } from "@/schemas/member.schema"
 import {
   createMember,
@@ -41,7 +43,9 @@ import {
   type MemberDraftInput,
 } from "@/services/members.service"
 import { calculateAge, calculateDurationLabel, formatDateShort } from "@/utils/format"
+import { listEmploymentStatuses } from "@/services/employment-statuses.service"
 import { DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, IMAGE_EXTENSIONS, IMAGE_MIME_TYPES, type UploadStatus } from "@/lib/upload-validation"
+import { cn } from "@/lib/utils"
 import type { ApiValidationError } from "@/lib/api"
 import type { DocumentCategory, Member } from "@/types"
 
@@ -74,6 +78,10 @@ export default function MemberRegistrationPage() {
     queryKey: ["members", id],
     queryFn: () => getMember(id!),
     enabled: isEdit,
+  })
+  const { data: employmentStatuses = [] } = useQuery({
+    queryKey: ["employment-statuses"],
+    queryFn: listEmploymentStatuses,
   })
 
   useBreadcrumbExtra(isEdit ? existingMember?.fullName : undefined)
@@ -131,6 +139,7 @@ export default function MemberRegistrationPage() {
       membershipType: "Regular",
       membershipDate: "",
       membershipStatus: "Active",
+      netPay: undefined,
       retireeStatus: "Not Retired",
       remarks: "",
       beneficiaries: [],
@@ -139,10 +148,6 @@ export default function MemberRegistrationPage() {
 
   React.useEffect(() => {
     if (existingMember) {
-      // A draft member can genuinely have most of these as null at the API
-      // level (see MemberRequest's lenient `asDraft` rules) even though the
-      // TS type keeps them non-optional for the ~all real/submitted members —
-      // fall back to sane defaults so `reset()` never hands RHF a null value.
       reset({
         memberNumber: existingMember.memberNumber,
         employeeNumber: existingMember.employeeNumber ?? "",
@@ -164,6 +169,7 @@ export default function MemberRegistrationPage() {
         membershipType: existingMember.membershipType ?? "Regular",
         membershipDate: existingMember.membershipDate ?? "",
         membershipStatus: existingMember.membershipStatus ?? "Active",
+        netPay: existingMember.netPay ?? undefined,
         retireeStatus: existingMember.retireeStatus ?? "Not Retired",
         remarks: existingMember.remarks ?? "",
         beneficiaries: existingMember.beneficiaries,
@@ -315,12 +321,9 @@ export default function MemberRegistrationPage() {
 
   const isAnyLiveUploadInProgress = photoSlot.status === "uploading" || Object.values(docSlots).some((s) => s.status === "uploading")
 
-  // A draft only exists once the backend has assigned it an id — either
-  // because we're resuming one via the /edit route, or because an earlier
-  // autosave/manual "Save as Draft" already created it this session.
   const wasExistingDraft = isEdit ? existingMember?.isDraft === true : false
   const memberDraft = useDraft<MemberDraftInput, Member>({
-    draftId: isEdit ? id : undefined,
+    draftId: wasExistingDraft ? id : undefined,
     create: createMemberDraft,
     update: updateMemberDraft,
     getId: (m) => m.id,
@@ -342,13 +345,11 @@ export default function MemberRegistrationPage() {
     try {
       await memberDraft.save(payload)
       toast.success("Draft saved successfully.")
-    } catch {
-      // Surfaced via useDraft's onError above.
-    }
+    } catch {}
   }
 
   useAutosaveDraft(watch(), saveDraft, {
-    enabled: isDirty && !isAnyLiveUploadInProgress && (!isEdit || wasExistingDraft) && memberDraft.status !== "saving",
+    enabled: isDirty && Boolean(memberDraft.draftId) && !isAnyLiveUploadInProgress && (!isEdit || wasExistingDraft) && memberDraft.status !== "saving",
     delayMs: 30000,
   })
 
@@ -387,7 +388,13 @@ export default function MemberRegistrationPage() {
       return member
     },
     onSuccess: (member) => {
-      toast.success(isDraftContext ? "Draft submitted — member registered successfully." : isEdit ? "Member profile updated successfully." : "Member registered successfully.")
+      toast.success(
+        isEdit
+          ? "Member profile updated successfully."
+          : member.approvalStatus === "approved"
+            ? "Member successfully registered and activated."
+            : "Member registration was submitted for approval."
+      )
       queryClient.invalidateQueries({ queryKey: ["members"] })
       navigate(`/members/${member.id}`)
     },
@@ -407,9 +414,7 @@ export default function MemberRegistrationPage() {
   async function onSubmit(values: MemberFormValues) {
     try {
       await mutation.mutateAsync(values)
-    } catch {
-      // Surfaced via the mutation's onError hook.
-    }
+    } catch {}
   }
 
   function handleCancelClick() {
@@ -417,12 +422,7 @@ export default function MemberRegistrationPage() {
   }
 
   if (isEdit && isLoadingMember) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center animate-pulse" role="status">
-        <Loader2 className="size-8 animate-spin text-primary" aria-hidden="true" />
-        <span className="sr-only">Loading member profile</span>
-      </div>
-    )
+    return <FormSkeleton fields={["text", "text", "text", "select", "date", "select"]} columns={3} showAvatar showUpload />
   }
 
   const photoHasFile = Boolean(profilePhoto || existingMember?.profilePhotoUrl)
@@ -437,7 +437,7 @@ export default function MemberRegistrationPage() {
     return {
       category,
       node: (
-        <div className="rounded-xl border border-border/60 bg-card p-1 transition-all hover:border-border hover:shadow-sm">
+        <div className="rounded-xl border border-border/60 bg-card p-1 transition-all hover:border-border hover:shadow-xs">
           <FileUploader
             key={`${category}-${docResetKeys[category]}`}
             label={category}
@@ -462,18 +462,23 @@ export default function MemberRegistrationPage() {
   })
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 pb-20 px-2 sm:px-0">
+    <div className="mx-auto space-y-8 pb-20 px-4 sm:px-0">
       <PageHeader
         title={isDraftContext ? "Continue Member Draft" : isEdit ? "Edit Member Information" : "Member Registration"}
         description="Encode the member's information based on submitted physical documents."
         actions={isDraftContext && <DraftStatusBadge status="Draft" />}
       />
+
       {isDraftContext && (
-        <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3">
-          <p className="text-sm font-medium text-foreground">
-            {(isEdit ? existingMember?.draftReferenceNo : undefined) ?? "This registration is saved as a draft."}
-          </p>
-          <DraftCompletionBar percentage={completionPercentage ?? 0} className="mt-1.5" />
+        <div className="rounded-xl border border-warning/20 bg-warning/5 px-5 py-4 shadow-sm flex flex-col gap-2.5 relative overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-warning" />
+          <div className="flex items-center gap-2 pl-2">
+            <Sparkles className="size-4 text-warning animate-pulse" />
+            <p className="text-xs font-semibold text-foreground">
+              {(isEdit ? existingMember?.draftReferenceNo : undefined) ?? "Draft Registration Progress"}
+            </p>
+          </div>
+          <DraftCompletionBar percentage={completionPercentage ?? 0} className="mt-1 pl-2" />
         </div>
       )}
 
@@ -482,9 +487,11 @@ export default function MemberRegistrationPage() {
         {/* SECTION 1: Personal Information */}
         <FormSection 
           title={
-            <span className="flex items-center gap-2">
-              <User className="size-5 text-primary/80" />
-              <span>Section 1 · Personal Information</span>
+            <span className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
+                <User className="size-4 text-primary" />
+              </div>
+              <span className="text-sm font-semibold tracking-tight text-foreground">Section 1 · Personal Information</span>
             </span>
           }
         >
@@ -493,7 +500,7 @@ export default function MemberRegistrationPage() {
             <div className="lg:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
               {isEdit && (
                 <Field label="Member Number">
-                  <Input value={existingMember?.memberNumber ?? ""} disabled className="bg-muted/40 font-mono" />
+                  <Input value={existingMember?.memberNumber ?? ""} disabled className="bg-muted/40 font-mono text-sm" />
                 </Field>
               )}
               <Field label="Employee Number" required error={errors.employeeNumber?.message}>
@@ -512,13 +519,17 @@ export default function MemberRegistrationPage() {
                 <Input placeholder="Jr., Sr., III" {...register("suffix")} />
               </Field>
               <Field label="Sex" required>
-                <Select value={watch("sex")} onValueChange={(v) => setValue("sex", v as "Male" | "Female", { shouldDirty: true })}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                  </SelectContent>
-                </Select>
+                <CommandSelect
+                  className="w-full h-10"
+                  value={watch("sex")}
+                  onValueChange={(v) => setValue("sex", v as "Male" | "Female", { shouldDirty: true })}
+                  options={[
+                    { value: "Male", label: "Male" },
+                    { value: "Female", label: "Female" },
+                  ]}
+                  placeholder="Select sex"
+                  hideSearch
+                />
               </Field>
               <Field label="Birthdate" required error={errors.birthdate?.message}>
                 <Input type="date" {...register("birthdate")} aria-invalid={!!errors.birthdate} />
@@ -527,20 +538,24 @@ export default function MemberRegistrationPage() {
                 <Input 
                   value={birthdate ? `${calculateAge(birthdate)} years old` : "—"} 
                   disabled 
-                  className="bg-muted/40 border-dashed text-foreground/80 font-medium cursor-not-allowed"
+                  className="bg-muted/10 border-dashed border-amber-500/30 text-foreground/80 font-medium cursor-not-allowed select-none"
                 />
               </Field>
               <Field label="Civil Status" required>
-                <Select value={watch("civilStatus")} onValueChange={(v) => setValue("civilStatus", v as MemberFormValues["civilStatus"], { shouldDirty: true })}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Single">Single</SelectItem>
-                    <SelectItem value="Married">Married</SelectItem>
-                    <SelectItem value="Widowed">Widowed</SelectItem>
-                    <SelectItem value="Separated">Separated</SelectItem>
-                    <SelectItem value="Divorced">Divorced</SelectItem>
-                  </SelectContent>
-                </Select>
+                <CommandSelect
+                  className="w-full h-10"
+                  value={watch("civilStatus")}
+                  onValueChange={(v) => setValue("civilStatus", v as MemberFormValues["civilStatus"], { shouldDirty: true })}
+                  options={[
+                    { value: "Single", label: "Single" },
+                    { value: "Married", label: "Married" },
+                    { value: "Widowed", label: "Widowed" },
+                    { value: "Separated", label: "Separated" },
+                    { value: "Divorced", label: "Divorced" },
+                  ]}
+                  placeholder="Select civil status"
+                  hideSearch
+                />
               </Field>
               <Field label="Name of Spouse">
                 <Input placeholder="Full name (if married)" {...register("nameOfSpouse")} />
@@ -552,7 +567,7 @@ export default function MemberRegistrationPage() {
                 <Input type="email" placeholder="e.g. jdelacruz@gcgea.gingoog.gov.ph" {...register("email")} aria-invalid={!!errors.email} />
               </Field>
               <Field label="Permanent Address" required error={errors.permanentAddress?.message} className="sm:col-span-2">
-                <div className="space-y-2.5 rounded-lg border border-border/50 bg-muted/10 p-3 shadow-inner">
+                <div className="space-y-3 rounded-xl border border-border/60 bg-muted/5 p-4 shadow-sm transition-all hover:bg-muted/10 duration-200">
                   <AddressCommandSelect
                     value={selectedLocationLabel}
                     placeholder="Search barangay, city, municipality, or province…"
@@ -568,7 +583,7 @@ export default function MemberRegistrationPage() {
                     placeholder="House/Unit No., Street, Barangay"
                     {...register("permanentAddress")}
                     aria-invalid={!!errors.permanentAddress}
-                    className="bg-background shadow-none"
+                    className="bg-background shadow-none resize-none"
                   />
                 </div>
               </Field>
@@ -576,7 +591,7 @@ export default function MemberRegistrationPage() {
 
             {/* Profile photo uploader panel */}
             <div className="lg:col-span-1">
-              <div className="lg:sticky lg:top-4">
+              <div className="lg:sticky lg:top-4 bg-muted/5 rounded-xl border border-border/50 p-4 shadow-xs">
                 <FileUploader
                   key={`photo-${photoResetKey}`}
                   label="Profile Photo"
@@ -601,9 +616,11 @@ export default function MemberRegistrationPage() {
         {/* SECTION 2: Employment Information */}
         <FormSection 
           title={
-            <span className="flex items-center gap-2">
-              <Briefcase className="size-5 text-primary/80" />
-              <span>Section 2 · Employment Information</span>
+            <span className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
+                <Briefcase className="size-4 text-primary" />
+              </div>
+              <span className="text-sm font-semibold tracking-tight text-foreground">Section 2 · Employment Information</span>
             </span>
           }
         >
@@ -621,20 +638,20 @@ export default function MemberRegistrationPage() {
               <Input 
                 value={dateOfRegularAppointment ? calculateDurationLabel(dateOfRegularAppointment) : "—"} 
                 disabled 
-                className="bg-muted/40 border-dashed text-foreground/80 font-medium cursor-not-allowed"
+                className="bg-muted/10 border-dashed border-amber-500/30 text-foreground/80 font-medium cursor-not-allowed select-none"
               />
             </Field>
             <Field label="Employment Status" required>
-              <Select value={watch("employmentStatus")} onValueChange={(v) => setValue("employmentStatus", v as MemberFormValues["employmentStatus"], { shouldDirty: true })}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Permanent">Permanent</SelectItem>
-                  <SelectItem value="Casual">Casual</SelectItem>
-                  <SelectItem value="Job Order">Job Order</SelectItem>
-                  <SelectItem value="Contractual">Contractual</SelectItem>
-                  <SelectItem value="Co-terminus">Co-terminus</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full h-10"
+                value={watch("employmentStatus")}
+                onValueChange={(v) => setValue("employmentStatus", v as MemberFormValues["employmentStatus"], { shouldDirty: true })}
+                options={employmentStatuses
+                  .filter((status) => status.isActive || status.name === watch("employmentStatus"))
+                  .map((status) => ({ value: status.name, label: status.name }))}
+                placeholder="Select employment status"
+                hideSearch
+              />
             </Field>
           </div>
         </FormSection>
@@ -642,22 +659,28 @@ export default function MemberRegistrationPage() {
         {/* SECTION 3: Membership Information */}
         <FormSection 
           title={
-            <span className="flex items-center gap-2">
-              <Calendar className="size-5 text-primary/80" />
-              <span>Section 3 · Membership Information</span>
+            <span className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
+                <Landmark className="size-4 text-primary" />
+              </div>
+              <span className="text-sm font-semibold tracking-tight text-foreground">Section 3 · Membership Information</span>
             </span>
           }
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Membership Type" required>
-              <Select value={watch("membershipType")} onValueChange={(v) => setValue("membershipType", v as MemberFormValues["membershipType"], { shouldDirty: true })}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Regular">Regular</SelectItem>
-                  <SelectItem value="Associate">Associate</SelectItem>
-                  <SelectItem value="Honorary">Honorary</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full h-10"
+                value={watch("membershipType")}
+                onValueChange={(v) => setValue("membershipType", v as MemberFormValues["membershipType"], { shouldDirty: true })}
+                options={[
+                  { value: "Regular", label: "Regular" },
+                  { value: "Associate", label: "Associate" },
+                  { value: "Honorary", label: "Honorary" },
+                ]}
+                placeholder="Select membership type"
+                hideSearch
+              />
             </Field>
             <Field label="Date as GCGEA Member" required error={errors.membershipDate?.message}>
               <Input type="date" {...register("membershipDate")} aria-invalid={!!errors.membershipDate} />
@@ -666,29 +689,40 @@ export default function MemberRegistrationPage() {
               <Input 
                 value={membershipDate ? calculateDurationLabel(membershipDate) : "—"} 
                 disabled 
-                className="bg-muted/40 border-dashed text-foreground/80 font-medium cursor-not-allowed"
+                className="bg-muted/10 border-dashed border-amber-500/30 text-foreground/80 font-medium cursor-not-allowed select-none"
               />
             </Field>
             <Field label="Membership Status" required>
-              <Select value={watch("membershipStatus")} onValueChange={(v) => setValue("membershipStatus", v as MemberFormValues["membershipStatus"], { shouldDirty: true })}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Suspended">Suspended</SelectItem>
-                  <SelectItem value="Terminated">Terminated</SelectItem>
-                  <SelectItem value="Deceased">Deceased</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full h-10"
+                value={watch("membershipStatus")}
+                onValueChange={(v) => setValue("membershipStatus", v as MemberFormValues["membershipStatus"], { shouldDirty: true })}
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                  { value: "Suspended", label: "Suspended" },
+                  { value: "Terminated", label: "Terminated" },
+                  { value: "Deceased", label: "Deceased" },
+                ]}
+                placeholder="Select membership status"
+                hideSearch
+              />
             </Field>
             <Field label="Retiree Status" required>
-              <Select value={watch("retireeStatus")} onValueChange={(v) => setValue("retireeStatus", v as MemberFormValues["retireeStatus"], { shouldDirty: true })}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Not Retired">Not Retired</SelectItem>
-                  <SelectItem value="Retired">Retired</SelectItem>
-                </SelectContent>
-              </Select>
+              <CommandSelect
+                className="w-full h-10"
+                value={watch("retireeStatus")}
+                onValueChange={(v) => setValue("retireeStatus", v as MemberFormValues["retireeStatus"], { shouldDirty: true })}
+                options={[
+                  { value: "Not Retired", label: "Not Retired" },
+                  { value: "Retired", label: "Retired" },
+                ]}
+                placeholder="Select retiree status"
+                hideSearch
+              />
+            </Field>
+            <Field label="Monthly Net Pay" error={errors.netPay?.message}>
+              <CurrencyInput value={watch("netPay")} onChange={(v) => setValue("netPay", v, { shouldDirty: true })} placeholder="Optional — used for income-tiered loan products" />
             </Field>
             <Field label="Remarks" className="sm:col-span-2">
               <Textarea rows={2} placeholder="Additional notes about this member (optional)" {...register("remarks")} className="bg-background" />
@@ -698,7 +732,7 @@ export default function MemberRegistrationPage() {
 
         {/* SECTION 4: Beneficiaries */}
         <FormSection title="Section 4 · Beneficiaries" description="Add one or more beneficiaries for this member.">
-          <div className="rounded-xl border border-border/80 bg-card p-4 sm:p-6 shadow-sm">
+          <div className="rounded-xl border border-border bg-card p-4 sm:p-6 shadow-sm">
             <BeneficiaryFieldArray control={control} register={register} errors={errors} />
           </div>
         </FormSection>
@@ -706,27 +740,29 @@ export default function MemberRegistrationPage() {
         {/* SECTION 5: Documents */}
         <FormSection 
           title={
-            <span className="flex items-center gap-2">
-              <FileText className="size-5 text-primary/80" />
-              <span>Section 5 · Documents</span>
+            <span className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
+                <FileText className="size-4 text-primary" />
+              </div>
+              <span className="text-sm font-semibold tracking-tight text-foreground">Section 5 · Documents</span>
             </span>
           } 
           description="Upload scanned copies of supporting documents."
         >
-          <div className="rounded-xl border border-border/80 bg-muted/10 p-4 sm:p-6 shadow-sm">
+          <div className="rounded-xl border border-border bg-muted/15 p-4 sm:p-6 shadow-sm">
             <DocumentGallery items={documentGalleryItems} />
           </div>
         </FormSection>
 
         {/* Sticky Action Footer */}
-        <div className="sticky bottom-0 -mx-4 z-10 flex items-center justify-end gap-3 border-t border-border/85 bg-background/80 backdrop-blur-md px-6 py-4 sm:mx-0 sm:rounded-xl sm:border sm:shadow-lg transition-all">
+        <div className="sticky bottom-4 z-15 flex items-center justify-end gap-3 border border-border/65 bg-background/80 backdrop-blur-md px-6 py-4 shadow-lg transition-all duration-200">
           {isAnyLiveUploadInProgress && (
             <p className="mr-auto text-xs text-muted-foreground flex items-center gap-1.5 animate-pulse">
-              <span className="size-1.5 rounded-full bg-primary" />
+              <span className="size-1.5 rounded-full bg-primary animate-ping" />
               Waiting for uploads to finish…
             </p>
           )}
-          <Button type="button" variant="outline" onClick={handleCancelClick} disabled={isSaving}>
+          <Button type="button" variant="outline" onClick={handleCancelClick} disabled={isSaving} className="h-9 text-xs">
             Cancel
           </Button>
           {(!isEdit || wasExistingDraft) && (
@@ -738,7 +774,7 @@ export default function MemberRegistrationPage() {
               disabled={isSaving || isAnyLiveUploadInProgress}
             />
           )}
-          <Button type="submit" disabled={isSaving || isAnyLiveUploadInProgress} aria-busy={isSaving} className="shadow-sm">
+          <Button type="submit" disabled={isSaving || isAnyLiveUploadInProgress} aria-busy={isSaving} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
             {isSaving ? <Loader2 className="animate-spin size-4" aria-hidden="true" /> : isDraftContext ? <FilePlus2 className="size-4" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}
             {isSaving ? "Saving changes…" : isDraftContext ? "Submit Registration" : isEdit ? "Save Changes" : "Register Member"}
           </Button>
@@ -792,19 +828,22 @@ function Field({
   isCalculated?: boolean
 }) {
   return (
-    <div className={`space-y-1.5 ${className ?? ""}`}>
-      <Label className="text-sm font-medium tracking-tight text-foreground/90 flex items-center gap-1">
+    <div className={cn("space-y-1.5", className)}>
+      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90 flex items-center gap-1.5">
         {label}
         {required && <span className="text-destructive font-bold">*</span>}
         {isCalculated && (
-          <Sparkles className="size-3 text-amber-500/80" aria-hidden="true" />
+          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full select-none">
+            <Sparkles className="size-2.5" aria-hidden="true" />
+            Calculated
+          </span>
         )}
       </Label>
       <div className="relative">
         {children}
       </div>
       {error && (
-        <p className="text-xs font-medium text-destructive mt-1 animate-in fade-in-50 slide-in-from-top-1 duration-155">
+        <p className="text-xs font-medium text-destructive mt-1 animate-in fade-in-50 slide-in-from-top-1 duration-150">
           {error}
         </p>
       )}
