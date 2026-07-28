@@ -17,7 +17,12 @@ export default function NotificationsPage() {
   const [unreadOnly, setUnreadOnly] = React.useState(false)
   const [markingId, setMarkingId] = React.useState<string | null>(null)
   const [isMarkingAllRead, setIsMarkingAllRead] = React.useState(false)
-  const { data: notifications = [] } = useQuery({ queryKey: ["notifications"], queryFn: listNotifications, refetchInterval: 30_000, refetchOnWindowFocus: true })
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: listNotifications,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  })
 
   const filtered = unreadOnly ? notifications.filter((n) => !n.isRead) : notifications
   const unreadCount = notifications.filter((n) => !n.isRead).length

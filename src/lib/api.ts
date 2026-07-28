@@ -1,5 +1,6 @@
-import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios"
+import axios, { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from "axios"
 import type { PaginatedResponse, PaginationParams } from "@/types"
+import { notifySystemDataChanged } from "@/lib/query-client"
 
 /**
  * Centralized Axios client for the Laravel Sanctum API. Cookie/session based
@@ -18,6 +19,41 @@ export const api = axios.create({
     "Content-Type": "application/json",
   },
 })
+
+/**
+ * Share identical GET requests that are already in flight. This protects
+ * direct service calls as well as React Query calls, so mounting multiple
+ * consumers at the same time still produces only one backend request.
+ */
+const defaultAdapter = axios.getAdapter(api.defaults.adapter)
+const inFlightGets = new Map<string, Promise<AxiosResponse>>()
+
+function stableSerialize(value: unknown): string {
+  if (value == null || typeof value !== "object") return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, nested]) => `${JSON.stringify(key)}:${stableSerialize(nested)}`)
+    .join(",")}}`
+}
+
+const deduplicatingAdapter: AxiosAdapter = (config) => {
+  if (config.method?.toLowerCase() !== "get") return defaultAdapter(config)
+
+  const key = `${config.baseURL ?? ""}${config.url ?? ""}?${stableSerialize(config.params ?? {})}`
+  const existing = inFlightGets.get(key)
+  if (existing) return existing
+
+  const request = defaultAdapter(config)
+  inFlightGets.set(key, request)
+  const cleanup = () => {
+    if (inFlightGets.get(key) === request) inFlightGets.delete(key)
+  }
+  void request.then(cleanup, cleanup)
+  return request
+}
+
+api.defaults.adapter = deduplicatingAdapter
 
 const GLOBAL_SEARCH_PAGE_SIZE = 10_000
 
@@ -105,8 +141,32 @@ interface RetryableConfig extends InternalAxiosRequestConfig {
   _retriedAfterCsrfRefresh?: boolean
 }
 
+function dataDomainForUrl(url?: string): string {
+  const firstSegment = (url ?? "").replace(/^https?:\/\/[^/]+/i, "").replace(/^\/?api\/?/, "").split(/[/?]/)[0]
+  const aliases: Record<string, string> = {
+    contribution: "contributions",
+    deductions: "payroll",
+    "payroll-deductions": "payroll",
+    "loan-payments": "loans",
+    "loan-types": "settings",
+    "loan-settings": "settings",
+    "benefit-types": "settings",
+    "deduction-types": "settings",
+    "system-settings": "settings",
+    permissions: "roles",
+    "approval-workflow": "approvals",
+  }
+  return aliases[firstSegment] ?? (firstSegment || "system")
+}
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = response.config.method?.toLowerCase()
+    if (method && ["post", "put", "patch", "delete"].includes(method)) {
+      notifySystemDataChanged(dataDomainForUrl(response.config.url))
+    }
+    return response
+  },
   async (error: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
     const config = error.config as RetryableConfig | undefined
 
@@ -145,6 +205,10 @@ api.interceptors.response.use(
 
     if (status === 422) {
       return Promise.reject(friendlyError(data?.message ?? "The submitted data is invalid.", data?.errors))
+    }
+
+    if (status === 503 && data?.message) {
+      return Promise.reject(friendlyError(data.message))
     }
 
     if (status >= 500) {

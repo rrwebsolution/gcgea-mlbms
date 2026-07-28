@@ -8,11 +8,11 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { DataTable } from "@/components/shared/DataTable"
-import { Pagination } from "@/components/shared/Pagination"
 import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { AlertBanner } from "@/components/shared/AlertBanner"
 import { Button } from "@/components/ui/button"
 import { LoadingButton } from "@/components/shared/loaders/LoadingButton"
 import { Input } from "@/components/ui/input"
@@ -26,7 +26,6 @@ import {
   postBulkPayrollBatch,
   saveBulkPayrollDraft,
 } from "@/services/bulk-payroll.service"
-import { paginate } from "@/utils/paginate"
 import { formatCurrency } from "@/utils/format"
 import { listDeductionTypes } from "@/services/deduction-types.service"
 import type { BulkPayrollBatch } from "@/types/bulk-payroll"
@@ -41,6 +40,11 @@ interface BulkRow {
   cashPabaon: number
   loanDeduction: number
   hasActiveLoan: boolean
+  loanNumber: string | null
+  loanableAmount: number | null
+  outstandingPrincipal: number | null
+  outstandingInterest: number | null
+  outstandingBalance: number | null
 }
 
 const today = new Date().toISOString().slice(0, 10)
@@ -50,6 +54,7 @@ export default function BulkPayrollEntryPage() {
   const { hasPermission } = usePermission()
   const canOverride = hasPermission("payroll.bulk.override")
   const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes })
+  const hasActiveCashPabaon = deductionTypes.some((type) => type.code === "pabaon" && type.isActive)
 
   const [reference, setReference] = React.useState("")
   const [period, setPeriod] = React.useState("")
@@ -62,8 +67,6 @@ export default function BulkPayrollEntryPage() {
   const [rows, setRows] = React.useState<BulkRow[]>([])
   const [isLoadingMembers, setIsLoadingMembers] = React.useState(false)
   const [search, setSearch] = React.useState("")
-  const [page, setPage] = React.useState(1)
-  const [perPage, setPerPage] = React.useState(10)
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
 
   const [batch, setBatch] = React.useState<BulkPayrollBatch | null>(null)
@@ -87,7 +90,7 @@ export default function BulkPayrollEntryPage() {
     setIsLoadingMembers(true)
     try {
       const response = await listMembers({ office, membershipStatus: "Active", perPage: 500 })
-      const contexts = await getBulkPayrollMemberContexts(response.data.map((m) => m.id))
+      const contexts = response.data.length > 0 ? await getBulkPayrollMemberContexts(response.data.map((m) => m.id)) : {}
       const loaded: BulkRow[] = response.data.map((m) => {
         const ctx = contexts[m.id]
         return {
@@ -100,11 +103,15 @@ export default function BulkPayrollEntryPage() {
           cashPabaon: defaultCashPabaon,
           loanDeduction: ctx?.loanDeduction ?? 0,
           hasActiveLoan: ctx?.hasActiveLoan ?? false,
+          loanNumber: ctx?.loanNumber ?? null,
+          loanableAmount: ctx?.loanableAmount ?? null,
+          outstandingPrincipal: ctx?.outstandingPrincipal ?? null,
+          outstandingInterest: ctx?.outstandingInterest ?? null,
+          outstandingBalance: ctx?.outstandingBalance ?? null,
         }
       })
       setRows(loaded)
       setRowSelection(Object.fromEntries(loaded.map((r) => [r.memberId, true])))
-      setPage(1)
       setBatch(null)
       if (loaded.length === 0) toast.info("No approved and active members found for this office.")
       else toast.success(`Loaded ${loaded.length} member(s).`)
@@ -124,7 +131,6 @@ export default function BulkPayrollEntryPage() {
   const filteredRows = rows.filter(
     (r) => !search || r.fullName.toLowerCase().includes(search.toLowerCase()) || r.memberNumber.toLowerCase().includes(search.toLowerCase())
   )
-  const pagedRows = paginate(filteredRows, page, perPage)
   const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id])
 
   function updateRow(memberId: string, patch: Partial<BulkRow>) {
@@ -156,7 +162,15 @@ export default function BulkPayrollEntryPage() {
         payrollDate,
         officeId: office,
         remarks: remarks || undefined,
-        rows: rows.map((r) => ({ memberId: r.memberId, monthlyDues: r.monthlyDues, cashPabaon: r.cashPabaon, loanDeduction: r.loanDeduction })),
+        rows: rows.map((r) => ({
+          memberId: r.memberId,
+          monthlyDues: r.monthlyDues,
+          cashPabaon: r.cashPabaon,
+          loanDeduction: r.loanDeduction,
+          loanableAmount: r.loanableAmount,
+          outstandingInterest: r.outstandingInterest,
+          outstandingBalance: r.outstandingBalance,
+        })),
       })
       setBatch(saved)
       toast.success("Bulk payroll deduction saved as draft. No ledger records were created.")
@@ -184,7 +198,7 @@ export default function BulkPayrollEntryPage() {
     }
   }
 
-  const columns: ColumnDef<BulkRow, unknown>[] = [
+  const allColumns: ColumnDef<BulkRow, unknown>[] = [
     { accessorKey: "memberNumber", header: "Member Number", enableSorting: false, cell: ({ row }) => <span className="font-medium text-foreground">{row.original.memberNumber}</span> },
     { accessorKey: "fullName", header: "Full Name", enableSorting: false },
     { accessorKey: "officeName", header: "Office", enableSorting: false },
@@ -206,13 +220,48 @@ export default function BulkPayrollEntryPage() {
       ),
     },
     {
+      id: "loanableAmount",
+      header: "Loanable Amount",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <CurrencyInput
+          className="h-8 w-28"
+          value={row.original.loanableAmount ?? undefined}
+          onChange={(v) => updateRow(row.original.memberId, { loanableAmount: v ?? null })}
+        />
+      ),
+    },
+    {
+      id: "outstandingInterest",
+      header: "Interest",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <CurrencyInput
+          className="h-8 w-28"
+          value={row.original.outstandingInterest ?? undefined}
+          onChange={(v) => updateRow(row.original.memberId, { outstandingInterest: v ?? null })}
+        />
+      ),
+    },
+    {
+      id: "outstandingBalance",
+      header: "Outstanding Balance",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <CurrencyInput
+          className="h-8 w-28"
+          value={row.original.outstandingBalance ?? undefined}
+          onChange={(v) => updateRow(row.original.memberId, { outstandingBalance: v ?? null })}
+        />
+      ),
+    },
+    {
       id: "loanDeduction",
       header: "Loan Deduction",
       enableSorting: false,
       cell: ({ row }) => (
         <CurrencyInput
           className="h-8 w-28"
-          disabled={!row.original.hasActiveLoan}
           value={row.original.loanDeduction}
           onChange={(v) => updateRow(row.original.memberId, { loanDeduction: v ?? 0 })}
         />
@@ -230,6 +279,7 @@ export default function BulkPayrollEntryPage() {
       ),
     },
   ]
+  const columns = allColumns.filter((column) => hasActiveCashPabaon || column.id !== "cashPabaon")
 
   return (
     <div className="space-y-5 pb-10">
@@ -269,8 +319,8 @@ export default function BulkPayrollEntryPage() {
           <div className="space-y-1.5"><Label>Payroll Period <span className="text-destructive">*</span></Label><Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Office <span className="text-destructive">*</span></Label><OfficeSelect value={office} onValueChange={setOffice} /></div>
           <div className="space-y-1.5"><Label>Payroll Date</Label><Input type="date" value={payrollDate} onChange={(e) => setPayrollDate(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Default Monthly Dues</Label><CurrencyInput value={defaultMonthlyDues} onChange={(v) => setDefaultMonthlyDues(v ?? 0)} /></div>
-          <div className="space-y-1.5"><Label>Default Cash Pabaon</Label><CurrencyInput value={defaultCashPabaon} onChange={(v) => setDefaultCashPabaon(v ?? 0)} /></div>
+          <div className="space-y-1.5"><Label>Monthly Dues</Label><CurrencyInput value={defaultMonthlyDues} onChange={(v) => setDefaultMonthlyDues(v ?? 0)} /></div>
+          {hasActiveCashPabaon && <div className="space-y-1.5"><Label>Cash Pabaon</Label><CurrencyInput value={defaultCashPabaon} onChange={(v) => setDefaultCashPabaon(v ?? 0)} /></div>}
           <div className="space-y-1.5 lg:col-span-2"><Label>Remarks</Label><Textarea rows={1} placeholder="Optional posting notes for this batch" value={remarks} onChange={(e) => setRemarks(e.target.value)} /></div>
         </div>
         <div className="mt-4 flex gap-2">
@@ -290,30 +340,38 @@ export default function BulkPayrollEntryPage() {
             <SummaryStat label="Members Loaded" value={String(rows.length)} />
             <SummaryStat label="Selected" value={String(selectedIds.length)} />
             <SummaryStat label="Total Monthly Dues" value={formatCurrency(totalMonthlyDues)} />
-            <SummaryStat label="Total Cash Pabaon" value={formatCurrency(totalCashPabaon)} />
+            {hasActiveCashPabaon && <SummaryStat label="Total Cash Pabaon" value={formatCurrency(totalCashPabaon)} />}
             <SummaryStat label="Total Amount" value={formatCurrency(totalAmount)} />
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
             <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
-              <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search loaded members…" className="max-w-sm" />
+              <SearchInput value={search} onChange={setSearch} placeholder="Search loaded members…" className="max-w-sm" />
               <div className="ml-auto flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" disabled={selectedIds.length === 0 || !canOverride} onClick={() => applyToSelected({ monthlyDues: defaultMonthlyDues })}>Apply Default Dues</Button>
-                <Button variant="outline" size="sm" disabled={selectedIds.length === 0 || !canOverride} onClick={() => applyToSelected({ cashPabaon: defaultCashPabaon })}>Apply Default Pabaon</Button>
+                {hasActiveCashPabaon && <Button variant="outline" size="sm" disabled={selectedIds.length === 0 || !canOverride} onClick={() => applyToSelected({ cashPabaon: defaultCashPabaon })}>Apply Default Pabaon</Button>}
                 <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={excludeSelected}>Exclude Selected</Button>
               </div>
             </div>
+            <div className="border-b border-border bg-muted/5 px-4 py-3">
+              <AlertBanner
+                tone="warning"
+                title="Manual sheet entry"
+                description="Loanable amount, interest, outstanding balance, and loan deduction values are entered manually from your payroll sheet. Once this batch is recorded in the system, these values can no longer be edited."
+                className="mb-0 rounded-none"
+              />
+            </div>
             <DataTable
               columns={columns}
-              data={pagedRows.data}
+              data={filteredRows}
               enableRowSelection
               rowSelection={rowSelection}
               onRowSelectionChange={setRowSelection}
               getRowId={(r) => r.memberId}
               enableColumnVisibility={false}
               emptyTitle="No members match your search"
+              maxHeight="max-h-[32rem]"
             />
-            <Pagination meta={pagedRows.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
           </div>
         </>
       )}

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Ban, FileText, Pencil, PlusCircle, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { AlertBanner } from "@/components/shared/AlertBanner"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { PrintButton } from "@/components/shared/PrintButton"
 import { PermissionButton } from "@/components/shared/PermissionButton"
@@ -17,6 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getContribution, getAllContributions, voidContribution } from "@/services/contributions.service"
 import { getMember } from "@/services/members.service"
+import { listAllDeductions } from "@/services/deductions.service"
+import { listDeductionTypes } from "@/services/deduction-types.service"
 import { CONTRIBUTION_STATUS_TONE, MEMBERSHIP_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort, initialsFromName } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
@@ -32,6 +35,8 @@ export default function ContributionDetailPage() {
     queryFn: () => getMember(contribution!.memberId),
     enabled: !!contribution,
   })
+  const { data: allDeductions = [] } = useQuery({ queryKey: ["deductions", "all"], queryFn: listAllDeductions })
+  const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes })
 
   const [showVoidDialog, setShowVoidDialog] = React.useState(false)
   const [isVoiding, setIsVoiding] = React.useState(false)
@@ -41,6 +46,18 @@ export default function ContributionDetailPage() {
   const memberContributionHistory = contribution
     ? getAllContributions().filter((c) => c.memberId === contribution.memberId && c.id !== contribution.id).sort((a, b) => b.paymentDate.localeCompare(a.paymentDate))
     : []
+
+  // Cash Pabaon auto-posts as a Deduction (not a Contribution) alongside a
+  // Monthly Dues / Payroll Deduction contribution — surface that linked
+  // record right here so it's visible from the contribution that triggered it.
+  const pabaonDeductionType = deductionTypes.find((deductionType) => deductionType.code === "pabaon")
+  const linkedPabaonDeduction = contribution && pabaonDeductionType
+    ? allDeductions.find((deduction) =>
+        deduction.memberId === contribution.memberId
+        && deduction.deductionTypeId === pabaonDeductionType.id
+        && deduction.period === contribution.contributionPeriod
+      )
+    : undefined
 
   async function handleVoid(reason: string) {
     if (!contribution || !user) return
@@ -78,6 +95,8 @@ export default function ContributionDetailPage() {
     })
   }
   timelineEntries.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+  const fundAllocations = contribution.fundAllocations ?? []
+  const totalFundAllocation = fundAllocations.reduce((sum, allocation) => sum + allocation.allocatedAmount, 0)
 
   return (
     <div className="space-y-5">
@@ -102,6 +121,31 @@ export default function ContributionDetailPage() {
         }
       />
 
+      {contribution.status === "Voided" && (
+        <AlertBanner
+          tone="danger"
+          title="This contribution has already been voided."
+          description={
+            <>
+              <span>{contribution.voidReason}</span>
+              <span className="block mt-1 text-xs text-muted-foreground/80">
+                Voided by {contribution.voidedBy} on {formatDateShort(contribution.voidedAt)}
+              </span>
+            </>
+          }
+          actions={contribution.contributionType === "Monthly Dues" ? (
+            <PermissionButton
+              permission="contributions.create"
+              size="sm"
+              variant="outline"
+              render={<Link to={`/contributions/new?member=${contribution.memberId}&period=${contribution.contributionPeriod}`} />}
+            >
+              <PlusCircle /> Re-contribute for This Month
+            </PermissionButton>
+          ) : undefined}
+        />
+      )}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryStat label="Amount" value={formatCurrency(contribution.amount)} />
         <SummaryStat label="Payment Method" value={contribution.paymentMethod} />
@@ -124,6 +168,7 @@ export default function ContributionDetailPage() {
             <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               <Detail label="Reference No." value={contribution.referenceNumber} />
               <Detail label="Contribution Period" value={contribution.contributionPeriod} />
+              <Detail label="Contribution Type" value={contribution.contributionType} />
               <Detail label="Amount" value={formatCurrency(contribution.amount)} />
               <Detail label="Payment Method" value={contribution.paymentMethod} />
               <Detail label="Status" value={contribution.status} />
@@ -132,13 +177,49 @@ export default function ContributionDetailPage() {
               <Detail label="Remarks" value={contribution.remarks || "—"} />
             </dl>
           </div>
-          {contribution.status === "Voided" && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-              <h3 className="mb-1 text-sm font-semibold text-destructive">Void Reason</h3>
-              <p className="text-sm text-foreground">{contribution.voidReason}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Voided by {contribution.voidedBy} on {formatDateShort(contribution.voidedAt)}
-              </p>
+          {contribution.contributionType === "Monthly Dues" && (
+            <div className="rounded-xl border border-border bg-card shadow-sm">
+              <div className="flex flex-col gap-1 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Fund Allocation</h3>
+                  <p className="text-xs text-muted-foreground">Breakdown of this contribution across the configured association funds.</p>
+                </div>
+                {fundAllocations.length > 0 && (
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs text-muted-foreground">Total Allocated</p>
+                    <p className="font-heading text-base font-semibold text-foreground">{formatCurrency(totalFundAllocation)}</p>
+                  </div>
+                )}
+              </div>
+              {fundAllocations.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+                  {fundAllocations.map((allocation) => (
+                    <div key={allocation.fundId} className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">{allocation.fundName}</p>
+                      <p className="mt-1 font-heading text-lg font-semibold text-foreground">
+                        {formatCurrency(allocation.allocatedAmount)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="p-4 text-sm text-muted-foreground">
+                  No fund allocation data is recorded for this contribution.
+                </p>
+              )}
+            </div>
+          )}
+          {linkedPabaonDeduction && (
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-foreground">Linked Cash Pabaon Deduction</h3>
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                <Detail label="Reference No." value={linkedPabaonDeduction.referenceNumber} />
+                <Detail label="Period" value={linkedPabaonDeduction.period} />
+                <Detail label="Amount" value={formatCurrency(linkedPabaonDeduction.amount)} />
+                <Detail label="Payment Date" value={formatDateShort(linkedPabaonDeduction.paymentDate)} />
+                <Detail label="Status" value={linkedPabaonDeduction.status} />
+              </dl>
+              <p className="mt-2 text-xs text-muted-foreground">Automatically posted alongside this Monthly Dues contribution.</p>
             </div>
           )}
         </TabsContent>
@@ -255,6 +336,9 @@ export default function ContributionDetailPage() {
         open={showVoidDialog}
         onOpenChange={setShowVoidDialog}
         transactionLabel={`Contribution ${contribution.referenceNumber}`}
+        description={contribution.contributionType === "Monthly Dues"
+          ? "This is a grouped payment. Voiding the Monthly Dues will also void the linked Cash Pabaon for the same member and period. Both records will keep their audit trail."
+          : undefined}
         isLoading={isVoiding}
         onConfirm={handleVoid}
       />

@@ -115,7 +115,7 @@ export default function DeductionRecordsPage() {
                 onValueChange={(value) => { setDeductionTypeCode(value === "__all__" ? "" : value); setPage(1) }}
                 options={[
                   { value: "__all__", label: "All Deduction Types" },
-                  ...deductionTypes.map((type) => ({ value: type.code, label: type.name })),
+                  ...deductionTypes.filter((type) => type.isActive).map((type) => ({ value: type.code, label: type.name })),
                 ]}
                 placeholder="Deduction type"
               />

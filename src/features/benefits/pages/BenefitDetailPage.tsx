@@ -40,6 +40,7 @@ export default function BenefitDetailPage() {
         <SummaryStat label="Requested Amount" value={formatCurrency(benefit.requestedAmount)} />
         <SummaryStat label="Approved Amount" value={benefit.approvedAmount != null ? formatCurrency(benefit.approvedAmount) : "—"} />
         <SummaryStat label="Release Date" value={formatDateShort(benefit.releaseDate)} />
+        <SummaryStat label="Release Reference" value={benefit.releaseReferenceNumber || "—"} />
       </div>
 
       <Tabs defaultValue="summary">

@@ -90,6 +90,7 @@ export default function MemberRegistrationPage() {
   const [completionPercentage, setCompletionPercentage] = React.useState<number | undefined>(existingMember?.draftCompletionPercentage)
   const [profilePhoto, setProfilePhoto] = React.useState<File | null>(null)
   const [documents, setDocuments] = React.useState<Partial<Record<DocumentCategory, File | null>>>({})
+  const [payslipError, setPayslipError] = React.useState(false)
   const [selectedLocationLabel, setSelectedLocationLabel] = React.useState<string | undefined>()
 
   const [photoSlot, setPhotoSlot] = React.useState<SlotState>(IDLE_SLOT)
@@ -135,7 +136,7 @@ export default function MemberRegistrationPage() {
       officeId: "",
       position: "",
       dateOfRegularAppointment: "",
-      employmentStatus: "Permanent",
+      employmentStatus: "",
       membershipType: "Regular",
       membershipDate: "",
       membershipStatus: "Active",
@@ -177,6 +178,14 @@ export default function MemberRegistrationPage() {
       setCompletionPercentage(existingMember.draftCompletionPercentage)
     }
   }, [existingMember, reset])
+
+  React.useEffect(() => {
+    if (isEdit || employmentStatuses.length === 0 || getValues("employmentStatus")) return
+    const firstActiveStatus = employmentStatuses.find((status) => status.isActive)
+    if (firstActiveStatus) {
+      setValue("employmentStatus", firstActiveStatus.name, { shouldDirty: false })
+    }
+  }, [employmentStatuses, getValues, isEdit, setValue])
 
   React.useEffect(() => {
     setIsDirty(Object.keys(dirtyFields).length > 0)
@@ -287,6 +296,7 @@ export default function MemberRegistrationPage() {
   }
 
   function handleDocumentUpload(category: DocumentCategory, file: File) {
+    if (category === "Payslip") setPayslipError(false)
     if (isEdit) {
       const existingDoc = existingMember?.documents.find((d) => d.category === category)
       documentUploadMutation.mutate({ category, file, existingDocId: existingDoc?.id })
@@ -412,6 +422,17 @@ export default function MemberRegistrationPage() {
   const isSaving = isSubmitting || mutation.isPending
 
   async function onSubmit(values: MemberFormValues) {
+    const requiresPayslip = Number(values.netPay ?? 0) > 0
+    const hasPayslip = Boolean(
+      documents.Payslip
+      || existingMember?.documents.some((document) => document.category === "Payslip")
+    )
+    if (requiresPayslip && !hasPayslip) {
+      setPayslipError(true)
+      toast.error("Payslip is required when Monthly Net Pay is provided.")
+      return
+    }
+    setPayslipError(false)
     try {
       await mutation.mutateAsync(values)
     } catch {}
@@ -428,7 +449,9 @@ export default function MemberRegistrationPage() {
   const photoHasFile = Boolean(profilePhoto || existingMember?.profilePhotoUrl)
   const photoDisplayStatus: UploadStatus = photoSlot.status !== "idle" ? photoSlot.status : photoHasFile ? "uploaded" : "idle"
 
-  const documentGalleryItems: DocumentGalleryItem[] = DOCUMENT_CATEGORIES.map((category) => {
+  const hasMonthlyNetPay = Number(watch("netPay") ?? 0) > 0
+  const visibleDocumentCategories = DOCUMENT_CATEGORIES.filter((category) => category !== "Payslip" || hasMonthlyNetPay)
+  const documentGalleryItems: DocumentGalleryItem[] = visibleDocumentCategories.map((category) => {
     const existingDoc = existingMember?.documents.find((d) => d.category === category)
     const hasFile = Boolean(documents[category] || existingDoc)
     const slot = docSlots[category]
@@ -441,7 +464,7 @@ export default function MemberRegistrationPage() {
           <FileUploader
             key={`${category}-${docResetKeys[category]}`}
             label={category}
-            required={category === "Valid ID"}
+            required={category === "Valid ID" || category === "Payslip"}
             accept={DOCUMENT_MIME_TYPES}
             acceptExtensions={DOCUMENT_EXTENSIONS}
             fileName={existingDoc?.fileName}
@@ -641,7 +664,7 @@ export default function MemberRegistrationPage() {
                 className="bg-muted/10 border-dashed border-amber-500/30 text-foreground/80 font-medium cursor-not-allowed select-none"
               />
             </Field>
-            <Field label="Employment Status" required>
+            <Field label="Employment Status" required error={errors.employmentStatus?.message}>
               <CommandSelect
                 className="w-full h-10"
                 value={watch("employmentStatus")}
@@ -750,6 +773,11 @@ export default function MemberRegistrationPage() {
           description="Upload scanned copies of supporting documents."
         >
           <div className="rounded-xl border border-border bg-muted/15 p-4 sm:p-6 shadow-sm">
+            {payslipError && hasMonthlyNetPay && (
+              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
+                Payslip is required because Monthly Net Pay has been provided.
+              </p>
+            )}
             <DocumentGallery items={documentGalleryItems} />
           </div>
         </FormSection>

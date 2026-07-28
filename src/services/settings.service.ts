@@ -56,6 +56,26 @@ let appearance: AppearanceSettings = {
   ...DEFAULT_APPEARANCE_SETTINGS,
   ...readStorage<Partial<AppearanceSettings>>(STORAGE_KEYS.appearanceSettings, DEFAULT_APPEARANCE_SETTINGS),
 }
+const settingsChannel = typeof BroadcastChannel !== "undefined"
+  ? new BroadcastChannel("gcgea:settings-values")
+  : null
+
+function publishSettingsChanged<K extends keyof SystemSettings>(section: K, value: SystemSettings[K], broadcast = true): void {
+  const detail = { section, value, settings }
+  window.dispatchEvent(new CustomEvent("gcgea:settings-changed", { detail }))
+  if (broadcast) settingsChannel?.postMessage({ section, value })
+}
+
+if (settingsChannel) {
+  settingsChannel.onmessage = (event: MessageEvent<{ section: keyof SystemSettings; value: SystemSettings[keyof SystemSettings] }>) => {
+    const { section, value } = event.data
+    settings = { ...settings, [section]: value }
+    persistSettings()
+    publishSettingsChanged(section, value, false)
+  }
+}
+// Migrate installations that still carry the previous default font.
+if (appearance.fontFamily === "geist") appearance.fontFamily = "century-gothic"
 
 const SEED_BACKUP_HISTORY: BackupHistoryEntry[] = [
   { id: "bk-01", name: "gcgea-mlbms-backup-2026-07-15.json", date: "2026-07-15T02:00:00", type: "Automatic", size: "1.8 MB", status: "Completed", createdBy: "System" },
@@ -92,6 +112,10 @@ function readableTextColor(background: string): "#ffffff" | "#111827" {
 export function applyAppearanceTheme(value: AppearanceSettings): void {
   const root = document.documentElement
   const fontFamilies: Record<AppearanceSettings["fontFamily"], string> = {
+    "century-gothic": "'Century Gothic', CenturyGothic, AppleGothic, Arial, sans-serif",
+    arial: "Arial, Helvetica, sans-serif",
+    calibri: "Calibri, Candara, 'Segoe UI', sans-serif",
+    verdana: "Verdana, Geneva, sans-serif",
     geist: "'Geist Variable', sans-serif",
     system: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     serif: "Georgia, 'Times New Roman', serif",
@@ -101,11 +125,12 @@ export function applyAppearanceTheme(value: AppearanceSettings): void {
   root.style.setProperty("--primary-foreground", readableTextColor(value.primaryColor))
   root.style.setProperty("--gold", value.accentColor)
   root.style.setProperty("--gold-foreground", readableTextColor(value.accentColor))
-  root.style.setProperty("--sidebar", value.sidebarColor)
-  root.style.setProperty("--sidebar-foreground", readableTextColor(value.sidebarColor))
-  root.style.setProperty("--progress-start", value.progressColorStart)
-  root.style.setProperty("--progress-middle", value.progressColorMiddle)
-  root.style.setProperty("--progress-end", value.progressColorEnd)
+  // Sidebar colors are intentionally owned by the light/dark CSS theme so
+  // navigation always follows the active theme instead of a fixed inline color.
+  const isDark = root.classList.contains("dark")
+  root.style.setProperty("--progress-start", isDark ? "#FFFFFF" : value.primaryColor)
+  root.style.setProperty("--progress-middle", value.primaryColor)
+  root.style.setProperty("--progress-end", isDark ? "#FFFFFF" : value.primaryColor)
   root.style.setProperty("--font-sans", fontFamilies[value.fontFamily])
   root.style.fontSize = `${Math.min(20, Math.max(12, value.baseFontSize))}px`
   document.body.style.fontWeight = String(value.fontWeight)
@@ -126,16 +151,37 @@ export function getBackupHistory(): BackupHistoryEntry[] {
   return backupHistory
 }
 
+// A server section missing keys (e.g. a row saved before a field was added)
+// must fall back to defaults for those keys, not wipe out the whole section.
+function mergeServerSection<K extends keyof SystemSettings>(key: K, serverValue?: Partial<SystemSettings[K]>): SystemSettings[K] {
+  return serverValue ? { ...DEFAULT_SYSTEM_SETTINGS[key], ...settings[key], ...serverValue } : settings[key]
+}
+
 export async function loadSystemSettings(): Promise<{ settings: SystemSettings; appearance: AppearanceSettings }> {
   const { data } = await api.get<Partial<SystemSettings> & { appearance?: AppearanceSettings }>("/system-settings")
   const serverAppearance = data.appearance
   const serverSections = { ...data }
   delete serverSections.appearance
+  if (serverSections.general) {
+    serverSections.general = {
+      ...serverSections.general,
+      timeZone: serverSections.general.timeZone?.split(" ")[0] || DEFAULT_SYSTEM_SETTINGS.general.timeZone,
+      currency: serverSections.general.currency?.startsWith("USD") ? "USD" : "PHP",
+    }
+  }
 
   settings = {
     ...DEFAULT_SYSTEM_SETTINGS,
     ...settings,
-    ...serverSections,
+    general: mergeServerSection("general", serverSections.general),
+    organization: mergeServerSection("organization", serverSections.organization),
+    numbering: mergeServerSection("numbering", serverSections.numbering),
+    loan: mergeServerSection("loan", serverSections.loan),
+    contribution: mergeServerSection("contribution", serverSections.contribution),
+    benefit: mergeServerSection("benefit", serverSections.benefit),
+    notification: mergeServerSection("notification", serverSections.notification),
+    security: mergeServerSection("security", serverSections.security),
+    backup: mergeServerSection("backup", serverSections.backup),
     reportTemplate: mergeReportTemplate(serverSections.reportTemplate ?? settings.reportTemplate),
   } as SystemSettings
   appearance = { ...DEFAULT_APPEARANCE_SETTINGS, ...appearance, ...serverAppearance }
@@ -148,6 +194,7 @@ export async function saveSettingsSection<K extends keyof SystemSettings>(sectio
   await api.put(`/system-settings/${section}`, { value })
   settings = { ...settings, [section]: value }
   persistSettings()
+  publishSettingsChanged(section, value)
   return settings
 }
 
@@ -162,6 +209,7 @@ export async function resetSettingsSection<K extends keyof SystemSettings>(secti
   await api.put(`/system-settings/${section}`, { value: DEFAULT_SYSTEM_SETTINGS[section] })
   settings = { ...settings, [section]: DEFAULT_SYSTEM_SETTINGS[section] }
   persistSettings()
+  publishSettingsChanged(section, settings[section])
   return settings
 }
 

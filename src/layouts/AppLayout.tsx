@@ -20,11 +20,11 @@ export function AppLayout() {
         <TooltipProvider delay={200}>
           <RouteProgressBar />
           <ReportPrintTools />
-          <div className="flex min-h-svh">
+          <div className="relative isolate flex min-h-svh">
             <AppBackground intensity="subtle" position="fixed" />
             <Sidebar />
             <MobileSidebar />
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="relative z-10 flex min-w-0 flex-1 flex-col">
               <Topbar />
               <main className="flex-1 px-4 py-5 sm:px-6 sm:py-6">
                 <Outlet />

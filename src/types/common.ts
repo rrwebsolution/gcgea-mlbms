@@ -22,7 +22,7 @@ export interface PaginationParams {
   search?: string
   sortBy?: string
   sortDir?: "asc" | "desc"
-  [key: string]: string | number | boolean | undefined
+  [key: string]: string | string[] | number | boolean | undefined
 }
 
 export type Sex = "Male" | "Female"

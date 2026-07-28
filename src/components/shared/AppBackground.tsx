@@ -17,7 +17,7 @@ export function AppBackground({ intensity = "vivid", position = "absolute" }: Ap
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
   const isSubtle = intensity === "subtle"
-  const scale = isSubtle ? 0.45 : 1
+  const scale = isSubtle ? 0.9 : 1
 
   const baseBg = isDark ? "#0a0f1d" : "#F8FAFC"
   const cityFadeColor = isDark ? "#0a0f1d" : "#F8FAFC"
@@ -26,7 +26,7 @@ export function AppBackground({ intensity = "vivid", position = "absolute" }: Ap
 
   return (
     <div
-      className={`${position} inset-0 -z-10 overflow-hidden`}
+      className={`${position} inset-0 z-0 pointer-events-none overflow-hidden`}
       style={{ backgroundColor: baseBg }}
       aria-hidden="true"
     >
@@ -70,7 +70,7 @@ export function AppBackground({ intensity = "vivid", position = "absolute" }: Ap
       {/* Detailed City & LGU Skyline SVG */}
       <svg
         className="absolute inset-x-0 bottom-0 h-[40%] w-full min-h-[220px]"
-        style={{ opacity: isSubtle ? 0.55 : 1 }}
+        style={{ opacity: isSubtle ? 0.9 : 1 }}
         viewBox="0 0 1200 300"
         preserveAspectRatio="none"
         xmlns="http://www.w3.org/2000/svg"
@@ -183,8 +183,8 @@ export function AppBackground({ intensity = "vivid", position = "absolute" }: Ap
       <div
         className={
           isDark
-            ? "absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10"
-            : "absolute inset-0 bg-gradient-to-t from-white/50 via-transparent to-white/10"
+            ? `absolute inset-0 bg-gradient-to-t ${isSubtle ? "from-black/25" : "from-black/60"} via-transparent to-black/10`
+            : `absolute inset-0 bg-gradient-to-t ${isSubtle ? "from-white/15" : "from-white/50"} via-transparent to-white/5`
         }
       />
     </div>

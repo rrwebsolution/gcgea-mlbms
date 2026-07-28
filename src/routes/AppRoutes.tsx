@@ -44,6 +44,8 @@ import ContributionsByOfficeReportPage from "@/features/contributions/pages/repo
 import UnpaidContributionsReportPage from "@/features/contributions/pages/reports/UnpaidContributionsReportPage"
 import MemberContributionHistoryReportPage from "@/features/contributions/pages/reports/MemberContributionHistoryReportPage"
 import PayrollDeductionSummaryReportPage from "@/features/contributions/pages/reports/PayrollDeductionSummaryReportPage"
+import FundAllocationReportPage from "@/features/contributions/pages/reports/FundAllocationReportPage"
+import MemberMonthlyDuesSummaryReportPage from "@/features/contributions/pages/reports/MemberMonthlyDuesSummaryReportPage"
 
 import LoansPage from "@/features/loans/pages/LoansPage"
 import ActiveLoansPage from "@/features/loans/pages/ActiveLoansPage"
@@ -53,6 +55,9 @@ import LoanDetailPage from "@/features/loans/pages/LoanDetailPage"
 import CreateLoanApplicationPage from "@/features/loans/pages/CreateLoanApplicationPage"
 import ReloanWizardPage from "@/features/loans/pages/ReloanWizardPage"
 import LoanDraftsPage from "@/features/loans/pages/LoanDraftsPage"
+import LegacyLoanImportPage from "@/features/loans/pages/LegacyLoanImportPage"
+import LoanImportHistoryPage from "@/features/loans/pages/LoanImportHistoryPage"
+import LoanImportBatchDetailPage from "@/features/loans/pages/LoanImportBatchDetailPage"
 import LoanApplicationsReportPage from "@/features/loans/pages/reports/LoanApplicationsReportPage"
 import ApprovedLoansReportPage from "@/features/loans/pages/reports/ApprovedLoansReportPage"
 import RejectedLoansReportPage from "@/features/loans/pages/reports/RejectedLoansReportPage"
@@ -71,7 +76,6 @@ import CreateLoanPaymentPage from "@/features/loan-payments/pages/CreateLoanPaym
 import PayrollImportWizardPage from "@/features/payroll/pages/PayrollImportWizardPage"
 import PayrollHistoryPage from "@/features/payroll/pages/PayrollHistoryPage"
 import PayrollImportBatchDetailPage from "@/features/payroll/pages/PayrollImportBatchDetailPage"
-import DeductionTypesPage from "@/features/payroll/pages/DeductionTypesPage"
 import ManualPayrollEntryPage from "@/features/payroll/pages/ManualPayrollEntryPage"
 import BulkPayrollEntryPage from "@/features/payroll/pages/BulkPayrollEntryPage"
 import DeductionRecordsPage from "@/features/payroll/pages/DeductionRecordsPage"
@@ -92,6 +96,12 @@ import MemberBenefitHistoryReportPage from "@/features/benefits/pages/reports/Me
 import ReportsPage from "@/features/reports/pages/ReportsPage"
 import DailyCollectionReportPage from "@/features/financial/pages/reports/DailyCollectionReportPage"
 import MonthlyCollectionReportPage from "@/features/financial/pages/reports/MonthlyCollectionReportPage"
+import RemittanceBreakdownReportPage from "@/features/financial/pages/reports/RemittanceBreakdownReportPage"
+import AnnualBudgetReportPage from "@/features/financial/pages/reports/AnnualBudgetReportPage"
+import AnnualBudgetsPage from "@/features/financial/pages/AnnualBudgetsPage"
+import DisbursementsPage from "@/features/financial/pages/DisbursementsPage"
+import DisbursementFormPage from "@/features/financial/pages/DisbursementFormPage"
+import MonthlyDisbursementsReportPage from "@/features/financial/pages/reports/MonthlyDisbursementsReportPage"
 import AnnualCollectionReportPage from "@/features/financial/pages/reports/AnnualCollectionReportPage"
 import LoanReleaseSummaryReportPage from "@/features/financial/pages/reports/LoanReleaseSummaryReportPage"
 import BenefitsReleaseSummaryReportPage from "@/features/financial/pages/reports/BenefitsReleaseSummaryReportPage"
@@ -203,6 +213,11 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission="loans.create" />}>
             <Route path="/loans/new" element={<CreateLoanApplicationPage />} />
           </Route>
+          <Route element={<ProtectedRoute permission="loan_payments.import" />}>
+            <Route path="/loans/import" element={<LegacyLoanImportPage />} />
+            <Route path="/loans/import-history" element={<LoanImportHistoryPage />} />
+            <Route path="/loans/import-history/:token" element={<LoanImportBatchDetailPage />} />
+          </Route>
           <Route element={<ProtectedRoute permission="loans.update" />}>
             <Route path="/loans/:id/edit" element={<CreateLoanApplicationPage />} />
           </Route>
@@ -230,9 +245,7 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission="payroll.import.view" />}>
             <Route path="/payroll-deductions/import" element={<PayrollImportWizardPage />} />
           </Route>
-          <Route element={<ProtectedRoute permission="deduction_types.view" />}>
-            <Route path="/payroll/deduction-types" element={<DeductionTypesPage />} />
-          </Route>
+          <Route path="/payroll/deduction-types" element={<Navigate to="/admin/settings?section=deductionTypes" replace />} />
           <Route element={<ProtectedRoute permission="deductions.view" />}>
             <Route path="/payroll-deductions/records" element={<DeductionRecordsPage />} />
           </Route>
@@ -257,6 +270,15 @@ export function AppRoutes() {
             <Route path="/benefits/:id/edit" element={<CreateBenefitApplicationPage />} />
           </Route>
 
+          <Route element={<ProtectedRoute permission="annual_budgets.view" />}>
+            <Route path="/financial/annual-budgets" element={<AnnualBudgetsPage />} />
+            <Route path="/financial/annual-budgets/:year" element={<AnnualBudgetReportPage />} />
+            <Route path="/financial/annual-budget" element={<Navigate to="/financial/annual-budgets" replace />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="disbursements.view" />}>
+            <Route path="/financial/disbursements" element={<DisbursementsPage />} />
+            <Route path="/financial/disbursements/:id" element={<DisbursementFormPage />} />
+          </Route>
           <Route element={<ProtectedRoute permission="reports.view" />}>
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reports/contributions" element={<ContributionReportsPage />} />
@@ -265,6 +287,8 @@ export function AppRoutes() {
             <Route path="/reports/contributions/unpaid" element={<UnpaidContributionsReportPage />} />
             <Route path="/reports/contributions/member-history" element={<MemberContributionHistoryReportPage />} />
             <Route path="/reports/contributions/payroll-summary" element={<PayrollDeductionSummaryReportPage />} />
+            <Route path="/reports/contributions/fund-allocation" element={<FundAllocationReportPage />} />
+            <Route path="/reports/contributions/member-monthly-dues-summary" element={<MemberMonthlyDuesSummaryReportPage />} />
             <Route path="/reports/benefits/applications" element={<BenefitApplicationsReportPage />} />
             <Route path="/reports/benefits/approved" element={<ApprovedBenefitsReportPage />} />
             <Route path="/reports/benefits/released" element={<ReleasedBenefitsReportPage />} />
@@ -283,6 +307,9 @@ export function AppRoutes() {
             <Route path="/reports/loans/member-ledger" element={<MemberLoanLedgerReportPage />} />
             <Route path="/reports/financial/daily-collections" element={<DailyCollectionReportPage />} />
             <Route path="/reports/financial/monthly-collections" element={<MonthlyCollectionReportPage />} />
+            <Route path="/reports/financial/remittance-breakdown" element={<RemittanceBreakdownReportPage />} />
+            <Route path="/reports/financial/annual-budget" element={<AnnualBudgetReportPage />} />
+            <Route path="/reports/financial/monthly-disbursements" element={<MonthlyDisbursementsReportPage />} />
             <Route path="/reports/financial/annual-collections" element={<AnnualCollectionReportPage />} />
             <Route path="/reports/financial/loan-release-summary" element={<LoanReleaseSummaryReportPage />} />
             <Route path="/reports/financial/benefits-release-summary" element={<BenefitsReleaseSummaryReportPage />} />

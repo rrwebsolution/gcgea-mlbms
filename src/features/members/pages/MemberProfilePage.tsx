@@ -1,10 +1,14 @@
 import * as React from "react"
 import { Link, useParams } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
+import type { ColumnDef } from "@tanstack/react-table"
 import {
+  Ban,
   Banknote,
   FileText,
   Landmark,
+  MoreHorizontal,
   PencilLine,
   Plus,
   PrinterIcon,
@@ -14,20 +18,23 @@ import {
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ProfileCompleteness } from "@/components/shared/ProfileCompleteness"
 import { PermissionButton } from "@/components/shared/PermissionButton"
+import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { DataTable } from "@/components/shared/DataTable"
 import { DocumentCard } from "@/components/shared/DocumentCard"
 import { DocumentGallery, type DocumentGalleryItem } from "@/components/shared/DocumentGallery"
 import { ImagePreviewDialog } from "@/components/shared/ImagePreviewDialog"
+import { VoidTransactionDialog } from "@/components/shared/VoidTransactionDialog"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
-import { IndeterminateBar } from "@/components/shared/loaders/IndeterminateBar"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ReloanButton } from "@/features/loans/components/ReloanButton"
 import { getMember, profileCompleteness } from "@/services/members.service"
-import { getAllContributions } from "@/services/contributions.service"
+import { listAllContributions, voidContribution } from "@/services/contributions.service"
 import { listAllLoans } from "@/services/loans.service"
 import { listAllLoanPayments } from "@/services/loan-payments.service"
 import { listAllDeductions } from "@/services/deductions.service"
@@ -35,31 +42,166 @@ import { listDeductionTypes } from "@/services/deduction-types.service"
 import { getAllBenefits } from "@/services/benefits.service"
 import { MEMBERSHIP_STATUS_TONE, LOAN_STATUS_TONE, BENEFIT_STATUS_TONE, CONTRIBUTION_STATUS_TONE } from "@/constants/status"
 import { calculateAge, calculateDurationLabel, formatCurrency, formatDateShort, initialsFromName } from "@/utils/format"
+import type { Contribution } from "@/types"
 
 export default function MemberProfilePage() {
   const { id = "" } = useParams()
+  const queryClient = useQueryClient()
   const { data: member, isLoading } = useQuery({ queryKey: ["members", id], queryFn: () => getMember(id) })
+  const { data: allContributions = [] } = useQuery({ queryKey: ["contributions", "all"], queryFn: listAllContributions })
   const { data: allPayments = [], isLoading: isLoadingPayments } = useQuery({ queryKey: ["loan-payments", "all"], queryFn: listAllLoanPayments })
   const { data: allLoans = [] } = useQuery({ queryKey: ["loans", "all"], queryFn: listAllLoans })
   const { data: allDeductions = [] } = useQuery({ queryKey: ["deductions", "all"], queryFn: listAllDeductions })
   const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes })
   const [photoPreviewOpen, setPhotoPreviewOpen] = React.useState(false)
+  const [voidTarget, setVoidTarget] = React.useState<Contribution | null>(null)
+  const [isVoiding, setIsVoiding] = React.useState(false)
 
   useBreadcrumbExtra(member?.fullName)
 
   if (isLoading) return <ProfileSkeleton cards={2} />
   if (!member) return <EmptyState icon={UserRound} title="Member not found" description="This member record may have been archived or removed." />
 
-  const contributions = getAllContributions().filter((c) => c.memberId === member.id)
+  const contributions = allContributions.filter((c) => c.memberId === member.id)
+
+  async function handleVoidContribution(reason: string) {
+    if (!voidTarget) return
+    setIsVoiding(true)
+    try {
+      await voidContribution(voidTarget.id, reason)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contributions"] }),
+        queryClient.invalidateQueries({ queryKey: ["deductions"] }),
+      ])
+      toast.success("Contribution voided.")
+      setVoidTarget(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to void this contribution.")
+    } finally {
+      setIsVoiding(false)
+    }
+  }
   const loans = allLoans.filter((l) => l.memberId === member.id)
   const payments = allPayments.filter((p) => p.memberId === member.id)
   const benefits = getAllBenefits().filter((b) => b.memberId === member.id)
   const memberDeductions = allDeductions.filter((deduction) => deduction.memberId === member.id)
 
+  // Cash Pabaon auto-posts as a Deduction (not a Contribution) when a Monthly
+  // Dues contribution is saved — merge it into the Contributions tab too so
+  // it's visible right where the contribution was just added, without
+  // duplicating either ledger's underlying data.
+  const pabaonDeductionType = deductionTypes.find((deductionType) => deductionType.code === "pabaon")
+  const contributionTabRows = [
+    ...contributions.map((c) => ({
+      id: c.id,
+      referenceNumber: c.referenceNumber,
+      type: c.contributionType,
+      period: c.contributionPeriod,
+      amount: c.amount,
+      paymentDate: c.paymentDate,
+      status: c.status,
+      contribution: c as Contribution | undefined,
+    })),
+    ...(pabaonDeductionType
+      ? memberDeductions
+          .filter((deduction) => deduction.deductionTypeId === pabaonDeductionType.id)
+          .map((deduction) => ({
+            id: `deduction-${deduction.id}`,
+            referenceNumber: deduction.referenceNumber,
+            type: "Cash Pabaon",
+            period: deduction.period,
+            amount: deduction.amount,
+            paymentDate: deduction.paymentDate,
+            status: deduction.status,
+            contribution: undefined as Contribution | undefined,
+          }))
+      : []),
+  ].sort((a, b) => b.period.localeCompare(a.period))
+
   const outstandingBalance = loans.reduce((sum, l) => sum + l.outstandingBalance, 0)
   const totalContributions = contributions.filter((c) => c.status === "Posted").reduce((sum, c) => sum + c.amount, 0)
   const totalBenefits = benefits.filter((b) => b.status === "Released" || b.status === "Completed").reduce((sum, b) => sum + (b.approvedAmount ?? 0), 0)
   const completeness = profileCompleteness(member)
+  const contributionColumns: ColumnDef<(typeof contributionTabRows)[number], unknown>[] = [
+    {
+      accessorKey: "referenceNumber",
+      header: "Reference #",
+      cell: ({ row }) => row.original.contribution ? (
+        <Link to={`/contributions/${row.original.contribution.id}`} className="font-semibold text-primary hover:underline">
+          {row.original.referenceNumber}
+        </Link>
+      ) : <span className="font-semibold">{row.original.referenceNumber}</span>,
+    },
+    { accessorKey: "type", header: "Type" },
+    { accessorKey: "period", header: "Period" },
+    { accessorKey: "amount", header: "Amount", cell: ({ row }) => formatCurrency(row.original.amount) },
+    { accessorKey: "paymentDate", header: "Payment Date", cell: ({ row }) => formatDateShort(row.original.paymentDate) },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <StatusBadge label={row.original.status} tone={CONTRIBUTION_STATUS_TONE[row.original.status as keyof typeof CONTRIBUTION_STATUS_TONE]} />,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => row.original.contribution && row.original.status === "Posted" ? (
+        <PermissionGuard permission="contributions.void">
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Row actions" />}>
+              <MoreHorizontal className="size-4 text-muted-foreground/80" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem variant="destructive" onClick={() => setVoidTarget(row.original.contribution!)} className="text-xs">
+                <Ban className="mr-2 size-3.5" /> Void Transaction
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </PermissionGuard>
+      ) : null,
+    },
+  ]
+  const loanColumns: ColumnDef<(typeof loans)[number], unknown>[] = [
+    {
+      accessorKey: "applicationNumber",
+      header: "Application #",
+      cell: ({ row }) => (
+        <>
+          <Link to={`/loans/${row.original.id}`} className="font-semibold text-primary hover:underline">{row.original.applicationNumber}</Link>
+          {row.original.applicationType === "reloan" && <span className="ml-1.5 text-xs text-muted-foreground">(Reloan #{row.original.reloanSequence ?? 1})</span>}
+        </>
+      ),
+    },
+    { accessorKey: "loanTypeName", header: "Loan Type" },
+    { accessorKey: "requestedAmount", header: "Requested Amount", cell: ({ row }) => formatCurrency(row.original.requestedAmount) },
+    { accessorKey: "outstandingBalance", header: "Outstanding Balance", cell: ({ row }) => formatCurrency(row.original.outstandingBalance) },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={LOAN_STATUS_TONE[row.original.status]} /> },
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => <ReloanButton loan={row.original} eligible={["Fully Paid", "Active", "Released"].includes(row.original.status)} />,
+    },
+  ]
+  const paymentColumns: ColumnDef<(typeof payments)[number], unknown>[] = [
+    { accessorKey: "paymentReferenceNumber", header: "Reference #", cell: ({ row }) => <span className="font-semibold">{row.original.paymentReferenceNumber}</span> },
+    { accessorKey: "loanApplicationNumber", header: "Loan Application #" },
+    { accessorKey: "paymentDate", header: "Payment Date", cell: ({ row }) => formatDateShort(row.original.paymentDate) },
+    { accessorKey: "amountPaid", header: "Amount Paid", cell: ({ row }) => formatCurrency(row.original.amountPaid) },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={row.original.status === "Posted" ? "success" : "danger"} /> },
+  ]
+  const benefitColumns: ColumnDef<(typeof benefits)[number], unknown>[] = [
+    {
+      accessorKey: "applicationNumber",
+      header: "Application #",
+      cell: ({ row }) => <Link to={`/benefits/${row.original.id}`} className="font-semibold text-primary hover:underline">{row.original.applicationNumber}</Link>,
+    },
+    { accessorKey: "benefitTypeName", header: "Benefit Type" },
+    { accessorKey: "requestedAmount", header: "Requested Amount", cell: ({ row }) => formatCurrency(row.original.requestedAmount) },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={BENEFIT_STATUS_TONE[row.original.status]} /> },
+  ]
 
   return (
     <div className="space-y-6 pb-12">
@@ -165,6 +307,7 @@ export default function MemberProfilePage() {
           <TabsTrigger value="employment" className="text-xs font-semibold">Employment</TabsTrigger>
           <TabsTrigger value="beneficiaries" className="text-xs font-semibold">Beneficiaries</TabsTrigger>
           <TabsTrigger value="contributions" className="text-xs font-semibold">Contributions</TabsTrigger>
+          <TabsTrigger value="contribution-allocation" className="text-xs font-semibold">Contribution Allocation</TabsTrigger>
           {deductionTypes.filter((deductionType) => deductionType.isActive).map((deductionType) => (
             <TabsTrigger key={deductionType.id} value={`deduction-${deductionType.id}`} className="text-xs font-semibold">
               {deductionType.name}
@@ -238,183 +381,116 @@ export default function MemberProfilePage() {
         </TabsContent>
 
         <TabsContent value="contributions" className="mt-4">
-          {contributions.length === 0 ? (
-            <EmptyState title="No contributions on record" />
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Reference #</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Period</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Amount</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Payment Date</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {contributions.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-semibold text-foreground py-3">{c.referenceNumber}</TableCell>
-                      <TableCell className="py-3">{c.contributionPeriod}</TableCell>
-                      <TableCell className="py-3">{formatCurrency(c.amount)}</TableCell>
-                      <TableCell className="py-3">{formatDateShort(c.paymentDate)}</TableCell>
-                      <TableCell className="py-3"><StatusBadge label={c.status} tone={CONTRIBUTION_STATUS_TONE[c.status]} /></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <DataTable
+            columns={contributionColumns}
+            data={contributionTabRows}
+            getRowId={(row) => row.id}
+            emptyTitle="No contributions on record"
+            emptyDescription="This member has no contribution or Cash Pabaon records yet."
+            maxHeight="max-h-[32rem]"
+          />
+        </TabsContent>
+
+        <TabsContent value="contribution-allocation" className="mt-4">
+          <ContributionAllocationDataTable contributions={contributions} />
         </TabsContent>
 
         {deductionTypes.filter((deductionType) => deductionType.isActive).map((deductionType) => {
-          const records = memberDeductions.filter((deduction) => deduction.deductionTypeId === deductionType.id)
+          const deductionRecords = memberDeductions
+            .filter((deduction) => deduction.deductionTypeId === deductionType.id)
+            .map((deduction) => ({
+              id: `deduction-${deduction.id}`,
+              referenceNumber: deduction.referenceNumber,
+              period: deduction.period,
+              amount: deduction.amount,
+              paymentDate: deduction.paymentDate,
+              payrollReference: deduction.payrollReference || "—",
+              status: deduction.status,
+              source: "Payroll Deduction" as const,
+            }))
+
+          // Cash Pabaon can also be paid as a direct Contribution (not just a
+          // payroll deduction) — merge both channels into the same tab so the
+          // member's full Cash Pabaon payment history shows in one place,
+          // without duplicating either ledger's underlying data.
+          const contributionRecords = deductionType.code === "pabaon"
+            ? contributions
+                .filter((c) => c.contributionType === "Cash Pabaon")
+                .map((c) => ({
+                  id: `contribution-${c.id}`,
+                  referenceNumber: c.referenceNumber,
+                  period: c.contributionPeriod,
+                  amount: c.amount,
+                  paymentDate: c.paymentDate,
+                  payrollReference: "—",
+                  status: c.status,
+                  source: "Direct Contribution" as const,
+                }))
+            : []
+
+          const records = [...deductionRecords, ...contributionRecords].sort((a, b) => b.period.localeCompare(a.period))
+          const totalPosted = records.filter((record) => record.status === "Posted").reduce((sum, record) => sum + record.amount, 0)
+          const deductionColumns: ColumnDef<(typeof records)[number], unknown>[] = [
+            { accessorKey: "referenceNumber", header: "Reference #", cell: ({ row }) => <span className="font-semibold">{row.original.referenceNumber}</span> },
+            { accessorKey: "period", header: "Period" },
+            { accessorKey: "amount", header: "Amount", cell: ({ row }) => formatCurrency(row.original.amount) },
+            { accessorKey: "paymentDate", header: "Payment Date", cell: ({ row }) => formatDateShort(row.original.paymentDate) },
+            { accessorKey: "payrollReference", header: "Payroll Reference" },
+            ...(deductionType.code === "pabaon" ? [{
+              accessorKey: "source",
+              header: "Source",
+              cell: ({ row }: { row: { original: (typeof records)[number] } }) => <span className="text-muted-foreground">{row.original.source}</span>,
+            } as ColumnDef<(typeof records)[number], unknown>] : []),
+            { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={row.original.status === "Posted" ? "success" : "neutral"} /> },
+          ]
+
           return (
             <TabsContent key={deductionType.id} value={`deduction-${deductionType.id}`} className="mt-4">
-              {records.length === 0 ? (
-                <EmptyState title={`No ${deductionType.name} deductions on record`} />
-              ) : (
-                <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Reference #</TableHead>
-                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Period</TableHead>
-                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Amount</TableHead>
-                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Payment Date</TableHead>
-                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Payroll Reference</TableHead>
-                        <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {records.map((deduction) => (
-                        <TableRow key={deduction.id}>
-                          <TableCell className="font-semibold text-foreground py-3">{deduction.referenceNumber}</TableCell>
-                          <TableCell className="py-3">{deduction.period}</TableCell>
-                          <TableCell className="py-3">{formatCurrency(deduction.amount)}</TableCell>
-                          <TableCell className="py-3">{formatDateShort(deduction.paymentDate)}</TableCell>
-                          <TableCell className="py-3">{deduction.payrollReference || "—"}</TableCell>
-                          <TableCell className="py-3">
-                            <StatusBadge label={deduction.status} tone={deduction.status === "Posted" ? "success" : "neutral"} />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+              <DataTable
+                columns={deductionColumns}
+                data={records}
+                getRowId={(row) => row.id}
+                emptyTitle={`No ${deductionType.name} deductions on record`}
+                emptyDescription={`This member has no ${deductionType.name} transactions yet.`}
+                maxHeight="max-h-[32rem]"
+                footer={<span>Total {deductionType.name} (Posted): <strong className="text-foreground">{formatCurrency(totalPosted)}</strong></span>}
+              />
             </TabsContent>
           )
         })}
 
         <TabsContent value="loans" className="mt-4">
-          {loans.length === 0 ? (
-            <EmptyState title="No loan applications on record" />
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Application #</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Loan Type</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Requested Amount</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Outstanding Balance</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loans.map((l) => (
-                    <TableRow key={l.id}>
-                      <TableCell className="py-3">
-                        <Link to={`/loans/${l.id}`} className="font-semibold text-primary hover:underline">{l.applicationNumber}</Link>
-                        {l.applicationType === "reloan" && <span className="ml-1.5 text-xs text-muted-foreground">(Reloan #{l.reloanSequence ?? 1})</span>}
-                      </TableCell>
-                      <TableCell className="py-3">{l.loanTypeName}</TableCell>
-                      <TableCell className="py-3">{formatCurrency(l.requestedAmount)}</TableCell>
-                      <TableCell className="py-3">{formatCurrency(l.outstandingBalance)}</TableCell>
-                      <TableCell className="py-3"><StatusBadge label={l.status} tone={LOAN_STATUS_TONE[l.status]} /></TableCell>
-                      <TableCell className="py-3 text-right">
-                        <ReloanButton loan={l} eligible={["Fully Paid", "Active", "Released"].includes(l.status)} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <DataTable
+            columns={loanColumns}
+            data={loans}
+            getRowId={(row) => row.id}
+            emptyTitle="No loan applications on record"
+            emptyDescription="This member has no loan applications yet."
+            maxHeight="max-h-[32rem]"
+          />
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
-          {isLoadingPayments ? (
-            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-              <IndeterminateBar className="rounded-none" />
-              <div className="space-y-3 p-4">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-8 w-full" />
-                ))}
-              </div>
-            </div>
-          ) : payments.length === 0 ? (
-            <EmptyState title="No loan payments on record" />
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Reference #</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Loan Application #</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Payment Date</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Amount Paid</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payments.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-semibold text-foreground py-3">{p.paymentReferenceNumber}</TableCell>
-                      <TableCell className="py-3">{p.loanApplicationNumber}</TableCell>
-                      <TableCell className="py-3">{formatDateShort(p.paymentDate)}</TableCell>
-                      <TableCell className="py-3">{formatCurrency(p.amountPaid)}</TableCell>
-                      <TableCell className="py-3"><StatusBadge label={p.status} tone={p.status === "Posted" ? "success" : "danger"} /></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <DataTable
+            columns={paymentColumns}
+            data={payments}
+            isLoading={isLoadingPayments}
+            getRowId={(row) => row.id}
+            emptyTitle="No loan payments on record"
+            emptyDescription="This member has no posted loan payments yet."
+            maxHeight="max-h-[32rem]"
+          />
         </TabsContent>
 
         <TabsContent value="benefits" className="mt-4">
-          {benefits.length === 0 ? (
-            <EmptyState title="No benefit applications on record" />
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Application #</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Benefit Type</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Requested Amount</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/90">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {benefits.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell className="py-3">
-                        <Link to={`/benefits/${b.id}`} className="font-semibold text-primary hover:underline">{b.applicationNumber}</Link>
-                      </TableCell>
-                      <TableCell className="py-3">{b.benefitTypeName}</TableCell>
-                      <TableCell className="py-3">{formatCurrency(b.requestedAmount)}</TableCell>
-                      <TableCell className="py-3"><StatusBadge label={b.status} tone={BENEFIT_STATUS_TONE[b.status]} /></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <DataTable
+            columns={benefitColumns}
+            data={benefits}
+            getRowId={(row) => row.id}
+            emptyTitle="No benefit applications on record"
+            emptyDescription="This member has no benefit applications yet."
+            maxHeight="max-h-[32rem]"
+          />
         </TabsContent>
 
         <TabsContent value="documents" className="mt-4">
@@ -459,7 +535,92 @@ export default function MemberProfilePage() {
           images={[{ url: member.profilePhotoUrl, name: `${member.fullName} — Profile Photo` }]}
         />
       )}
+
+      <VoidTransactionDialog
+        open={!!voidTarget}
+        onOpenChange={(open) => !open && setVoidTarget(null)}
+        transactionLabel={voidTarget ? `Contribution ${voidTarget.referenceNumber}` : "Contribution"}
+        description={voidTarget?.contributionType === "Monthly Dues"
+          ? "This is a grouped payment. Voiding the Monthly Dues will also void the linked Cash Pabaon for the same member and period. Both records will keep their audit trail."
+          : undefined}
+        isLoading={isVoiding}
+        onConfirm={handleVoidContribution}
+      />
     </div>
+  )
+}
+
+function ContributionAllocationDataTable({ contributions }: { contributions: Contribution[] }) {
+  const rows = React.useMemo(
+    () => contributions.filter((contribution) => contribution.contributionType === "Monthly Dues"),
+    [contributions]
+  )
+  const funds = React.useMemo(
+    () => Array.from(new Map(
+      rows.flatMap((contribution) => contribution.fundAllocations ?? [])
+        .map((allocation) => [allocation.fundId, allocation])
+    ).values()),
+    [rows]
+  )
+  const columns = React.useMemo<ColumnDef<Contribution, unknown>[]>(() => [
+    { accessorKey: "contributionPeriod", header: "Period" },
+    { accessorKey: "paymentDate", header: "Contribution Date", cell: ({ row }) => formatDateShort(row.original.paymentDate) },
+    { accessorKey: "amount", header: "Monthly Dues", cell: ({ row }) => formatCurrency(row.original.amount) },
+    ...funds.map((fund): ColumnDef<Contribution, unknown> => ({
+      id: `fund-${fund.fundId}`,
+      header: fund.fundName,
+      accessorFn: (contribution) => contribution.fundAllocations?.find((allocation) => allocation.fundId === fund.fundId)?.allocatedAmount ?? 0,
+      cell: ({ getValue }) => formatCurrency(Number(getValue())),
+    })),
+    {
+      id: "allocationTotal",
+      header: "Total",
+      accessorFn: (contribution) => contribution.fundAllocations?.reduce((sum, allocation) => sum + allocation.allocatedAmount, 0) ?? 0,
+      cell: ({ getValue }) => <span className="font-semibold">{formatCurrency(Number(getValue()))}</span>,
+    },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={CONTRIBUTION_STATUS_TONE[row.original.status]} /> },
+    { accessorKey: "encodedBy", header: "Posted By" },
+    { accessorKey: "remarks", header: "Remarks", cell: ({ row }) => row.original.remarks || "—" },
+  ], [funds])
+
+  const posted = rows.filter((contribution) => contribution.status === "Posted")
+  const totalDues = posted.reduce((sum, contribution) => sum + contribution.amount, 0)
+  const totalAllocated = posted.flatMap((contribution) => contribution.fundAllocations ?? [])
+    .reduce((sum, allocation) => sum + allocation.allocatedAmount, 0)
+
+  return (
+    <DataTable
+      columns={columns}
+      data={rows}
+      getRowId={(row) => row.id}
+      emptyTitle="No Monthly Dues allocations on record"
+      emptyDescription="Posted Monthly Dues and their configured fund allocations will appear here."
+      maxHeight="max-h-[32rem]"
+      footer={(
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border border-border/60 bg-background/70 px-3 py-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Monthly Dues</p>
+              <p className="mt-0.5 font-heading text-base font-bold text-foreground">{formatCurrency(totalDues)}</p>
+            </div>
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-primary/80">Grand Total Allocated</p>
+              <p className="mt-0.5 font-heading text-base font-bold text-primary">{formatCurrency(totalAllocated)}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+            {funds.map((fund) => (
+              <div key={fund.fundId} className="rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+                <p className="truncate text-[10px] font-semibold text-muted-foreground" title={fund.fundName}>{fund.fundName}</p>
+                <p className="mt-0.5 text-sm font-bold tabular-nums text-foreground">
+                  {formatCurrency(posted.reduce((sum, contribution) => sum + (contribution.fundAllocations?.find((allocation) => allocation.fundId === fund.fundId)?.allocatedAmount ?? 0), 0))}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    />
   )
 }
 

@@ -14,7 +14,7 @@ const CATEGORIES: { title: ReportCategory; icon: typeof Users; reports: string[]
   {
     title: "Contribution Reports",
     icon: CreditCard,
-    reports: ["Monthly Contributions", "Contributions by Office", "Unpaid Contributions", "Member Contribution History", "Payroll Deduction Summary"],
+    reports: ["Monthly Contributions", "Contributions by Office", "Unpaid Contributions", "Member Contribution History", "Monthly Dues Summary", "Payroll Deduction Summary", "Fund Allocation Report"],
   },
   {
     title: "Loan Reports",
@@ -29,7 +29,7 @@ const CATEGORIES: { title: ReportCategory; icon: typeof Users; reports: string[]
   {
     title: "Financial Reports",
     icon: LineChart,
-    reports: ["Daily Collection Report", "Monthly Collection Report", "Annual Collection Report", "Loan Release Summary", "Benefits Release Summary", "Cash Flow Summary"],
+    reports: ["Daily Collection Report", "Monthly Collection Report", "Remittance Breakdown", "Annual Budget", "Monthly Disbursements", "Annual Collection Report", "Loan Release Summary", "Benefits Release Summary", "Cash Flow Summary"],
   },
 ]
 

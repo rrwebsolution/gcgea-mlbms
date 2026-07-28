@@ -12,8 +12,12 @@ import {
   ShieldAlert, 
   Info,
   Layers,
-  Sparkles,
-  Users
+  Users,
+  ChevronRight,
+  ChevronLeft,
+  FileCheck,
+  Building2,
+  Calculator
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
@@ -44,7 +48,7 @@ import { getAllContributions } from "@/services/contributions.service"
 import { getAllDeductions } from "@/services/deductions.service"
 import { getMemberLoans } from "@/services/loans.service"
 import { createBenefitApplication, getBenefit, listBenefitTypes, getMemberBenefits, updateBenefitApplication, type CreateBenefitApplicationInput } from "@/services/benefits.service"
-import { evaluateBenefitEligibility, resultFor } from "@/utils/eligibility"
+import { CASH_PABAON_PROGRAM_NAME, evaluateBenefitEligibility, resultFor } from "@/utils/eligibility"
 import { computeProratedAmount, countDistinctPeriods } from "@/utils/proration"
 import { formatCurrency } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
@@ -56,7 +60,7 @@ import type { BenefitApplication } from "@/types"
 
 const STEPS = ["Select Member", "Benefit Details", "Eligibility & Requirements", "Review & Submit"]
 
-/** Fixed per-sibling schedule for an unmarried member's Nuclear Family Mortuary claim (Resolution No. 24-2026) — not prorated by months, capped at 3 siblings. */
+/** Fixed per-sibling schedule for an unmarried member's Nuclear Family Mortuary claim (Resolution No. 24-2026) */
 const SIBLING_SCHEDULE = [15000, 10000, 5000]
 const NUCLEAR_MORTUARY_BENEFIT_NAME = "Mortuary Cash Assistance for Nuclear Family Member"
 
@@ -186,7 +190,16 @@ export default function CreateBenefitApplicationPage() {
   })
 
   const eligibilityItems = member && benefitType
-    ? evaluateBenefitEligibility(member, benefitType, requestedAmount, priorBenefitOfType.length, pendingBenefitOfType)
+    ? evaluateBenefitEligibility(
+        member,
+        benefitType,
+        requestedAmount,
+        priorBenefitOfType.length,
+        pendingBenefitOfType,
+        benefitType.name === CASH_PABAON_PROGRAM_NAME
+          ? { recipientType, recipientNames, hasOutstandingObligations: overdueLoans.length > 0 }
+          : undefined
+      )
     : []
   const eligibilityResult: EligibilityResult = eligibilityItems.length > 0 ? resultFor(eligibilityItems) : "Not Eligible"
   const isBlocked = eligibilityResult === "Not Eligible" && !(overrideEnabled && overrideReason.trim() && overrideConfirmed)
@@ -316,15 +329,16 @@ export default function CreateBenefitApplicationPage() {
   }
 
   return (
-    <div className="space-y-6 pb-20 mx-auto px-4 md:px-0">
+    <div className="space-y-6 pb-24 mx-auto max-w-6xl">
+      {/* Page Header */}
       <PageHeader
-        title={isDraftContext ? "Continue Benefit Draft" : "Create Benefit Application"}
-        description="Encode a benefit application based on the physical documents submitted by the member."
-        actions={isDraftContext && <DraftStatusBadge status="Draft" />}
+        title={isDraftContext ? "Continue Benefit Application Draft" : "Create Benefit Application"}
+        description="Encode a benefit application based on physical documents submitted by the member."
+        badge={isDraftContext ? <DraftStatusBadge status="Draft" /> : undefined}
       />
 
-      {/* Step Indicator Panel */}
-      <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
+      {/* Step Indicator Card */}
+      <div className="rounded-2xl border border-border/60 bg-card/80 backdrop-blur-sm p-6 shadow-xs">
         <WizardStepIndicator steps={STEPS} currentStep={step} />
       </div>
 
@@ -341,10 +355,10 @@ export default function CreateBenefitApplicationPage() {
             overdueLoanCount={overdueLoans.length}
             extra={
               memberBenefits.length > 0 ? (
-                <div className="rounded-xl border border-border/40 bg-muted/20 p-4 text-xs text-muted-foreground/90 shadow-inner flex items-center gap-2.5">
-                  <Layers className="size-4 text-primary" />
+                <div className="rounded-xl border border-border/50 bg-muted/30 p-4 text-xs text-muted-foreground shadow-2xs flex items-center gap-3">
+                  <Layers className="size-4 text-primary shrink-0" />
                   <span>
-                    <strong className="text-foreground">Recent Benefits: </strong>
+                    <strong className="text-foreground">Recent Benefits Record: </strong>
                     {memberBenefits.slice(0, 3).map((b) => `${b.benefitTypeName} (${b.status})`).join(", ")}
                   </span>
                 </div>
@@ -356,41 +370,53 @@ export default function CreateBenefitApplicationPage() {
 
       {/* STEP 2: Benefit Details Form */}
       {step === 2 && (
-        <FormSection title="Step 2 · Benefit Details">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+        <FormSection title="Step 2 · Benefit Details & Purpose">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Application Date <span className="text-destructive font-bold">*</span>
               </Label>
-              <Input type="date" value={applicationDate} onChange={(e) => setApplicationDate(e.target.value)} className="h-10 text-sm" />
+              <Input 
+                type="date" 
+                value={applicationDate} 
+                onChange={(e) => setApplicationDate(e.target.value)} 
+                className="h-10 text-sm rounded-xl" 
+              />
             </div>
             
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Benefit Type <span className="text-destructive font-bold">*</span>
               </Label>
               <CommandSelect
-                className="w-full h-10 text-sm bg-background border-border hover:bg-accent/40 transition-all"
+                className="w-full h-10 text-sm bg-background border-border hover:bg-accent/40 transition-all rounded-xl"
                 value={benefitTypeId}
                 onValueChange={(v) => setBenefitTypeId(v ?? "")}
                 options={benefitTypes.filter((bt) => bt.status === "Active").map((bt) => ({ value: bt.id, label: bt.name }))}
-                placeholder="Select benefit type"
+                placeholder="Select benefit program type"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Requested Amount <span className="text-destructive font-bold">*</span>
               </Label>
               {isComputedAmount ? (
-                /* Dynamic Computation Display Block */
-                <div className="space-y-2 bg-muted/20 border border-border/60 rounded-xl p-4 shadow-inner">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 block">Calculated System Amount</span>
-                  <div className="text-xl font-bold text-foreground">{formatCurrency(requestedAmount ?? 0)}</div>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                /* Computed Amount Display Banner */
+                <div className="rounded-2xl border border-primary/30 bg-primary/[0.03] p-4 shadow-2xs space-y-1.5 relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary inline-flex items-center gap-1">
+                      <Calculator className="size-3.5" /> Automated System Calculation
+                    </span>
+                    <span className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      Fixed Formula
+                    </span>
+                  </div>
+                  <div className="text-2xl font-bold tracking-tight text-foreground">{formatCurrency(requestedAmount ?? 0)}</div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     {isSiblingSchedule
-                      ? "Evaluated based on the unmarried member's fixed sibling mortuary schedule."
-                      : `Automated proration: Based on ${monthsPaid} month(s) paid (${prorationPreview?.tier ? `${prorationPreview.tier.percentage}% tier` : "no matching tier"}). Not editable.`}
+                      ? "Evaluated using unmarried member's fixed sibling mortuary schedule."
+                      : `Automated proration based on ${monthsPaid} month(s) paid (${prorationPreview?.tier ? `${prorationPreview.tier.percentage}% tier` : "no matching tier"}).`}
                   </p>
                 </div>
               ) : (
@@ -398,15 +424,20 @@ export default function CreateBenefitApplicationPage() {
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Incident Date</Label>
-              <Input type="date" value={incidentDate} onChange={(e) => setIncidentDate(e.target.value)} className="h-10 text-sm" />
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-foreground/80">Incident Date</Label>
+              <Input 
+                type="date" 
+                value={incidentDate} 
+                onChange={(e) => setIncidentDate(e.target.value)} 
+                className="h-10 text-sm rounded-xl" 
+              />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Recipient Type</Label>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-foreground/80">Recipient Type</Label>
               <CommandSelect
-                className="w-full h-10 text-sm bg-background border-border hover:bg-accent/40 transition-all"
+                className="w-full h-10 text-sm bg-background border-border hover:bg-accent/40 transition-all rounded-xl"
                 value={recipientType}
                 onValueChange={(v) => {
                   const nextType = (v ?? "Member") as "Member" | "Beneficiary"
@@ -421,8 +452,8 @@ export default function CreateBenefitApplicationPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Recipient Name <span className="text-destructive font-bold">*</span>
               </Label>
               <RecipientMultiSelect
@@ -441,61 +472,75 @@ export default function CreateBenefitApplicationPage() {
 
             {recipientType === "Beneficiary" && (
               <>
-                <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Relationship to Member</Label>
+                <div className="space-y-2 animate-in fade-in duration-200">
+                  <Label className="text-xs font-semibold text-muted-foreground">Relationship to Member</Label>
                   <Input
-                    value={recipientNames.map((name) => member?.beneficiaries.find((beneficiary) => beneficiary.fullName === name)?.relationship).filter(Boolean).join(", ")}
+                    value={recipientNames.map((name) => member?.beneficiaries.find((b) => b.fullName === name)?.relationship).filter(Boolean).join(", ")}
                     placeholder="Based on selection"
                     disabled
-                    className="h-10 text-sm"
+                    className="h-10 text-sm rounded-xl bg-muted/20"
                   />
                 </div>
-                <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Contact Number</Label>
+                <div className="space-y-2 animate-in fade-in duration-200">
+                  <Label className="text-xs font-semibold text-muted-foreground">Contact Number</Label>
                   <Input
-                    value={recipientNames.map((name) => member?.beneficiaries.find((beneficiary) => beneficiary.fullName === name)?.contactNumber).filter(Boolean).join(", ")}
+                    value={recipientNames.map((name) => member?.beneficiaries.find((b) => b.fullName === name)?.contactNumber).filter(Boolean).join(", ")}
                     placeholder="No registered contact number"
                     disabled
-                    className="h-10 text-sm"
+                    className="h-10 text-sm rounded-xl bg-muted/20"
                   />
                 </div>
               </>
             )}
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+            <div className="space-y-2 sm:col-span-2">
+              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Assigned Benefits Officer <span className="text-destructive font-bold">*</span>
               </Label>
               <BenefitsOfficerCommandSelect value={assignedOfficer} onValueChange={setAssignedOfficer} />
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+            <div className="space-y-2 sm:col-span-2">
+              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Purpose / Reason <span className="text-destructive font-bold">*</span>
               </Label>
-              <Textarea rows={2} placeholder="e.g. Hospitalization, bereavement, calamity assistance" value={reason} onChange={(e) => setReason(e.target.value)} className="text-sm bg-background" />
+              <Textarea 
+                rows={2} 
+                placeholder="e.g. Hospitalization, bereavement, calamity assistance" 
+                value={reason} 
+                onChange={(e) => setReason(e.target.value)} 
+                className="text-sm rounded-xl bg-background" 
+              />
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Remarks</Label>
-              <Textarea rows={2} placeholder="Additional notes about this application (optional)" value={remarks} onChange={(e) => setRemarks(e.target.value)} className="text-sm bg-background" />
+            <div className="space-y-2 sm:col-span-2">
+              <Label className="text-xs font-semibold text-foreground/80">Additional Remarks</Label>
+              <Textarea 
+                rows={2} 
+                placeholder="Additional operational notes (optional)" 
+                value={remarks} 
+                onChange={(e) => setRemarks(e.target.value)} 
+                className="text-sm rounded-xl bg-background" 
+              />
             </div>
           </div>
 
-          {/* Sibling Schedule Picker — Nuclear Mortuary, unmarried member only */}
+          {/* Sibling Schedule Tile Picker */}
           {isSiblingSchedule && (
-            <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs shadow-inner">
-              <p className="mb-2 font-bold uppercase tracking-wider text-[10px] text-foreground flex items-center gap-1.5">
-                <Users className="size-4 text-primary" />
+            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/[0.02] p-5 shadow-2xs space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                <Users className="size-4" />
                 Sibling Mortuary Schedule (Unmarried Member)
-              </p>
-              <p className="mb-3 text-muted-foreground">
-                Select up to 3 siblings in claim order — 1st sibling {formatCurrency(SIBLING_SCHEDULE[0])}, 2nd {formatCurrency(SIBLING_SCHEDULE[1])}, 3rd {formatCurrency(SIBLING_SCHEDULE[2])}.
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select up to 3 registered siblings in claim order — 1st sibling {formatCurrency(SIBLING_SCHEDULE[0])}, 2nd {formatCurrency(SIBLING_SCHEDULE[1])}, 3rd {formatCurrency(SIBLING_SCHEDULE[2])}.
               </p>
               {siblingSiblingBeneficiaries.length === 0 ? (
-                <p className="font-medium text-warning">No beneficiary on record is tagged as a sibling. Add one to the member's beneficiary list first.</p>
+                <p className="font-medium text-xs text-amber-600 dark:text-amber-400">
+                  No registered beneficiary is tagged as a sibling. Add one to the member's profile first.
+                </p>
               ) : (
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-1 gap-2.5 pt-1">
                   {siblingSiblingBeneficiaries.map((b) => {
                     const order = siblingBeneficiaryIds.indexOf(b.id)
                     const checked = order !== -1
@@ -503,10 +548,10 @@ export default function CreateBenefitApplicationPage() {
                       <label 
                         key={b.id} 
                         className={cn(
-                          "flex items-center justify-between gap-3 rounded-xl border p-3.5 cursor-pointer transition-all hover:shadow-sm",
+                          "flex items-center justify-between gap-3 rounded-xl border p-3.5 cursor-pointer transition-all duration-200",
                           checked 
-                            ? "bg-primary/[0.02] border-primary/40 shadow-sm" 
-                            : "bg-card border-border hover:border-border/80"
+                            ? "bg-primary/5 border-primary/40 ring-1 ring-primary/20 shadow-2xs" 
+                            : "bg-card border-border/70 hover:border-border hover:bg-muted/30"
                         )}
                       >
                         <span className="flex items-center gap-3">
@@ -517,10 +562,12 @@ export default function CreateBenefitApplicationPage() {
                               setSiblingBeneficiaryIds((prev) => (v ? [...prev, b.id].slice(0, 3) : prev.filter((id) => id !== b.id)))
                             }
                           />
-                          <span className="font-semibold text-foreground text-sm">{b.fullName}</span>
-                          <span className="text-xs text-muted-foreground">({b.relationship})</span>
+                          <div>
+                            <p className="font-semibold text-sm text-foreground">{b.fullName}</p>
+                            <p className="text-xs text-muted-foreground">{b.relationship}</p>
+                          </div>
                         </span>
-                        {checked && <StatusBadge label={`${formatCurrency(SIBLING_SCHEDULE[order])} · #${order + 1}`} tone="info" />}
+                        {checked && <StatusBadge label={`${formatCurrency(SIBLING_SCHEDULE[order])} · Order #${order + 1}`} tone="info" />}
                       </label>
                     )
                   })}
@@ -529,40 +576,39 @@ export default function CreateBenefitApplicationPage() {
             </div>
           )}
 
-          {/* Policy Information Panel */}
+          {/* Policy Information Summary Grid */}
           {benefitType && (
-            <div className="mt-6 rounded-xl border border-border bg-muted/20 p-5 shadow-inner relative overflow-hidden">
-              <div className="absolute top-0 left-0 bottom-0 w-1 bg-primary" />
-              <p className="mb-3.5 font-bold uppercase tracking-wider text-[10px] text-foreground flex items-center gap-2">
+            <div className="mt-6 rounded-2xl border border-border/70 bg-muted/20 p-5 shadow-2xs space-y-3 relative overflow-hidden">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
                 <Info className="size-4 text-primary" />
-                {benefitType.name} — Core Policy Information
-              </p>
-              <div className="grid grid-cols-2 gap-y-3.5 gap-x-6 text-xs text-muted-foreground sm:grid-cols-3 pt-1">
-                <div className="space-y-0.5">
-                  <span className="block text-[10px] uppercase text-muted-foreground/60">Default Amount</span>
-                  <strong className="text-sm font-semibold text-foreground">{formatCurrency(benefitType.defaultAmount)}</strong>
+                {benefitType.name} — Program Guidelines
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground sm:grid-cols-3 pt-1">
+                <div>
+                  <span className="block text-[10px] uppercase font-semibold text-muted-foreground/60">Default Amount</span>
+                  <strong className="text-sm font-bold text-foreground">{formatCurrency(benefitType.defaultAmount)}</strong>
                 </div>
-                <div className="space-y-0.5">
-                  <span className="block text-[10px] uppercase text-muted-foreground/60">Maximum Limit</span>
-                  <strong className="text-sm font-semibold text-foreground">{formatCurrency(benefitType.maximumAmount)}</strong>
+                <div>
+                  <span className="block text-[10px] uppercase font-semibold text-muted-foreground/60">Maximum Limit</span>
+                  <strong className="text-sm font-bold text-foreground">{formatCurrency(benefitType.maximumAmount)}</strong>
                 </div>
-                <div className="space-y-0.5">
-                  <span className="block text-[10px] uppercase text-muted-foreground/60">Min. Tenure Required</span>
-                  <strong className="text-sm font-semibold text-foreground">{benefitType.requiredMembershipMonths} months</strong>
+                <div>
+                  <span className="block text-[10px] uppercase font-semibold text-muted-foreground/60">Min. Tenure</span>
+                  <strong className="text-sm font-bold text-foreground">{benefitType.requiredMembershipMonths} months</strong>
                 </div>
-                <div className="space-y-0.5">
-                  <span className="block text-[10px] uppercase text-muted-foreground/60">Frequency Limit</span>
-                  <strong className="text-sm font-semibold text-foreground">{benefitType.frequencyLimit}</strong>
+                <div>
+                  <span className="block text-[10px] uppercase font-semibold text-muted-foreground/60">Frequency Limit</span>
+                  <strong className="text-sm font-bold text-foreground">{benefitType.frequencyLimit}</strong>
                 </div>
-                <div className="space-y-0.5">
-                  <span className="block text-[10px] uppercase text-muted-foreground/60">Officer Approval</span>
-                  <strong className="text-sm font-semibold text-foreground">{benefitType.approvalRequired ? "Mandatory" : "Optional"}</strong>
+                <div>
+                  <span className="block text-[10px] uppercase font-semibold text-muted-foreground/60">Approval Mandate</span>
+                  <strong className="text-sm font-bold text-foreground">{benefitType.approvalRequired ? "Mandatory" : "Optional"}</strong>
                 </div>
               </div>
               {requestedAmount != null && requestedAmount > benefitType.maximumAmount && (
-                <div className="mt-4 flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/25 p-3 text-xs font-semibold text-destructive animate-pulse">
+                <div className="mt-3 flex items-center gap-2 rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-xs font-semibold text-destructive animate-pulse">
                   <AlertTriangle className="size-4 shrink-0" /> 
-                  Requested amount exceeds the maximum limit for this benefit type.
+                  Requested amount exceeds program cap limit.
                 </div>
               )}
             </div>
@@ -572,7 +618,7 @@ export default function CreateBenefitApplicationPage() {
 
       {/* STEP 3: Eligibility & Requirements Checklist */}
       {step === 3 && (
-        <FormSection title="Step 3 · Eligibility & Requirements">
+        <FormSection title="Step 3 · Eligibility Audit & Documents">
           {eligibilityItems.length === 0 ? (
             <AlertBanner tone="warning" title="Incomplete information" description="Select a member and benefit type first." />
           ) : (
@@ -580,58 +626,65 @@ export default function CreateBenefitApplicationPage() {
               <EligibilityChecklist items={eligibilityItems} result={eligibilityResult} />
 
               {eligibilityResult === "Not Eligible" && canOverride && (
-                <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-3">
-                  <label className="flex items-center gap-2.5 text-sm font-semibold text-foreground cursor-pointer">
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-3">
+                  <label className="flex items-center gap-3 text-sm font-bold text-foreground cursor-pointer">
                     <Checkbox checked={overrideEnabled} onCheckedChange={(v) => setOverrideEnabled(!!v)} />
                     Override eligibility requirements for this application
                   </label>
                   {overrideEnabled && (
-                    <div className="mt-4 space-y-4 animate-in fade-in duration-200">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90">
-                          Override Reason <span className="text-destructive font-bold">*</span>
+                    <div className="mt-4 space-y-4 animate-in fade-in duration-200 pt-2 border-t border-amber-500/20">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Override Justification <span className="text-destructive font-bold">*</span>
                         </Label>
-                        <Textarea rows={2} placeholder="Explain why this application should proceed despite failing eligibility…" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} className="text-sm bg-background" />
+                        <Textarea 
+                          rows={2} 
+                          placeholder="State the administrative justification for overriding eligibility…" 
+                          value={overrideReason} 
+                          onChange={(e) => setOverrideReason(e.target.value)} 
+                          className="text-sm rounded-xl bg-background" 
+                        />
                       </div>
-                      <label className="flex items-center gap-2.5 text-xs font-medium text-foreground cursor-pointer">
+                      <label className="flex items-center gap-2.5 text-xs font-semibold text-foreground cursor-pointer">
                         <Checkbox checked={overrideConfirmed} onCheckedChange={(v) => setOverrideConfirmed(!!v)} />
-                        I confirm I am authorized to override eligibility for this application.
+                        I confirm authorization to override system eligibility filters.
                       </label>
                       <Button 
                         type="button" 
                         variant="outline" 
                         size="sm" 
-                        className="h-9 gap-1.5 text-xs hover:bg-accent/80 active:scale-97 transition-all"
+                        className="h-9 gap-2 text-xs rounded-xl shadow-2xs hover:bg-accent"
                         onClick={() => setShowOverrideDialog(true)} 
                         disabled={!overrideReason.trim() || !overrideConfirmed}
                       >
-                        <ShieldAlert className="size-3.5" /> Confirm Override
+                        <ShieldAlert className="size-3.5 text-amber-600" /> Apply Override
                       </Button>
                     </div>
                   )}
                 </div>
               )}
+
               {eligibilityResult === "Not Eligible" && !canOverride && (
-                <AlertBanner tone="danger" title="Eligibility override not available" description="You do not have permission to override eligibility." />
+                <AlertBanner tone="danger" title="Eligibility override unavailable" description="You do not hold permissions to override system eligibility filters." />
               )}
 
-              <div className="space-y-3">
+              <div className="space-y-3.5 pt-2">
                 <p className="text-sm font-bold tracking-tight text-foreground flex items-center gap-2">
-                  <Sparkles className="size-4 text-primary" />
-                  Requirements Checklist
+                  <FileCheck className="size-4 text-primary" />
+                  Required Document Checklist
                 </p>
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-1 gap-2.5">
                   {requirementEntries.map((req) => (
                     <div 
                       key={req.label} 
                       className={cn(
                         "flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5 transition-all duration-200",
                         requirements[req.label]
-                          ? "bg-emerald-500/[0.02] border-emerald-500/25 shadow-sm"
+                          ? "bg-emerald-500/[0.03] border-emerald-500/30 shadow-2xs"
                           : "bg-card border-border/60 hover:border-border"
                       )}
                     >
-                      <label className="flex items-center gap-2.5 text-sm text-foreground font-medium cursor-pointer">
+                      <label className="flex items-center gap-3 text-sm text-foreground font-semibold cursor-pointer">
                         <Checkbox checked={requirements[req.label]} onCheckedChange={(v) => setRequirements((prev) => ({ ...prev, [req.label]: !!v }))} />
                         {req.label}
                       </label>
@@ -639,15 +692,17 @@ export default function CreateBenefitApplicationPage() {
                     </div>
                   ))}
                 </div>
+                
                 <div className="mt-4">
                   <FileUploader
-                    label="Other Supporting Document (optional)"
+                    label="Attach Supporting Document (optional)"
                     fileName={fileMeta?.fileName}
                     onFileSelect={(file) => setFileMeta(file ? { fileName: file.name, fileSize: `${Math.max(1, Math.round(file.size / 1024))} KB` } : null)}
                   />
                 </div>
+
                 {missingRequirements.length > 0 && (
-                  <AlertBanner tone="warning" className="mt-4 animate-in fade-in duration-250" title={`${missingRequirements.length} requirement(s) missing`} description="You may still proceed, but missing requirements will be flagged in the review step." />
+                  <AlertBanner tone="warning" className="mt-4 animate-in fade-in duration-200" title={`${missingRequirements.length} requirement(s) missing`} description="Missing items will be flagged during the review and approval stage." />
                 )}
               </div>
             </div>
@@ -655,58 +710,83 @@ export default function CreateBenefitApplicationPage() {
         </FormSection>
       )}
 
-      {/* STEP 4: Review Block & Consent */}
+      {/* STEP 4: Review Block & Confirmation */}
       {step === 4 && member && benefitType && (
-        <FormSection title="Step 4 · Review and Submit">
+        <FormSection title="Step 4 · Review & Complete Submission">
           <div className="space-y-4">
-            <ReviewBlock title="Member Overview">
+            <ReviewBlock title="Member Profile" icon={Users}>
               <ReviewRow label="Full Name" value={member.fullName} />
               <ReviewRow label="Member Number" value={member.memberNumber} />
-              <ReviewRow label="Office Name" value={member.officeName} />
+              <ReviewRow label="Office" value={member.officeName} />
             </ReviewBlock>
-            <ReviewBlock title="Application Overview">
-              <ReviewRow label="Benefit Type" value={benefitType.name} />
+
+            <ReviewBlock title="Benefit Details" icon={Building2}>
+              <ReviewRow label="Benefit Program" value={benefitType.name} />
               <ReviewRow label="Requested Amount" value={formatCurrency(requestedAmount ?? 0)} />
               <ReviewRow label="Recipient Name" value={recipientName} />
-              <ReviewRow label="Application Reason" value={reason} />
+              <ReviewRow label="Purpose / Reason" value={reason} />
             </ReviewBlock>
-            <ReviewBlock title="Eligibility Audit">
-              <ReviewRow label="System Result" value={eligibilityResult} />
-              {overrideEnabled && <ReviewRow label="Override Reason" value={overrideReason} />}
+
+            <ReviewBlock title="Eligibility Audit" icon={ShieldAlert}>
+              <ReviewRow label="System Status" value={eligibilityResult} />
+              {overrideEnabled && <ReviewRow label="Override Justification" value={overrideReason} />}
             </ReviewBlock>
-            <ReviewBlock title="Requirements Status">
-              <ReviewRow label="Submitted Docs" value={`${requirementEntries.filter((r) => r.completed).length} / ${requirementEntries.length}`} />
+
+            <ReviewBlock title="Requirement Checklist" icon={FileCheck}>
+              <ReviewRow label="Verified Documents" value={`${requirementEntries.filter((r) => r.completed).length} of ${requirementEntries.length} completed`} />
             </ReviewBlock>
 
             {isBlocked && (
-              <AlertBanner tone="danger" title="Cannot submit" description="This application does not meet eligibility requirements and has not been overridden. You may still save it as a draft." />
+              <AlertBanner tone="danger" title="Submission Blocked" description="This application fails system eligibility and has not been overridden. Save as draft or apply an override." />
             )}
 
-            <label className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/10 p-3.5 text-xs text-foreground font-medium cursor-pointer">
+            <label className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4 text-xs font-semibold text-foreground cursor-pointer transition-colors hover:bg-muted/30">
               <Checkbox checked={agree} onCheckedChange={(v) => setAgree(!!v)} className="mt-0.5" />
-              I confirm that the information has been reviewed and is accurate.
+              I confirm that all physical application documents have been verified for submission.
             </label>
           </div>
         </FormSection>
       )}
 
-      {/* Floating Action Bar */}
-      <div className="sticky bottom-4 z-15 flex flex-wrap items-center justify-between gap-3 border border-border bg-background/80 backdrop-blur-md px-6 py-4 shadow-lg transition-all duration-200">
-        <Button variant="outline" onClick={() => promptLeave(() => navigate("/benefits"))} className="h-9 text-xs">Cancel</Button>
-        <div className="flex flex-wrap items-center gap-2">
-          {step > 1 && <Button variant="outline" onClick={goBack} className="h-9 text-xs">Previous</Button>}
-          <SaveDraftButton status={benefitDraft.status} lastSavedAt={benefitDraft.lastSavedAt} onClick={saveDraft} disabled={!memberId || isSubmitting} />
+      {/* FLOATING ACTION TOOLBAR */}
+      <div className="sticky bottom-5 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/90 backdrop-blur-xl px-6 py-4 shadow-xl transition-all duration-200">
+        <Button variant="outline" onClick={() => promptLeave(() => navigate("/benefits"))} className="h-9 text-xs rounded-xl">
+          Cancel
+        </Button>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          {step > 1 && (
+            <Button variant="outline" onClick={goBack} className="h-9 text-xs rounded-xl gap-1">
+              <ChevronLeft className="size-3.5" /> Previous
+            </Button>
+          )}
+
+          <SaveDraftButton 
+            status={benefitDraft.status} 
+            lastSavedAt={benefitDraft.lastSavedAt} 
+            onClick={saveDraft} 
+            disabled={!memberId || isSubmitting} 
+          />
+
           {step < STEPS.length ? (
-            <Button onClick={goNext} disabled={!canProceedFromStep(step)} className="h-9 text-xs">Next</Button>
+            <Button onClick={goNext} disabled={!canProceedFromStep(step)} className="h-9 text-xs rounded-xl gap-1 shadow-2xs">
+              Next Step <ChevronRight className="size-3.5" />
+            </Button>
           ) : (
-            <Button onClick={() => handleSubmit(false)} disabled={isSubmitting || isBlocked || !agree} aria-busy={isSubmitting} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
-              {isSubmitting ? <Loader2 className="animate-spin size-3.5" aria-hidden="true" /> : <FilePlus2 className="size-3.5" aria-hidden="true" />}
+            <Button 
+              onClick={() => handleSubmit(false)} 
+              disabled={isSubmitting || isBlocked || !agree} 
+              aria-busy={isSubmitting} 
+              className="h-9 text-xs rounded-xl gap-1.5 shadow-md active:scale-97 transition-all"
+            >
+              {isSubmitting ? <Loader2 className="animate-spin size-3.5" /> : <FilePlus2 className="size-3.5" />}
               {isSubmitting ? "Submitting…" : "Submit Application"}
             </Button>
           )}
         </div>
       </div>
 
+      {/* Dialogs */}
       <ConfirmDialog
         open={showOverrideDialog}
         onOpenChange={setShowOverrideDialog}
@@ -731,27 +811,27 @@ export default function CreateBenefitApplicationPage() {
         onLeaveWithoutSaving={() => resolvePrompt("leave")}
       />
 
-      {/* Success Dialog overlay */}
+      {/* Completion Success Dialog */}
       <Dialog open={!!successDialog} onOpenChange={(open) => !open && setSuccessDialog(null)}>
         <DialogContent className="sm:max-w-sm rounded-2xl p-6">
           <DialogHeader className="space-y-3">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-success/10 text-success">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
               <CheckCircle2 className="size-6" />
             </div>
-            <DialogTitle className="text-center text-lg font-bold">Application Saved</DialogTitle>
+            <DialogTitle className="text-center text-lg font-bold">Application Recorded</DialogTitle>
             <DialogDescription className="text-center text-sm text-muted-foreground">
-              Reference <span className="font-bold text-foreground">{successDialog?.applicationNumber}</span> has been recorded successfully.
+              Reference <span className="font-bold text-foreground">{successDialog?.applicationNumber}</span> recorded successfully.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col gap-2 sm:flex-col mt-4">
-            <Button className="w-full h-9 text-xs shadow-sm" onClick={() => successDialog && navigate(`/benefits/${successDialog.id}`)}>
+            <Button className="w-full h-9 text-xs rounded-xl shadow-2xs" onClick={() => successDialog && navigate(`/benefits/${successDialog.id}`)}>
               View Application Details
             </Button>
-            <Button variant="outline" className="w-full h-9 text-xs" onClick={resetWizard}>
+            <Button variant="outline" className="w-full h-9 text-xs rounded-xl" onClick={resetWizard}>
               Create Another Application
             </Button>
-            <Button variant="ghost" className="w-full h-9 text-xs text-muted-foreground" onClick={() => navigate("/benefits")}>
-              Back to List
+            <Button variant="ghost" className="w-full h-9 text-xs text-muted-foreground rounded-xl" onClick={() => navigate("/benefits")}>
+              Back to Benefits List
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -760,19 +840,22 @@ export default function CreateBenefitApplicationPage() {
   )
 }
 
-function ReviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
+function ReviewBlock({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/10 p-5 shadow-sm">
-      <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{title}</p>
-      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</dl>
+    <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-2xs space-y-3">
+      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <Icon className="size-3.5 text-primary" />
+        {title}
+      </div>
+      <dl className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 pt-1">{children}</dl>
     </div>
   )
 }
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1.5 border-b border-border/20 pb-2.5 last:border-0 sm:border-b-0 sm:pb-0">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+    <div className="flex flex-col gap-1 border-b border-border/20 pb-2 last:border-0 sm:border-b-0 sm:pb-0">
+      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
       <dd className="text-sm font-bold text-foreground truncate">{value}</dd>
     </div>
   )
@@ -798,32 +881,34 @@ function RecipientMultiSelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={<Button type="button" variant="outline" className="min-h-10 h-auto w-full justify-between px-3 py-2 font-normal" />}
-      >
-        {values.length === 0 ? (
-          <span className="text-muted-foreground">{placeholder}</span>
-        ) : (
-          <span className="flex min-w-0 flex-wrap gap-1.5">
-            {values.map((value) => (
-              <span key={value} className="max-w-full truncate rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-                {value}
+        render={
+          <Button type="button" variant="outline" className="min-h-10 h-auto w-full justify-between px-3 py-2 font-normal rounded-xl">
+            {values.length === 0 ? (
+              <span className="text-muted-foreground text-sm">{placeholder}</span>
+            ) : (
+              <span className="flex min-w-0 flex-wrap gap-1.5">
+                {values.map((value) => (
+                  <span key={value} className="max-w-full truncate rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                    {value}
+                  </span>
+                ))}
               </span>
-            ))}
-          </span>
-        )}
-        <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-      </PopoverTrigger>
-      <PopoverContent className="w-[--anchor-width] p-0" align="start">
+            )}
+            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        }
+      />
+      <PopoverContent className="w-[--anchor-width] p-0 rounded-2xl overflow-hidden" align="start">
         <Command>
           <CommandInput placeholder="Search recipient…" />
           <CommandList>
             <CommandEmpty>No registered recipient found.</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
-                <CommandItem key={option.value} value={`${option.label} ${option.description}`} onSelect={() => toggle(option.value)}>
-                  <Check className={`size-4 ${values.includes(option.value) ? "opacity-100" : "opacity-0"}`} />
+                <CommandItem key={option.value} value={`${option.label} ${option.description}`} onSelect={() => toggle(option.value)} className="cursor-pointer">
+                  <Check className={`size-4 mr-2 ${values.includes(option.value) ? "opacity-100 text-primary" : "opacity-0"}`} />
                   <span className="min-w-0">
-                    <span className="block truncate">{option.label}</span>
+                    <span className="block truncate font-medium text-sm">{option.label}</span>
                     <span className="block truncate text-xs text-muted-foreground">{option.description}</span>
                   </span>
                 </CommandItem>

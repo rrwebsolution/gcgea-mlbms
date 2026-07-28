@@ -6,6 +6,7 @@ import { AlertBanner } from "@/components/shared/AlertBanner"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { getMembershipApprovalSetting, updateMembershipApprovalSetting } from "@/services/membership-approval-settings.service"
 import { listAllRoles } from "@/services/roles.service"
@@ -28,7 +29,7 @@ function ToggleRow({ label, description, checked, onChange }: { label: string; d
 
 export function MembershipApprovalSettingsCard() {
   const queryClient = useQueryClient()
-  const { data, isLoading } = useQuery({ queryKey: ["settings", "membership-approval"], queryFn: getMembershipApprovalSetting })
+  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["settings", "membership-approval"], queryFn: getMembershipApprovalSetting })
   const { data: roles = [] } = useQuery({ queryKey: ["roles", "all"], queryFn: listAllRoles })
   const { data: users = [] } = useQuery({ queryKey: ["users", "all"], queryFn: listAllUsers })
   const { data: workflows = [] } = useQuery({ queryKey: ["admin", "workflow-definitions"], queryFn: listWorkflowDefinitions })
@@ -46,10 +47,22 @@ export function MembershipApprovalSettingsCard() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Unable to save membership approval settings."),
   })
 
-  if (isLoading || !form) return <p className="text-sm text-muted-foreground">Loading membership approval settings…</p>
+  if (isLoading) return <MembershipApprovalSettingsSkeleton />
+  if (isError || !form) {
+    return (
+      <AlertBanner
+        tone="danger"
+        title="Unable to load membership approval settings"
+        description={error instanceof Error ? error.message : "Please try again."}
+        actions={<Button variant="outline" size="sm" onClick={() => void refetch()}>Try Again</Button>}
+      />
+    )
+  }
   const requiresApproval = form.manualRegistrationRequiresApproval || form.importedMembersRequireApproval
+  const needsFallbackApprover = requiresApproval || form.autoApproveRequiresPermission
   const activeUsers = users.filter((user) => user.status === "Active" && computeEffectivePermissionCodes(user, roles).includes("members.approve"))
   const enabledWorkflows = workflows.filter((workflow) => workflow.isEnabled && workflow.moduleKey === "member_registration")
+  const approvingRoles = roles.filter((role) => role.status === "Active" && role.permissions.includes("members.approve"))
 
   function patch(value: Partial<MembershipApprovalSetting>) {
     setForm((current) => current ? { ...current, ...value } : current)
@@ -93,8 +106,15 @@ export function MembershipApprovalSettingsCard() {
           />
         </div>
 
-        {requiresApproval && (
+        {needsFallbackApprover && (
           <div className="mt-5 space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+            {!requiresApproval && (
+              <AlertBanner
+                tone="info"
+                title="Fallback approval required"
+                description="Automatic approval is limited to encoders with members.auto_approve. Registrations from other encoders will be sent to the approver configured below."
+              />
+            )}
             <div className="space-y-1.5">
               <Label>Approver Assignment Type</Label>
               <CommandSelect
@@ -133,7 +153,7 @@ export function MembershipApprovalSettingsCard() {
                   value={form.defaultApproverRoleId ?? ""}
                   onValueChange={(value) => patch({ defaultApproverRoleId: value })}
                   placeholder="Select a role"
-                  options={roles.filter((role) => role.status === "Active").map((role) => ({ value: role.id, label: role.name }))}
+                  options={approvingRoles.map((role) => ({ value: role.id, label: role.name }))}
                 />
               </div>
             )}
@@ -152,8 +172,8 @@ export function MembershipApprovalSettingsCard() {
           </div>
         )}
 
-        {!requiresApproval && (
-          <AlertBanner className="mt-5" tone="info" title="Automatic approval enabled" description="Valid registrations and imports are immediately Approved + Active when the encoder has members.auto_approve permission; otherwise they fall back to the configured workflow." />
+        {!needsFallbackApprover && (
+          <AlertBanner className="mt-5" tone="info" title="Automatic approval enabled" description="Valid manual registrations and imports are immediately approved and activated." />
         )}
       </div>
 
@@ -161,6 +181,40 @@ export function MembershipApprovalSettingsCard() {
         <Button onClick={() => mutation.mutate(form)} disabled={mutation.isPending}>
           {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />} Save Membership Approval Settings
         </Button>
+      </div>
+    </div>
+  )
+}
+
+function MembershipApprovalSettingsSkeleton() {
+  return (
+    <div className="space-y-5" aria-label="Loading membership approval settings" aria-busy="true">
+      <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+        <div className="mb-5 flex items-start gap-3 border-b border-border/40 pb-4">
+          <Skeleton className="size-5 shrink-0 rounded-md" />
+          <div className="w-full space-y-2">
+            <Skeleton className="h-5 w-72 max-w-full" />
+            <Skeleton className="h-3 w-[30rem] max-w-full" />
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div key={index} className="flex items-start justify-between gap-4 rounded-xl border border-border/60 p-4">
+              <div className="w-full space-y-2">
+                <Skeleton className="h-4 w-48 max-w-full" />
+                <Skeleton className="h-3 w-11/12" />
+              </div>
+              <Skeleton className="h-5 w-9 shrink-0 rounded-full" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 space-y-3 rounded-xl border border-primary/10 p-4">
+          <Skeleton className="h-3 w-36" />
+          <Skeleton className="h-9 w-full rounded-md" />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Skeleton className="h-9 w-64 rounded-md" />
       </div>
     </div>
   )

@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-r
 import { Button } from "@/components/ui/button"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import type { PaginationMeta } from "@/types"
+import { getSettings } from "@/services/settings.service"
 
 interface PaginationProps {
   meta: PaginationMeta
@@ -14,6 +15,28 @@ export function Pagination({ meta, onPageChange, onPerPageChange, perPageOptions
   const { currentPage, perPage, totalRecords, totalPages } = meta
   const start = totalRecords === 0 ? 0 : (currentPage - 1) * perPage + 1
   const end = Math.min(currentPage * perPage, totalRecords)
+  const appliedDefault = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!appliedDefault.current) {
+      appliedDefault.current = true
+      const configured = getSettings().general.recordsPerPage
+      if (perPageOptions.includes(configured) && configured !== perPage) {
+        onPerPageChange(configured)
+      }
+    }
+
+    function handleSettingsChanged(event: Event) {
+      const detail = (event as CustomEvent<{ section?: string; value?: { recordsPerPage?: number } }>).detail
+      const configured = detail?.value?.recordsPerPage
+      if (detail?.section === "general" && configured && perPageOptions.includes(configured)) {
+        onPerPageChange(configured)
+      }
+    }
+
+    window.addEventListener("gcgea:settings-changed", handleSettingsChanged)
+    return () => window.removeEventListener("gcgea:settings-changed", handleSettingsChanged)
+  }, [onPerPageChange, perPage, perPageOptions])
 
   return (
     <div className="flex flex-col-reverse items-center justify-between gap-4 border-t border-border/60 bg-muted/5 px-6 py-3.5 sm:flex-row transition-all duration-200">
@@ -85,3 +108,4 @@ export function Pagination({ meta, onPageChange, onPerPageChange, perPageOptions
     </div>
   )
 }
+import * as React from "react"

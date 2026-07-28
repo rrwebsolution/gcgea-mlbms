@@ -4,6 +4,7 @@ import { ORGANIZATION } from "@/constants/organization"
 import { cn } from "@/lib/utils"
 import { getAppearance } from "@/services/settings.service"
 import type { AppearanceSettings } from "@/types"
+import { useOrganizationSettings } from "@/hooks/useOrganizationSettings"
 
 interface BrandLogoProps {
   className?: string
@@ -15,6 +16,7 @@ interface BrandLogoProps {
  * never breaks the surrounding layout.
  */
 export function BrandLogo({ className }: BrandLogoProps) {
+  const organization = useOrganizationSettings()
   const [failed, setFailed] = React.useState(false)
   const [logoUrl, setLogoUrl] = React.useState(() => getAppearance().sidebarLogoUrl || ORGANIZATION.logoPath)
 
@@ -39,7 +41,7 @@ export function BrandLogo({ className }: BrandLogoProps) {
   return (
     <img
       src={logoUrl}
-      alt={`${ORGANIZATION.acronym} logo`}
+      alt={`${organization.acronym} logo`}
       className={cn("shrink-0 object-contain", className)}
       onError={() => setFailed(true)}
     />

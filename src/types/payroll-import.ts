@@ -8,6 +8,7 @@
 export type PayrollTargetField =
   | "member_number"
   | "employee_number"
+  | "office_name"
   | "name"
   | "loan_remarks"
   | "principal"
@@ -22,15 +23,26 @@ export type PayrollTargetField =
   | "interest_balance_current"
   | "total_balance_current"
 
+/** Mapping values are spreadsheet column letters (e.g. "C"), not header text — a
+ * sheet can have two columns sharing identical header text (e.g. a loan's
+ * original "Principal" amount and a separate "Principal" column for this
+ * month's actual payment further right), so header text alone can't be a
+ * unique key. */
 export type PayrollColumnMapping = Partial<Record<PayrollTargetField, string | null>>
+
+export interface PayrollUploadColumn {
+  /** Spreadsheet column letter, e.g. "C" — the stable identifier; label text may repeat across columns. */
+  column: string
+  label: string
+}
 
 export interface PayrollUploadResponse {
   token: string
   targetFields: Record<PayrollTargetField, string>
   requiredFields: PayrollTargetField[]
-  headers: string[]
+  headers: PayrollUploadColumn[]
   detectedMapping: PayrollColumnMapping
-  unmatchedHeaders: string[]
+  unmatchedHeaders: PayrollUploadColumn[]
   sampleRows: Record<string, string | number | null>[]
   totalRows: number
   sheetNames: string[]

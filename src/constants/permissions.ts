@@ -182,6 +182,28 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
     ],
   },
   {
+    group: "annual_budgets",
+    label: "Annual Budgets",
+    permissions: [
+      p("annual_budgets.view", "View Annual Budgets", "annual_budgets", "View annual budget lists and details"),
+      p("annual_budgets.manage", "Manage Annual Budgets", "annual_budgets", "Create and edit annual budget drafts"),
+      p("annual_budgets.submit", "Submit Annual Budgets", "annual_budgets", "Submit annual budgets for approval"),
+      p("annual_budgets.approve", "Approve Annual Budgets", "annual_budgets", "Approve, reject, or return annual budgets"),
+    ],
+  },
+  {
+    group: "disbursements",
+    label: "Disbursements",
+    permissions: [
+      p("disbursements.view", "View Disbursements", "disbursements", "View disbursement records and reports"),
+      p("disbursements.manage", "Manage Disbursements", "disbursements", "Create and edit disbursement drafts"),
+      p("disbursements.submit", "Submit Disbursements", "disbursements", "Submit disbursements for approval"),
+      p("disbursements.approve", "Approve Disbursements", "disbursements", "Approve, reject, or return disbursements"),
+      p("disbursements.pay", "Pay Disbursements", "disbursements", "Mark approved disbursements as paid"),
+      p("disbursements.void", "Void Disbursements", "disbursements", "Void paid disbursements"),
+    ],
+  },
+  {
     group: "drafts",
     label: "Drafts",
     permissions: [
@@ -382,6 +404,8 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "payroll.bulk.view", "payroll.bulk.create", "payroll.bulk.edit", "payroll.bulk.post",
         "payroll.import.view", "payroll.import.rollback", "payroll.history.view",
         "deduction_types.view", "deductions.view", "deductions.void",
+        "annual_budgets.view", "annual_budgets.manage", "annual_budgets.submit",
+        "disbursements.view", "disbursements.manage", "disbursements.submit", "disbursements.pay", "disbursements.void",
       ]
     case "Benefits Officer":
       return [
@@ -402,6 +426,8 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "benefits.view", "benefits.review", "benefits.approve", "benefits.reject",
         "benefits.print", "benefits.export",
         "reports.view", "reports.export", "reports.print", "reports.loan", "reports.benefit",
+        "annual_budgets.view", "annual_budgets.approve",
+        "disbursements.view", "disbursements.approve",
       ]
     case "Auditor / Viewer":
       return Array.from(new Set([...VIEW_ONLY_PERMISSION_CODES, "audit_logs.view", "audit_logs.export", "drafts.view_all"]))

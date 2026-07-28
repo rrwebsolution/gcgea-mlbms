@@ -3,6 +3,7 @@ import { api, getPaginated } from "@/lib/api"
 
 export interface MemberListParams extends PaginationParams {
   office?: string
+  offices?: string[]
   sex?: string
   membershipStatus?: string
   retireeStatus?: string

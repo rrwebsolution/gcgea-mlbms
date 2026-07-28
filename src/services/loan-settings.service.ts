@@ -19,17 +19,7 @@ export function getLoanSettingsSync(): LoanSettings | null {
   return cachedLoanSettings
 }
 
-export type UpdateLoanSettingsInput = Pick<
-  LoanSettings,
-  | "minimumMembershipMonths"
-  | "requirePaidContributions"
-  | "minimumPaidContributionMonths"
-  | "requiredMonthlyDuesAmount"
-  | "requireConsecutiveContributionMonths"
-  | "applyContributionRuleToReloan"
-  | "defaultPenaltyRate"
-  | "reloanPolicy"
->
+export type UpdateLoanSettingsInput = LoanSettings
 
 export async function updateLoanSettings(input: UpdateLoanSettingsInput): Promise<LoanSettings> {
   const { reloanPolicy, ...settings } = input

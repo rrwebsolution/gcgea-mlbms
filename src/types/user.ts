@@ -14,6 +14,7 @@ export interface AuthUser {
   avatarUrl?: string
   status: UserStatus
   lastLoginAt?: string
+  requirePasswordChange: boolean
 }
 
 export interface SystemUser {

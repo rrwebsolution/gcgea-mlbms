@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { listLoans, deleteLoanApplication } from "@/services/loans.service"
 import { LOAN_STATUS_TONE } from "@/constants/status"
-import { formatCurrency, formatDateShort } from "@/utils/format"
+import { formatCurrency, formatMonthYear } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
 import type { LoanApplication, LoanApplicationType, LoanStatus } from "@/types"
 
@@ -97,7 +97,7 @@ export default function LoansPage({ presetStatus, overdueOnly, activeOnly, title
     { accessorKey: "applicationNumber", header: "Application #", cell: ({ row }) => (
         <Link to={`/loans/${row.original.id}`} className="font-medium text-primary hover:underline">{row.original.applicationNumber}</Link>
       ) },
-    { accessorKey: "applicationDate", header: "Application Date", cell: ({ row }) => formatDateShort(row.original.applicationDate) },
+    { accessorKey: "applicationDate", header: "Started Application", cell: ({ row }) => formatMonthYear(row.original.applicationDate) },
     { accessorKey: "memberName", header: "Member Name" },
     { accessorKey: "officeName", header: "Office" },
     { accessorKey: "loanTypeName", header: "Loan Type" },
@@ -110,12 +110,27 @@ export default function LoansPage({ presetStatus, overdueOnly, activeOnly, title
         <StatusBadge label="New Loan" tone="neutral" />
       ),
     },
-    { id: "previousLoanReference", header: "Previous Loan Reference", cell: ({ row }) => row.original.previousLoanReference ?? "—" },
+    {
+      id: "previousLoanReference",
+      header: "Previous Loan Reference",
+      cell: ({ row }) => row.original.previousLoanReference && row.original.previousLoanId ? (
+        <Link to={`/loans/${row.original.previousLoanId}`} className="font-medium text-primary hover:underline">
+          {row.original.previousLoanReference}
+        </Link>
+      ) : "—",
+    },
     { accessorKey: "requestedAmount", header: "Requested Amount", cell: ({ row }) => formatCurrency(row.original.requestedAmount) },
     { accessorKey: "monthlyAmortization", header: "Monthly Amortization", cell: ({ row }) => formatCurrency(row.original.monthlyAmortization) },
     { accessorKey: "outstandingBalance", header: "Outstanding Balance", cell: ({ row }) => formatCurrency(row.original.outstandingBalance) },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={LOAN_STATUS_TONE[row.original.status]} /> },
-    { accessorKey: "assignedOfficer", header: "Assigned Officer" },
+    {
+      accessorKey: "assignedOfficer",
+      header: "Assigned Officer",
+      cell: ({ row }) => {
+        const officer = row.original.assignedOfficer || "Unassigned"
+        return officer === "Unassigned" ? <StatusBadge label="Unassigned" tone="neutral" /> : officer
+      },
+    },
     {
       id: "actions",
       header: "Actions",

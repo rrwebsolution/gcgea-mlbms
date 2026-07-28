@@ -86,6 +86,7 @@ export interface BenefitApplication {
   /** Which wizard step a draft was last saved on (Create Benefit Application page). */
   draftCurrentStep?: number
   releaseDate?: string
+  releaseReferenceNumber?: string
   rejectionReason?: string
   cancellationReason?: string
   remarks?: string

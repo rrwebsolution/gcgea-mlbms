@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
   Bell,
@@ -12,6 +13,7 @@ import {
   Landmark,
   Loader2,
   Palette,
+  ReceiptText,
   RotateCcw,
   Save,
   Settings2,
@@ -64,9 +66,13 @@ import { api } from "@/lib/api"
 import { formatDateTime } from "@/utils/format"
 import type { AppearanceSettings, BackupHistoryEntry, NumberingFormatConfig, ReportCategoryTemplate, ReportExportDesign, ReportTemplateCategory, ReportTemplatePreset, ReportTextStyle, SystemSettings } from "@/types"
 import { MembershipApprovalSettingsCard } from "@/features/settings/components/MembershipApprovalSettingsCard"
+import { ContributionFundAllocationCard } from "@/features/settings/components/ContributionFundAllocationCard"
+import { BenefitComputationSettingsCard, type BenefitComputationSettingsHandle } from "@/features/settings/components/BenefitComputationSettingsCard"
+import { LoanComputationSettingsCard, type LoanComputationSettingsHandle } from "@/features/settings/components/LoanComputationSettingsCard"
 import { EmploymentStatusesSettings } from "@/features/settings/components/EmploymentStatusesSettings"
+import DeductionTypesPage from "@/features/payroll/pages/DeductionTypesPage"
 
-type SectionKey = "general" | "organization" | "membership" | "employmentStatuses" | "numbering" | "loan" | "contribution" | "benefit" | "notification" | "security" | "reportTemplate" | "backup" | "appearance"
+type SectionKey = "general" | "organization" | "membership" | "employmentStatuses" | "numbering" | "loan" | "contribution" | "deductionTypes" | "benefit" | "notification" | "security" | "reportTemplate" | "backup" | "appearance"
 
 const REPORT_CATEGORIES: { key: ReportTemplateCategory; label: string }[] = [
   { key: "member", label: "Member Reports" },
@@ -97,6 +103,7 @@ const SECTIONS: { key: SectionKey; label: string; icon: typeof Settings2 }[] = [
   { key: "numbering", label: "Numbering Formats", icon: Hash },
   { key: "loan", label: "Loan Settings", icon: Landmark },
   { key: "contribution", label: "Contribution Settings", icon: Wallet },
+  { key: "deductionTypes", label: "Deduction Types", icon: ReceiptText },
   { key: "benefit", label: "Benefit Settings", icon: Gift },
   { key: "notification", label: "Notification Settings", icon: Bell },
   { key: "security", label: "Security Settings", icon: Shield },
@@ -164,7 +171,13 @@ function SectionShell({
 
 export default function SettingsPage() {
   const { user } = useAuth()
-  const [active, setActive] = React.useState<SectionKey>("general")
+  const [searchParams] = useSearchParams()
+  const requestedSection = searchParams.get("section")
+  const [active, setActive] = React.useState<SectionKey>(
+    SECTIONS.some((section) => section.key === requestedSection)
+      ? requestedSection as SectionKey
+      : "general"
+  )
   const [reportCategory, setReportCategory] = React.useState<ReportTemplateCategory>("member")
   const [reportFormat, setReportFormat] = React.useState<"pdf" | "excel">("pdf")
   const [editorZoom, setEditorZoom] = React.useState(100)
@@ -183,6 +196,8 @@ export default function SettingsPage() {
   const [isCreatingBackup, setIsCreatingBackup] = React.useState(false)
   const [deleteBackupId, setDeleteBackupId] = React.useState<string | null>(null)
   const restoreInputRef = React.useRef<HTMLInputElement>(null)
+  const benefitComputationRef = React.useRef<BenefitComputationSettingsHandle>(null)
+  const loanComputationRef = React.useRef<LoanComputationSettingsHandle>(null)
   const currentReportDesign = reportFormat === "pdf"
     ? settings.reportTemplate.categoryTemplates[reportCategory]
     : settings.reportTemplate.categoryTemplates[reportCategory].excelTemplate
@@ -390,31 +405,109 @@ export default function SettingsPage() {
     reader.readAsDataURL(file)
   }
 
+  function uploadSidebarFooterLogo(side: "left" | "right", file?: File) {
+    if (!file) return
+    if (!["image/png", "image/jpeg", "image/webp", "image/svg+xml"].includes(file.type)) {
+      toast.error("Please select a PNG, JPG, WebP, or SVG logo.")
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Sidebar footer logo must not exceed 2 MB.")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => setAppearance((prev) => ({
+      ...prev,
+      [side === "left" ? "sidebarFooterLeftLogoUrl" : "sidebarFooterRightLogoUrl"]: String(reader.result),
+    }))
+    reader.readAsDataURL(file)
+  }
+
+  async function uploadOrganizationAsset(kind: "logo" | "seal", file?: File) {
+    if (!file) return
+    if (!["image/png", "image/jpeg", "image/webp", "image/svg+xml"].includes(file.type)) {
+      toast.error("Please select a PNG, JPG, WebP, or SVG image.")
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must not exceed 2 MB.")
+      return
+    }
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(new Error("Unable to read the selected image."))
+        reader.readAsDataURL(file)
+      })
+      const nextOrganization = {
+        ...settings.organization,
+        [kind === "logo" ? "logoFileName" : "citySealFileName"]: file.name,
+      }
+      const nextAppearance = {
+        ...appearance,
+        ...(kind === "logo"
+          ? { sidebarLogoUrl: dataUrl, sidebarFooterLeftLogoUrl: dataUrl }
+          : { sidebarFooterRightLogoUrl: dataUrl }),
+      }
+      const nextReportTemplate = {
+        ...settings.reportTemplate,
+        [kind === "logo" ? "leftLogo" : "rightLogo"]: dataUrl,
+      }
+
+      await Promise.all([
+        saveSettingsSection("organization", nextOrganization),
+        saveSettingsSection("reportTemplate", nextReportTemplate),
+        saveAppearance(nextAppearance),
+      ])
+      setSettings((current) => ({
+        ...current,
+        organization: nextOrganization,
+        reportTemplate: nextReportTemplate,
+      }))
+      setAppearance(nextAppearance)
+      applyAppearanceTheme(nextAppearance)
+      toast.success(kind === "logo" ? "Organization logo updated." : "City seal updated.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to upload the image.")
+    }
+  }
+
   function applyAppearance(value: AppearanceSettings) {
     applyAppearanceTheme(value)
   }
 
   async function handleSave(key: SectionKey) {
-    if (key === "membership" || key === "employmentStatuses") return
+    if (key === "membership" || key === "employmentStatuses" || key === "deductionTypes") return
     setIsSaving(true)
     try {
       if (key === "appearance") {
         await saveAppearance(appearance)
         applyAppearance(appearance)
       } else if (key === "loan") {
+        await updateLoanSettings(settings.loan)
         await Promise.all([
           saveSettingsSection(key, settings.loan),
-          updateLoanSettings({
-            minimumMembershipMonths: settings.loan.minimumMembershipMonths,
-            requirePaidContributions: settings.loan.requirePaidContributions,
-            minimumPaidContributionMonths: settings.loan.minimumPaidContributionMonths,
-            requiredMonthlyDuesAmount: settings.loan.requiredMonthlyDuesAmount,
-            requireConsecutiveContributionMonths: settings.loan.requireConsecutiveContributionMonths,
-            applyContributionRuleToReloan: settings.loan.applyContributionRuleToReloan,
-            defaultPenaltyRate: settings.loan.defaultPenaltyRate,
-            reloanPolicy: settings.loan.reloanPolicy,
-          }),
+          loanComputationRef.current?.save(),
         ])
+      } else if (key === "benefit") {
+        await Promise.all([
+          saveSettingsSection(key, settings.benefit),
+          benefitComputationRef.current?.save(),
+        ])
+      } else if (key === "organization") {
+        const syncedReportTemplate = {
+          ...settings.reportTemplate,
+          organizationLine: settings.organization.organizationName,
+          acronymLine: `(${settings.organization.acronym})`,
+          addressLine: settings.organization.address,
+        }
+        await Promise.all([
+          saveSettingsSection("organization", settings.organization),
+          saveSettingsSection("reportTemplate", syncedReportTemplate),
+        ])
+        setSettings((current) => ({ ...current, reportTemplate: syncedReportTemplate }))
       } else {
         await saveSettingsSection(key, settings[key])
       }
@@ -427,7 +520,7 @@ export default function SettingsPage() {
   }
 
   async function handleReset(key: SectionKey) {
-    if (key === "membership" || key === "employmentStatuses") return
+    if (key === "membership" || key === "employmentStatuses" || key === "deductionTypes") return
     setIsSaving(true)
     try {
       if (key === "appearance") {
@@ -438,16 +531,7 @@ export default function SettingsPage() {
         const reset = await resetSettingsSection(key)
         setSettings(reset)
         if (key === "loan") {
-          await updateLoanSettings({
-            minimumMembershipMonths: reset.loan.minimumMembershipMonths,
-            requirePaidContributions: reset.loan.requirePaidContributions,
-            minimumPaidContributionMonths: reset.loan.minimumPaidContributionMonths,
-            requiredMonthlyDuesAmount: reset.loan.requiredMonthlyDuesAmount,
-            requireConsecutiveContributionMonths: reset.loan.requireConsecutiveContributionMonths,
-            applyContributionRuleToReloan: reset.loan.applyContributionRuleToReloan,
-            defaultPenaltyRate: reset.loan.defaultPenaltyRate,
-            reloanPolicy: reset.loan.reloanPolicy,
-          })
+          await updateLoanSettings(reset.loan)
         }
       }
       setResetConfirm(null)
@@ -530,16 +614,27 @@ export default function SettingsPage() {
 
         {/* Panel Form Sections */}
         <div className="min-w-0 flex-1">
+          {active === "deductionTypes" && <DeductionTypesPage embedded />}
           {active === "general" && (
             <SectionShell title="General Settings" description="Core system identity and localization defaults." onSave={() => handleSave("general")} onReset={() => setResetConfirm("general")} isSaving={isSaving}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="System Name"><Input value={settings.general.systemName} onChange={(e) => patch("general", { systemName: e.target.value })} className="h-10 text-sm" /></Field>
                 <Field label="System Short Name"><Input value={settings.general.systemShortName} onChange={(e) => patch("general", { systemShortName: e.target.value })} className="h-10 text-sm" /></Field>
-                <Field label="Default Language"><Input value={settings.general.defaultLanguage} onChange={(e) => patch("general", { defaultLanguage: e.target.value })} className="h-10 text-sm" /></Field>
-                <Field label="Time Zone"><Input value={settings.general.timeZone} onChange={(e) => patch("general", { timeZone: e.target.value })} className="h-10 text-sm" /></Field>
-                <Field label="Date Format"><Input value={settings.general.dateFormat} onChange={(e) => patch("general", { dateFormat: e.target.value })} className="h-10 text-sm" /></Field>
-                <Field label="Currency"><Input value={settings.general.currency} onChange={(e) => patch("general", { currency: e.target.value })} className="h-10 text-sm" /></Field>
-                <Field label="Fiscal Year Start"><Input value={settings.general.fiscalYearStart} onChange={(e) => patch("general", { fiscalYearStart: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Default Language">
+                  <CommandSelect className="w-full" value={settings.general.defaultLanguage} onValueChange={(v) => patch("general", { defaultLanguage: v })} options={["English", "Bisaya", "Tagalog"].map((value) => ({ value, label: value }))} hideSearch />
+                </Field>
+                <Field label="Time Zone">
+                  <CommandSelect className="w-full" value={settings.general.timeZone} onValueChange={(v) => patch("general", { timeZone: v })} options={[{ value: "Asia/Manila", label: "Asia/Manila (UTC+8)" }, { value: "Asia/Singapore", label: "Asia/Singapore (UTC+8)" }, { value: "UTC", label: "UTC" }]} hideSearch />
+                </Field>
+                <Field label="Date Format">
+                  <CommandSelect className="w-full" value={settings.general.dateFormat} onValueChange={(v) => patch("general", { dateFormat: v })} options={["MMMM d, yyyy", "MMM d, yyyy", "MM/dd/yyyy", "dd/MM/yyyy"].map((value) => ({ value, label: value }))} hideSearch />
+                </Field>
+                <Field label="Currency">
+                  <CommandSelect className="w-full" value={settings.general.currency} onValueChange={(v) => patch("general", { currency: v })} options={[{ value: "PHP", label: "PHP (₱)" }, { value: "USD", label: "USD ($)" }]} hideSearch />
+                </Field>
+                <Field label="Fiscal Year Start">
+                  <CommandSelect className="w-full" value={settings.general.fiscalYearStart} onValueChange={(v) => patch("general", { fiscalYearStart: v })} options={["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((value) => ({ value, label: value }))} hideSearch />
+                </Field>
                 <Field label="Records Per Page">
                   <CommandSelect
                     className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"
@@ -552,6 +647,14 @@ export default function SettingsPage() {
               </div>
               <div className="mt-4">
                 <ToggleField label="Maintenance Mode" description="Temporarily restrict access while performing system maintenance." checked={settings.general.maintenanceMode} onCheckedChange={(v) => patch("general", { maintenanceMode: v })} />
+                <div className="mt-3">
+                  <ToggleField
+                    label="Enable Alert Translations"
+                    description="Show English, Bisaya, and Tagalog controls on system alert messages."
+                    checked={settings.general.enableAlertTranslations ?? false}
+                    onCheckedChange={(value) => patch("general", { enableAlertTranslations: value })}
+                  />
+                </div>
               </div>
             </SectionShell>
           )}
@@ -573,8 +676,10 @@ export default function SettingsPage() {
               <div className="mt-5 rounded-xl border border-dashed border-border/80 p-5 text-center bg-muted/10 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground/80">Organization Logo &amp; City Seal uploads</p>
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" disabled title="File storage setup is required"><Upload className="size-3.5" /> Upload Logo</Button>
-                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" disabled title="File storage setup is required"><Upload className="size-3.5" /> Upload City Seal</Button>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => document.getElementById("organization-logo-input")?.click()}><Upload className="size-3.5" /> Upload Logo</Button>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => document.getElementById("organization-seal-input")?.click()}><Upload className="size-3.5" /> Upload City Seal</Button>
+                  <input id="organization-logo-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={(event) => { void uploadOrganizationAsset("logo", event.target.files?.[0]); event.target.value = "" }} />
+                  <input id="organization-seal-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={(event) => { void uploadOrganizationAsset("seal", event.target.files?.[0]); event.target.value = "" }} />
                 </div>
               </div>
               <div className="mt-5 rounded-xl border border-border bg-muted/20 p-5 text-center shadow-inner space-y-1">
@@ -606,15 +711,21 @@ export default function SettingsPage() {
           )}
 
           {active === "loan" && (
-            <SectionShell title="Loan Settings" description="Default policy values applied to new loan types, plus the backend-enforced eligibility floor." onSave={() => handleSave("loan")} onReset={() => setResetConfirm("loan")} isSaving={isSaving}>
+            <SectionShell title="Loan Settings" description="Global loan eligibility and transaction policies, plus the dedicated Solidarity Cash Assistance computation setup." onSave={() => handleSave("loan")} onReset={() => setResetConfirm("loan")} isSaving={isSaving}>
               <AlertBanner
                 tone="info"
-                title="Backend-enforced"
-                description="Minimum Membership Duration and the Reloan Policy below are read and enforced by the server (GET/PUT /loan-settings) — not hardcoded in any page."
+                title="Clear configuration ownership"
+                description="General product terms belong in Edit Loan Type. This page owns global eligibility/reloan policies and the Solidarity Cash Assistance computation table below."
                 className="mb-4"
               />
+              <div className="mb-4">
+                <h3 className="mb-1 font-heading text-sm font-bold tracking-tight text-foreground">Global Loan Policy</h3>
+                <p className="text-xs font-medium text-muted-foreground">
+                  These values apply across loan products. Interest method, product interest rate, processing fee, amounts, and product requirements are maintained per loan type.
+                </p>
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Minimum Membership Duration for Loan (months)">
+                <Field label="Global Minimum Membership Floor (months)">
                   <Input
                     type="number"
                     min={0}
@@ -623,20 +734,8 @@ export default function SettingsPage() {
                     className="h-10 text-sm"
                   />
                 </Field>
-                <Field label="Default Interest Method">
-                  <CommandSelect
-                    className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"
-                    value={settings.loan.defaultInterestMethod}
-                    onValueChange={(v) => patch("loan", { defaultInterestMethod: v })}
-                    options={["Flat Interest", "Diminishing Balance", "Zero Interest", "Custom"].map((m) => ({ value: m, label: m }))}
-                    hideSearch
-                  />
-                </Field>
-                <Field label="Default Interest Rate (%/mo)"><Input type="number" step="0.01" value={settings.loan.defaultInterestRate} onChange={(e) => patch("loan", { defaultInterestRate: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Default Processing Fee (₱)"><Input type="number" value={settings.loan.defaultProcessingFee} onChange={(e) => patch("loan", { defaultProcessingFee: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Default Penalty Rate (%)"><Input type="number" step="0.01" value={settings.loan.defaultPenaltyRate} onChange={(e) => patch("loan", { defaultPenaltyRate: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Grace Period (Days)"><Input type="number" value={settings.loan.gracePeriodDays} onChange={(e) => patch("loan", { gracePeriodDays: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Maximum Active Loans"><Input type="number" value={settings.loan.maximumActiveLoans} onChange={(e) => patch("loan", { maximumActiveLoans: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Default Penalty Rate (%)"><Input type="number" min={0} max={100} step="0.01" value={settings.loan.defaultPenaltyRate} onChange={(e) => patch("loan", { defaultPenaltyRate: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })} className="h-10 text-sm" /></Field>
+                <Field label="Grace Period (Days)"><Input type="number" min={0} max={365} value={settings.loan.gracePeriodDays} onChange={(e) => patch("loan", { gracePeriodDays: Math.min(365, Math.max(0, Number(e.target.value) || 0)) })} className="h-10 text-sm" /></Field>
                 <Field label="Default Payment Method">
                   <CommandSelect
                     className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"
@@ -646,7 +745,15 @@ export default function SettingsPage() {
                     hideSearch
                   />
                 </Field>
-                <Field label="Rounding Rule"><Input value={settings.loan.roundingRule} onChange={(e) => patch("loan", { roundingRule: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Rounding Rule">
+                  <CommandSelect
+                    className="h-10 w-full"
+                    value={settings.loan.roundingRule}
+                    onValueChange={(value) => patch("loan", { roundingRule: value })}
+                    options={["Nearest Centavo", "Nearest Peso", "Round Up", "Round Down"].map((value) => ({ value, label: value }))}
+                    hideSearch
+                  />
+                </Field>
               </div>
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="Allow Eligibility Override" checked={settings.loan.allowEligibilityOverride} onCheckedChange={(v) => patch("loan", { allowEligibilityOverride: v })} />
@@ -757,6 +864,8 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
+
+              <LoanComputationSettingsCard ref={loanComputationRef} />
             </SectionShell>
           )}
 
@@ -788,18 +897,30 @@ export default function SettingsPage() {
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="Allow Partial Contribution" checked={settings.contribution.allowPartialContribution} onCheckedChange={(v) => patch("contribution", { allowPartialContribution: v })} />
                 <ToggleField label="Allow Advance Contribution" checked={settings.contribution.allowAdvanceContribution} onCheckedChange={(v) => patch("contribution", { allowAdvanceContribution: v })} />
-                <ToggleField label="Payroll Import Enabled" checked={settings.contribution.payrollImportEnabled} onCheckedChange={(v) => patch("contribution", { payrollImportEnabled: v })} />
-                <ToggleField label="Require Payroll Reference" checked={settings.contribution.requirePayrollReference} onCheckedChange={(v) => patch("contribution", { requirePayrollReference: v })} />
                 <ToggleField label="Contribution Reminder Enabled" checked={settings.contribution.contributionReminderEnabled} onCheckedChange={(v) => patch("contribution", { contributionReminderEnabled: v })} />
+                <ToggleField label="Enable Automatic Fund Allocation" checked={settings.contribution.enableAutomaticFundAllocation} onCheckedChange={(v) => patch("contribution", { enableAutomaticFundAllocation: v })} />
+                <ToggleField label="Require Allocation Validation" checked={settings.contribution.requireAllocationValidation} onCheckedChange={(v) => patch("contribution", { requireAllocationValidation: v })} />
+                <ToggleField
+                  label="Require Resolved Voided Months"
+                  description="Block a member's contribution for a later period until any earlier voided period for them has been re-contributed."
+                  checked={settings.contribution.requireResolvedVoidedMonths}
+                  onCheckedChange={(v) => patch("contribution", { requireResolvedVoidedMonths: v })}
+                />
               </div>
+              <ContributionFundAllocationCard monthlyDues={settings.contribution.defaultMonthlyContribution} />
             </SectionShell>
           )}
 
           {active === "benefit" && (
-            <SectionShell title="Benefit Settings" description="Policy standards applied to benefits." onSave={() => handleSave("benefit")} onReset={() => setResetConfirm("benefit")} isSaving={isSaving}>
+            <SectionShell title="Benefit Settings" description="Global benefit workflow policies and the dedicated Core Benefits and Cash Pabaon computation setup." onSave={() => handleSave("benefit")} onReset={() => setResetConfirm("benefit")} isSaving={isSaving}>
+              <AlertBanner
+                tone="info"
+                title="Clear configuration ownership"
+                description="General product details, eligibility, documents, frequency, and approval requirements belong in Edit Benefit Type. This page owns global workflow policy and the managed computation tables below."
+                className="mb-4"
+              />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Default Approval Limit (₱)"><Input type="number" value={settings.benefit.defaultApprovalLimit} onChange={(e) => patch("benefit", { defaultApprovalLimit: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Default Frequency Limit"><Input value={settings.benefit.defaultFrequencyLimit} onChange={(e) => patch("benefit", { defaultFrequencyLimit: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Global Approval Threshold (₱)"><Input type="number" value={settings.benefit.defaultApprovalLimit} onChange={(e) => patch("benefit", { defaultApprovalLimit: Number(e.target.value) })} className="h-10 text-sm" /></Field>
                 <Field label="Benefit Year Reset Month"><Input value={settings.benefit.benefitYearResetMonth} onChange={(e) => patch("benefit", { benefitYearResetMonth: e.target.value })} className="h-10 text-sm" /></Field>
               </div>
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -809,6 +930,11 @@ export default function SettingsPage() {
                 <ToggleField label="Require Supporting Documents" checked={settings.benefit.requireSupportingDocuments} onCheckedChange={(v) => patch("benefit", { requireSupportingDocuments: v })} />
                 <ToggleField label="Allow Multiple Pending Applications" checked={settings.benefit.allowMultiplePendingApplications} onCheckedChange={(v) => patch("benefit", { allowMultiplePendingApplications: v })} />
               </div>
+              <BenefitComputationSettingsCard
+                ref={benefitComputationRef}
+                independentSpousalBenefitRights={settings.benefit.independentSpousalBenefitRights}
+                onIndependentSpousalBenefitRightsChange={(v) => patch("benefit", { independentSpousalBenefitRights: v })}
+              />
             </SectionShell>
           )}
 
@@ -1373,15 +1499,99 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+              <div className="mb-5 rounded-xl border border-border bg-muted/10 p-4">
+                <div className="mb-3">
+                  <Label className="text-sm font-semibold">Sidebar Footer Logos</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">Customize the two logos and labels displayed above the Logout button.</p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {([
+                    {
+                      side: "left" as const,
+                      title: "Left Logo",
+                      url: appearance.sidebarFooterLeftLogoUrl,
+                      label: appearance.sidebarFooterLeftLogoLabel,
+                      defaultUrl: "/logo.png",
+                      defaultLabel: "GCGEA",
+                    },
+                    {
+                      side: "right" as const,
+                      title: "Right Logo",
+                      url: appearance.sidebarFooterRightLogoUrl,
+                      label: appearance.sidebarFooterRightLogoLabel,
+                      defaultUrl: "/city-seal-logo.png",
+                      defaultLabel: "Gingoog City",
+                    },
+                  ]).map((item) => (
+                    <div key={item.side} className="rounded-lg border border-border/70 bg-background p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-14 shrink-0 items-center justify-center rounded-lg border border-border bg-sidebar p-1.5">
+                          <img src={item.url} alt={`${item.title} preview`} className="size-full object-contain" />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <Label className="text-xs font-semibold">{item.title} Label</Label>
+                          <Input
+                            value={item.label}
+                            maxLength={40}
+                            onChange={(event) => setAppearance((prev) => ({
+                              ...prev,
+                              [item.side === "left" ? "sidebarFooterLeftLogoLabel" : "sidebarFooterRightLogoLabel"]: event.target.value,
+                            }))}
+                            className="h-9 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`sidebar-footer-${item.side}-logo-input`)?.click()}>
+                          <Upload className="size-3.5" /> Choose Logo
+                        </Button>
+                        {(item.url !== item.defaultUrl || item.label !== item.defaultLabel) && (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setAppearance((prev) => ({
+                            ...prev,
+                            [item.side === "left" ? "sidebarFooterLeftLogoUrl" : "sidebarFooterRightLogoUrl"]: item.defaultUrl,
+                            [item.side === "left" ? "sidebarFooterLeftLogoLabel" : "sidebarFooterRightLogoLabel"]: item.defaultLabel,
+                          }))}>
+                            <RotateCcw className="size-3.5" /> Use Default
+                          </Button>
+                        )}
+                        <input
+                          id={`sidebar-footer-${item.side}-logo-input`}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                          className="hidden"
+                          onChange={(event) => {
+                            uploadSidebarFooterLogo(item.side, event.target.files?.[0])
+                            event.target.value = ""
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <ColorField label="Primary Color" value={appearance.primaryColor} onChange={(v) => setAppearance((prev) => ({ ...prev, primaryColor: v }))} />
                 <ColorField label="Secondary Color" value={appearance.secondaryColor} onChange={(v) => setAppearance((prev) => ({ ...prev, secondaryColor: v }))} />
                 <ColorField label="Accent Color" value={appearance.accentColor} onChange={(v) => setAppearance((prev) => ({ ...prev, accentColor: v }))} />
-                <ColorField label="Sidebar Color" value={appearance.sidebarColor} onChange={(v) => setAppearance((prev) => ({ ...prev, sidebarColor: v }))} />
+                <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sidebar Color</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Automatically follows the active light or dark theme.</p>
+                </div>
                 <ColorField label="Background Color" value={appearance.backgroundColor} onChange={(v) => setAppearance((prev) => ({ ...prev, backgroundColor: v }))} />
-                <ColorField label="Progress Color 1 (Start)" value={appearance.progressColorStart} onChange={(v) => setAppearance((prev) => ({ ...prev, progressColorStart: v }))} />
-                <ColorField label="Progress Color 2 (Middle)" value={appearance.progressColorMiddle} onChange={(v) => setAppearance((prev) => ({ ...prev, progressColorMiddle: v }))} />
-                <ColorField label="Progress Color 3 (End)" value={appearance.progressColorEnd} onChange={(v) => setAppearance((prev) => ({ ...prev, progressColorEnd: v }))} />
+                <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 sm:col-span-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Theme-aware Progress Colors</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold text-muted-foreground">Light: Blue</p>
+                      <div className="h-2.5 rounded-full" style={{ background: appearance.primaryColor }} />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold text-muted-foreground">Dark: White → Blue → White</p>
+                      <div className="h-2.5 rounded-full" style={{ background: `linear-gradient(90deg, #FFFFFF, ${appearance.primaryColor}, #FFFFFF)` }} />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Blue automatically follows the configured Primary Color.</p>
+                </div>
                 <Field label="Border Radius (px)"><Input type="number" value={appearance.borderRadius} onChange={(e) => setAppearance((prev) => ({ ...prev, borderRadius: Number(e.target.value) }))} className="h-10 text-sm" /></Field>
                 <Field label="Sidebar Style">
                   <CommandSelect
@@ -1431,7 +1641,11 @@ export default function SettingsPage() {
                     value={appearance.fontFamily}
                     onValueChange={(v) => setAppearance((prev) => ({ ...prev, fontFamily: v as AppearanceSettings["fontFamily"] }))}
                     options={[
-                      { value: "geist", label: "Geist (Default)" },
+                      { value: "century-gothic", label: "Century Gothic (Default)" },
+                      { value: "arial", label: "Arial" },
+                      { value: "calibri", label: "Calibri" },
+                      { value: "verdana", label: "Verdana" },
+                      { value: "geist", label: "Geist" },
                       { value: "system", label: "System Sans" },
                       { value: "serif", label: "Serif" },
                       { value: "monospace", label: "Monospace" },
@@ -1460,7 +1674,7 @@ export default function SettingsPage() {
               <div className="mt-6 rounded-2xl border border-border p-4 bg-muted/10" style={{ borderRadius: appearance.borderRadius }}>
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Theme Live Preview</p>
                 <div className="overflow-hidden border border-border/60 shadow-md" style={{ borderRadius: appearance.borderRadius }}>
-                  <div className="flex items-center justify-between px-4 py-3 text-xs font-semibold text-white shadow-sm" style={{ backgroundColor: appearance.sidebarColor }}>
+                  <div className="flex items-center justify-between bg-sidebar px-4 py-3 text-xs font-semibold text-sidebar-foreground shadow-sm">
                     <span>GCGEA-MLBMS Application Header</span>
                     <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ backgroundColor: appearance.accentColor, color: "#1a1200" }}>Admin role</span>
                   </div>
@@ -1525,19 +1739,19 @@ function NumberingFormatRow({ label, config, onChange }: { label: string; config
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-6 items-end">
         <div className="space-y-1.5 col-span-2 sm:col-span-1">
           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Prefix</Label>
-          <Input className="h-9 text-xs" value={config.prefix} onChange={(e) => onChange({ ...config, prefix: e.target.value })} placeholder="Prefix" />
+          <Input className="h-9 text-xs uppercase" maxLength={40} value={config.prefix} onChange={(e) => onChange({ ...config, prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9._-]/g, "") })} placeholder="Prefix" />
         </div>
         <div className="space-y-1.5">
           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Separator</Label>
-          <Input className="h-9 text-xs" value={config.separator} onChange={(e) => onChange({ ...config, separator: e.target.value })} placeholder="Separator" />
+          <Input className="h-9 text-xs" maxLength={3} value={config.separator} onChange={(e) => onChange({ ...config, separator: e.target.value.replace(/[^._/-]/g, "") })} placeholder="Separator" />
         </div>
         <div className="space-y-1.5">
           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Seq Length</Label>
-          <Input className="h-9 text-xs" type="number" value={config.sequenceLength} onChange={(e) => onChange({ ...config, sequenceLength: Number(e.target.value) })} placeholder="Sequence Length" />
+          <Input className="h-9 text-xs" type="number" min={3} max={12} value={config.sequenceLength} onChange={(e) => onChange({ ...config, sequenceLength: Math.min(12, Math.max(3, Number(e.target.value) || 3)) })} placeholder="Sequence Length" />
         </div>
         <div className="space-y-1.5">
           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Start Num</Label>
-          <Input className="h-9 text-xs" type="number" value={config.startingNumber} onChange={(e) => onChange({ ...config, startingNumber: Number(e.target.value) })} placeholder="Starting Number" />
+          <Input className="h-9 text-xs" type="number" min={0} max={999999999} value={config.startingNumber} onChange={(e) => onChange({ ...config, startingNumber: Math.min(999999999, Math.max(0, Number(e.target.value) || 0)) })} placeholder="Starting Number" />
         </div>
         <div className="flex h-9 items-center pb-1">
           <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground/90 cursor-pointer">

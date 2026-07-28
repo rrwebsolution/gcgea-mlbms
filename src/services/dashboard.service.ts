@@ -12,6 +12,7 @@ export interface DashboardSummary {
   pendingBenefitApplications: number
   benefitsReleased: number
   monthlyContributionsCollected: number
+  fundBalances: { fundId: string; fundName: string; balance: number }[]
   pendingReloanApplications: number
   reloansAwaitingReview: number
   approvedReloans: number

@@ -31,26 +31,31 @@ function NavLink({
   isChild?: boolean 
 }) {
   const Icon = item.icon
+  
   const link = (
     <Link
       to={item.path}
       className={cn(
-        "group flex items-center gap-2.5 rounded-lg py-2 transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-        isChild ? "px-3 text-[13px]" : "px-2.5 text-sm",
+        "group/link relative flex items-center gap-2.5 rounded-xl py-2 transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+        isChild ? "px-3 text-[13px]" : "px-3 text-sm",
         isActive
-          ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-sm shadow-sidebar-primary/5"
+          ? isChild
+            ? "bg-gold/15 font-semibold text-gold-foreground dark:text-gold shadow-2xs"
+            : "bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-sm shadow-sidebar-primary/10"
           : cn(
               "font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              isChild && "text-sidebar-foreground/70 font-normal hover:bg-sidebar-accent/80"
+              isChild && "text-sidebar-foreground/65 font-normal hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
             ),
-        collapsed && "justify-center px-0"
+        collapsed && "justify-center px-0 h-10 w-10 mx-auto"
       )}
     >
       {Icon && (
         <Icon 
           className={cn(
-            "shrink-0 transition-transform duration-200 group-hover:scale-105", 
-            isChild ? "size-4 opacity-80" : "size-4.5"
+            "shrink-0 transition-transform duration-200 group-hover/link:scale-110", 
+            isChild 
+              ? "size-4 opacity-80 group-hover/link:opacity-100" 
+              : "size-[18px]"
           )} 
         />
       )}
@@ -63,7 +68,9 @@ function NavLink({
   return (
     <Tooltip>
       <TooltipTrigger render={link} />
-      <TooltipContent side="right" className="font-medium">{item.label}</TooltipContent>
+      <TooltipContent side="right" className="font-semibold text-xs">
+        {item.label}
+      </TooltipContent>
     </Tooltip>
   )
 }
@@ -99,22 +106,26 @@ function NavGroup({ item, collapsed, pathname }: { item: NavItem; collapsed: boo
     <Collapsible open={open} onOpenChange={setOpen} className="w-full">
       <CollapsibleTrigger
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring text-left",
-          isGroupActive 
-            ? "bg-sidebar-accent/30 text-sidebar-foreground font-semibold" 
+          "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring text-left group/trigger",
+          isGroupActive
+            ? "bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm shadow-sidebar-primary/10"
             : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         )}
       >
-        {Icon && <Icon className="size-4.5 shrink-0 transition-transform duration-200" />}
+        {Icon && (
+          <Icon className="size-[18px] shrink-0 transition-transform duration-200 group-hover/trigger:scale-110" />
+        )}
         <span className="flex-1 truncate">{item.label}</span>
-        <ChevronDown 
+        <ChevronDown
           className={cn(
-            "size-3.5 shrink-0 text-sidebar-foreground/50 transition-transform duration-200 ease-in-out", 
-            open && "rotate-180 text-sidebar-foreground"
-          )} 
+            "size-3.5 shrink-0 transition-transform duration-200 ease-in-out",
+            isGroupActive ? "text-sidebar-primary-foreground/80" : "text-sidebar-foreground/45",
+            open && "rotate-180",
+            open && !isGroupActive && "text-sidebar-foreground"
+          )}
         />
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1 space-y-1 ml-4 border-l border-sidebar-border/40 pl-3 transition-all duration-300">
+      <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapse-up data-[state=open]:animate-collapse-down my-1 space-y-1 ml-4 border-l border-sidebar-border/50 pl-2.5">
         {visibleChildren.map((child) => (
           <NavLink key={child.path} item={child} collapsed={collapsed} isActive={pathname === child.path} isChild />
         ))}
@@ -129,7 +140,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: bool
   const visibleItems = NAV_ITEMS.filter((item) => isItemVisible(item, hasPermission, hasAnyPermission))
 
   return (
-    <nav className="flex flex-col gap-1 px-2.5" onClick={onNavigate}>
+    <nav className="flex flex-col gap-1.5 px-2" onClick={onNavigate}>
       {visibleItems.map((item) =>
         item.children ? (
           <NavGroup key={item.path} item={item} collapsed={collapsed} pathname={location.pathname} />

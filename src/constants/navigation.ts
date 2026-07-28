@@ -24,12 +24,8 @@ import {
   History,
   SlidersHorizontal,
   ClipboardCheck,
-  ReceiptText,
   Workflow,
-  Banknote,
-  SquarePen,
-  Rows3,
-  Upload,
+  // Upload, — icon for the currently-hidden "Payroll Import" nav item
   type LucideIcon,
 } from "lucide-react"
 
@@ -49,6 +45,8 @@ export const APPROVAL_NAV_PERMISSIONS: PermissionCode[] = [
   "loans.review", "loans.approve", "loans.release",
   "benefits.review", "benefits.approve", "benefits.release",
   "members.approve",
+  "annual_budgets.approve",
+  "disbursements.approve",
 ]
 
 export const NAV_ITEMS: NavItem[] = [
@@ -99,23 +97,27 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Create Loan", path: "/loans/new", icon: FilePlus2, permission: "loans.create" },
       { label: "Draft Applications", path: "/loans/drafts", icon: FileClock, permission: "loans.view" },
       { label: "Active Loans", path: "/loans/active", icon: BadgeCheck, permission: "loans.view" },
+      { label: "Import Existing Loans", path: "/loans/import", icon: UploadCloud, permission: "loan_payments.import" },
+      { label: "Loan Import History", path: "/loans/import-history", icon: History, permission: "loan_payments.import" },
       { label: "Loan Payments", path: "/loan-payments", icon: CreditCard, permission: "loan_payments.view" },
       { label: "Overdue Loans", path: "/loans/overdue", icon: AlertTriangle, permission: "loans.view" },
       { label: "Loan Types", path: "/loans/types", icon: Settings2, permission: "loans.view" },
     ],
   },
-  {
-    label: "Payroll Deductions",
-    path: "/payroll-deductions/manual-entry",
-    icon: Banknote,
-    children: [
-      { label: "Manual Entry", path: "/payroll-deductions/manual-entry", icon: SquarePen, permission: "payroll.manual.view" },
-      { label: "Bulk Entry", path: "/payroll-deductions/bulk-entry", icon: Rows3, permission: "payroll.bulk.view" },
-      { label: "Payroll Import", path: "/payroll-deductions/import", icon: Upload, permission: "payroll.import.view" },
-      { label: "Deduction Records", path: "/payroll-deductions/records", icon: ReceiptText, permission: "deductions.view" },
-      { label: "Payroll History", path: "/payroll-deductions/history", icon: History, permission: "payroll.history.view" },
-    ],
-  },
+  // {
+  //   label: "Payroll Deductions",
+  //   path: "/payroll-deductions/bulk-entry",
+  //   icon: Banknote,
+  //   children: [
+  //     { label: "Bulk Entry", path: "/payroll-deductions/bulk-entry", icon: Rows3, permission: "payroll.bulk.view" },
+  //     // Hidden — column-header detection for real-world client Excel files
+  //     // proved too unreliable in practice. Bulk Entry (loads real members and
+  //     // types amounts directly) replaces this workflow for now. Restore once
+  //     // the import's column mapping is solid for the client's actual files.
+  //     // { label: "Payroll Import", path: "/payroll-deductions/import", icon: Upload, permission: "payroll.import.view" },
+  //     { label: "Payroll History", path: "/payroll-deductions/history", icon: History, permission: "payroll.history.view" },
+  //   ],
+  // },
   {
     label: "Benefits",
     path: "/benefits",
@@ -136,6 +138,26 @@ export const NAV_ITEMS: NavItem[] = [
     anyOf: APPROVAL_NAV_PERMISSIONS,
   },
   {
+    label: "Financial Management",
+    path: "/financial/annual-budgets",
+    icon: Wallet,
+    permission: "annual_budgets.view",
+    children: [
+      {
+        label: "Annual Budgets",
+        path: "/financial/annual-budgets",
+        icon: Landmark,
+        permission: "annual_budgets.view",
+      },
+      {
+        label: "Disbursements",
+        path: "/financial/disbursements",
+        icon: CreditCard,
+        permission: "disbursements.view",
+      },
+    ],
+  },
+  {
     label: "Reports",
     path: "/reports",
     icon: BarChart3,
@@ -151,7 +173,6 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Users", path: "/admin/users", icon: ShieldCheck, permission: "users.view" },
       { label: "Roles & Permissions", path: "/admin/roles", icon: KeyRound, permission: "roles.view" },
       { label: "Approval Workflow", path: "/admin/approval-workflow", icon: Workflow, permission: "approval_workflow.view" },
-      { label: "Deduction Types", path: "/payroll/deduction-types", icon: ReceiptText, permission: "deduction_types.view" },
       { label: "Audit Logs", path: "/admin/audit-logs", icon: History, permission: "audit_logs.view" },
       { label: "System Settings", path: "/admin/settings", icon: Settings2, permission: "settings.view" },
     ],

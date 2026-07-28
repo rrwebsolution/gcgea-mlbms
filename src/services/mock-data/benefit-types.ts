@@ -12,3 +12,4 @@ export const MOCK_BENEFIT_TYPES: BenefitType[] = [
   { id: "bt-09", name: "Solidarity Assistance", description: "Mutual aid benefit funded through the solidarity assistance program.", defaultAmount: 15000, maximumAmount: 15000, prorationTiers: [], fyAmounts: [], eligibilityRequirements: "Active solidarity fund contributor", requiredMembershipMonths: 12, frequencyLimit: "Once", requiredDocuments: ["Solidarity Fund Enrollment Form", "Supporting Documents", "Valid ID"], approvalRequired: true, status: "Active" },
   { id: "bt-10", name: "Other Financial Assistance", description: "Catch-all benefit type for special cases approved by the board.", defaultAmount: 2000, maximumAmount: 10000, prorationTiers: [], fyAmounts: [], eligibilityRequirements: "Subject to board discretion", requiredMembershipMonths: 0, frequencyLimit: "Case-to-case", requiredDocuments: ["Board Resolution / Approval", "Valid ID"], approvalRequired: true, status: "Active" },
 ]
+

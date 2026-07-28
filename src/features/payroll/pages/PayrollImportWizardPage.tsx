@@ -12,10 +12,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CommandSelect } from "@/components/shared/CommandSelect"
+import { DataTable } from "@/components/shared/DataTable"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import type { ColumnDef } from "@tanstack/react-table"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
-import { SPREADSHEET_EXTENSIONS, SPREADSHEET_MIME_TYPES } from "@/lib/upload-validation"
+import { WORKBOOK_EXTENSIONS, WORKBOOK_MIME_TYPES } from "@/lib/upload-validation"
 import {
   uploadPayrollFile,
   selectPayrollSheet,
@@ -45,6 +47,13 @@ function num(value: string | number | null | undefined): number | undefined {
   if (value === null || value === undefined || value === "") return undefined
   const n = Number(value)
   return Number.isFinite(n) ? n : undefined
+}
+
+// `??` alone doesn't catch an empty string (a blank cell in the sheet maps to
+// "", not null) — without this, a blank cell rendered as nothing instead of
+// the "—" every other empty cell shows, looking like data silently vanished.
+function text(value: string | number | null | undefined): string {
+  return value != null && value !== "" ? String(value) : "—"
 }
 
 export default function PayrollImportWizardPage() {
@@ -171,6 +180,67 @@ export default function PayrollImportWizardPage() {
   // requirement is that there's at least one row actually worth importing.
   const canConfirmImport = importableRows.length > 0
 
+  const previewColumns: ColumnDef<PayrollImportRowResult, unknown>[] = [
+    { id: "member", header: "Member", enableSorting: false, cell: ({ row }) => row.original.memberName || text(row.original.data.name) },
+    { id: "office", header: "Office", enableSorting: false, cell: ({ row }) => text(row.original.data.office_name) },
+    { id: "loanStatus", header: "Loan Status", enableSorting: false, cell: ({ row }) => text(row.original.data.loan_remarks) },
+    {
+      id: "principal",
+      header: "Principal",
+      enableSorting: false,
+      cell: ({ row }) => (num(row.original.data.principal) != null ? formatCurrency(num(row.original.data.principal)!) : "—"),
+    },
+    {
+      id: "interest",
+      header: "Interest",
+      enableSorting: false,
+      cell: ({ row }) => (num(row.original.data.interest) != null ? formatCurrency(num(row.original.data.interest)!) : "—"),
+    },
+    {
+      id: "monthlyDues",
+      header: "Monthly Dues",
+      enableSorting: false,
+      cell: ({ row }) => (num(row.original.data.monthly_dues) != null ? formatCurrency(num(row.original.data.monthly_dues)!) : "—"),
+    },
+    {
+      id: "pabaon",
+      header: "Pabaon",
+      enableSorting: false,
+      cell: ({ row }) => (num(row.original.data.pabaon) != null ? formatCurrency(num(row.original.data.pabaon)!) : "—"),
+    },
+    {
+      id: "totalRemit",
+      header: "Total Remit",
+      enableSorting: false,
+      cell: ({ row }) => (num(row.original.data.total_remit) != null ? formatCurrency(num(row.original.data.total_remit)!) : "—"),
+    },
+    {
+      id: "loanBalance",
+      header: "Loan Balance",
+      enableSorting: false,
+      cell: ({ row }) =>
+        num(row.original.data.total_balance_current) != null ? formatCurrency(num(row.original.data.total_balance_current)!) : "—",
+    },
+    {
+      id: "validationStatus",
+      header: "Validation Status",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <>
+            {r.category === "Invalid" && !resolvedMatches[r.rowNumber] ? (
+              <StatusBadge label="No System Record" tone="neutral" />
+            ) : (
+              <StatusBadge label={r.category} tone={CATEGORY_TONE[r.category]} />
+            )}
+            {resolvedMatches[r.rowNumber] && <StatusBadge label="Resolved" tone="info" className="ml-1" />}
+          </>
+        )
+      },
+    },
+  ]
+
   async function handleConfirmImport() {
     if (!uploadResult || !user) return
     setIsCommitting(true)
@@ -246,9 +316,9 @@ export default function PayrollImportWizardPage() {
             <FileUploader
               key={fileResetKey}
               label="Payroll Deduction File"
-              description="Upload the payroll office's existing Excel file — no changes to its layout are required."
-              accept={SPREADSHEET_MIME_TYPES}
-              acceptExtensions={SPREADSHEET_EXTENSIONS}
+              description="Upload the payroll office's existing Excel or CSV file — no changes to its layout are required."
+              accept={WORKBOOK_MIME_TYPES}
+              acceptExtensions={WORKBOOK_EXTENSIONS}
               fileName={file?.name}
               status={isUploading ? "uploading" : "idle"}
               progress={uploadProgress}
@@ -329,7 +399,7 @@ export default function PayrollImportWizardPage() {
           </p>
           {uploadResult.unmatchedHeaders.length > 0 && (
             <p className="mb-3 text-xs text-muted-foreground">
-              Ignored columns (not used): {uploadResult.unmatchedHeaders.join(", ")}
+              Ignored columns (not used): {uploadResult.unmatchedHeaders.map((h) => `${h.label} (Col. ${h.column})`).join(", ")}
             </p>
           )}
           <div className="overflow-auto rounded-lg border border-border">
@@ -344,8 +414,8 @@ export default function PayrollImportWizardPage() {
               </TableHeader>
               <TableBody>
                 {(Object.keys(uploadResult.targetFields) as PayrollTargetField[]).map((field) => {
-                  const mappedHeader = mapping[field]
-                  const sample = mappedHeader ? uploadResult.sampleRows[0]?.[mappedHeader] : undefined
+                  const mappedColumn = mapping[field]
+                  const sample = mappedColumn ? uploadResult.sampleRows[0]?.[mappedColumn] : undefined
                   const required = uploadResult.requiredFields.includes(field)
                   return (
                     <TableRow key={field}>
@@ -357,7 +427,21 @@ export default function PayrollImportWizardPage() {
                           className="w-56"
                           value={mapping[field] ?? "__none__"}
                           onValueChange={(v) => setMapping((prev) => ({ ...prev, [field]: v === "__none__" ? null : v }))}
-                          options={[{ value: "__none__", label: "Do not import" }, ...uploadResult.headers.map((h) => ({ value: h, label: h }))]}
+                          options={[
+                            { value: "__none__", label: "Do not import" },
+                            // Two columns can share identical header text (e.g. a
+                            // loan's original "Principal" amount vs. this month's
+                            // actual "Principal" payment further right) — suffix
+                            // the column letter whenever a label isn't unique so
+                            // both remain distinguishable and selectable.
+                            ...uploadResult.headers.map((h) => ({
+                              value: h.column,
+                              label:
+                                uploadResult.headers.filter((x) => x.label === h.label).length > 1
+                                  ? `${h.label} (Col. ${h.column})`
+                                  : h.label,
+                            })),
+                          ]}
                         />
                       </TableCell>
                       <TableCell className="text-muted-foreground">{sample != null ? String(sample) : "—"}</TableCell>
@@ -405,44 +489,16 @@ export default function PayrollImportWizardPage() {
           <Button variant="outline" size="sm" onClick={() => setFilterCategory("All")} className="mb-3">
             Show All ({rows.length})
           </Button>
-          <div className="max-h-[28rem] overflow-auto rounded-lg border border-border">
-            <Table>
-              <TableHeader className="sticky top-0 bg-card">
-                <TableRow>
-                  <TableHead className="bg-card">Member</TableHead>
-                  <TableHead className="bg-card">Loan Status</TableHead>
-                  <TableHead className="bg-card">Principal</TableHead>
-                  <TableHead className="bg-card">Interest</TableHead>
-                  <TableHead className="bg-card">Monthly Dues</TableHead>
-                  <TableHead className="bg-card">Pabaon</TableHead>
-                  <TableHead className="bg-card">Total Remit</TableHead>
-                  <TableHead className="bg-card">Loan Balance</TableHead>
-                  <TableHead className="bg-card">Validation Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleRows.map((r) => (
-                  <TableRow key={r.rowNumber}>
-                    <TableCell>{r.memberName || String(r.data.name ?? "—")}</TableCell>
-                    <TableCell className="text-muted-foreground">{String(r.data.loan_remarks ?? "—")}</TableCell>
-                    <TableCell>{num(r.data.principal) != null ? formatCurrency(num(r.data.principal)!) : "—"}</TableCell>
-                    <TableCell>{num(r.data.interest) != null ? formatCurrency(num(r.data.interest)!) : "—"}</TableCell>
-                    <TableCell>{num(r.data.monthly_dues) != null ? formatCurrency(num(r.data.monthly_dues)!) : "—"}</TableCell>
-                    <TableCell>{num(r.data.pabaon) != null ? formatCurrency(num(r.data.pabaon)!) : "—"}</TableCell>
-                    <TableCell>{num(r.data.total_remit) != null ? formatCurrency(num(r.data.total_remit)!) : "—"}</TableCell>
-                    <TableCell>{num(r.data.total_balance_current) != null ? formatCurrency(num(r.data.total_balance_current)!) : "—"}</TableCell>
-                    <TableCell>
-                      {r.category === "Invalid" && !resolvedMatches[r.rowNumber] ? (
-                        <StatusBadge label="No System Record" tone="neutral" />
-                      ) : (
-                        <StatusBadge label={r.category} tone={CATEGORY_TONE[r.category]} />
-                      )}
-                      {resolvedMatches[r.rowNumber] && <StatusBadge label="Resolved" tone="info" className="ml-1" />}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <DataTable
+              columns={previewColumns}
+              data={visibleRows}
+              getRowId={(r) => String(r.rowNumber)}
+              enableColumnVisibility={false}
+              emptyTitle="No records match"
+              emptyDescription="Try adjusting your category filter."
+              maxHeight="max-h-[28rem]"
+            />
           </div>
           <div className="mt-4 flex justify-between">
             <Button variant="outline" onClick={() => setStep(3)}>

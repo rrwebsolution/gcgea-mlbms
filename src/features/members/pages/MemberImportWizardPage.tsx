@@ -1,20 +1,26 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { CheckCircle2, Download, FileSpreadsheet, Loader2, XCircle } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { AlertBanner } from "@/components/shared/AlertBanner"
 import { FileUploader } from "@/components/shared/FileUploader"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { WizardStepIndicator } from "@/components/shared/WizardStepIndicator"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { CommandSelect } from "@/components/shared/CommandSelect"
+import { DataTable } from "@/components/shared/DataTable"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import type { ColumnDef } from "@tanstack/react-table"
 import { WORKBOOK_EXTENSIONS, WORKBOOK_MIME_TYPES } from "@/lib/upload-validation"
+import type { ApiValidationError } from "@/lib/api"
 import {
   uploadMemberImportFile,
   selectMemberImportWorksheet,
@@ -25,7 +31,8 @@ import {
 } from "@/services/member-import.service"
 import { OfficeAliasResolutionPanel } from "@/features/members/components/OfficeAliasResolutionPanel"
 import { DuplicateComparisonTable } from "@/features/members/components/DuplicateComparisonTable"
-import { formatDateShort } from "@/utils/format"
+import { FixInvalidMemberRowDialog, type MemberRowEdit } from "@/features/members/components/FixInvalidMemberRowDialog"
+import { calculateAge, formatDateShort } from "@/utils/format"
 import type {
   MemberColumnMapping,
   MemberImportCommitResponse,
@@ -61,14 +68,13 @@ const CATEGORY_TONE: Record<MemberValidationCategory, "success" | "warning" | "d
   Invalid: "danger",
 }
 
-const ROWS_PER_PAGE = 10
-
 // Stable reference so useMemo/derived arrays below don't recompute every
 // render just because previewResult is still null (before Step 5).
 const EMPTY_ROWS: MemberImportRowResult[] = []
 
 export default function MemberImportWizardPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const [step, setStep] = React.useState(1)
 
@@ -92,10 +98,13 @@ export default function MemberImportWizardPage() {
   const [previewResult, setPreviewResult] = React.useState<MemberImportPreviewResponse | null>(null)
   const [filterCategory, setFilterCategory] = React.useState<MemberValidationCategory | "All">("All")
   const [searchTerm, setSearchTerm] = React.useState("")
-  const [page, setPage] = React.useState(1)
 
   // Shared row decisions: rowNumber -> 'create_new' | 'skip' | 'merge_into:{id}'
   const [resolutions, setResolutions] = React.useState<Record<number, string>>({})
+
+  // Corrections made to rows across the wizard (Step 5 fixes, Step 9 beneficiary edits, etc.) — partial since a row may only ever get some fields touched
+  const [rowEdits, setRowEdits] = React.useState<Record<number, Partial<MemberRowEdit>>>({})
+  const [fixDialogRow, setFixDialogRow] = React.useState<MemberImportRowResult | null>(null)
 
   // Step 7
   const [unresolvedOffices, setUnresolvedOffices] = React.useState<UnresolvedOfficeGroup[]>([])
@@ -106,6 +115,12 @@ export default function MemberImportWizardPage() {
   const [commitResult, setCommitResult] = React.useState<MemberImportCommitResponse | null>(null)
 
   const rows = previewResult?.rows ?? EMPTY_ROWS
+
+  function isRowFixed(r: MemberImportRowResult): boolean {
+    const edit = rowEdits[r.rowNumber]
+    if (!edit) return false
+    return Boolean(edit.first_name?.trim() && edit.last_name?.trim() && edit.birthdate?.trim())
+  }
 
   async function handleUpload() {
     if (!file) return
@@ -148,7 +163,7 @@ export default function MemberImportWizardPage() {
       setPreviewResult(result)
       setUnresolvedOffices(result.unresolvedOffices)
       setResolutions({})
-      setPage(1)
+      setRowEdits({})
       setStep(5)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Preview failed.")
@@ -157,22 +172,35 @@ export default function MemberImportWizardPage() {
     }
   }
 
-  async function refreshPreview() {
-    if (!uploadResult) return
-    const result = await previewMemberImport(uploadResult.token, mapping)
-    setPreviewResult(result)
-    setUnresolvedOffices(result.unresolvedOffices)
-  }
-
   async function handleOfficeResolve(input: Parameters<typeof resolveMemberImportOffice>[1]) {
     if (!uploadResult) return
     try {
       const result = await resolveMemberImportOffice(uploadResult.token, input)
+      // Not refetching /preview here on purpose: that endpoint deletes and
+      // re-validates every row from scratch on the backend, which only
+      // re-resolves an office via a saved alias or exact name match. If
+      // "Remember this mapping" was left unchecked (or the match doesn't
+      // round-trip through alias lookup), that silently undoes the direct
+      // row resolution this endpoint just applied and Continue stays stuck
+      // disabled with no visible error. This response's unresolvedOffices
+      // reflects a direct, unconditional row write — trust it instead.
       setUnresolvedOffices(result.unresolvedOffices)
-      await refreshPreview()
+      // A "Create New Office" resolution adds a row to the offices table —
+      // invalidate so every OfficeCommandSelect (other unresolved groups on
+      // this same screen, the Fix Invalid Record dialog, etc.) picks it up
+      // as a selectable match right away instead of showing stale cached data.
+      queryClient.invalidateQueries({ queryKey: ["offices"] })
+      queryClient.invalidateQueries({ queryKey: ["offices", "all"] })
       toast.success(`Office mapping applied to ${result.rowsResolved} row(s).`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not resolve this office.")
+      const fieldErrors = (err as ApiValidationError)?.errors
+      const detail = fieldErrors ? Object.values(fieldErrors).flat().join(" ") : undefined
+      toast.error(detail || (err instanceof Error ? err.message : "Could not resolve this office."))
+      // Rethrow so OfficeAliasResolutionPanel's submit handler knows this
+      // failed (e.g. duplicate office code/name) and keeps the form open
+      // instead of marking the group "Resolved" — otherwise there is no way
+      // to retry with a different code or switch to "Match Existing Office".
+      throw err
     }
   }
 
@@ -180,7 +208,7 @@ export default function MemberImportWizardPage() {
     if (!uploadResult) return
     setIsCommitting(true)
     try {
-      const result = await commitMemberImport(uploadResult.token, resolutions)
+      const result = await commitMemberImport(uploadResult.token, resolutions, rowEdits)
       setCommitResult(result)
       setStep(12)
       toast.success(
@@ -206,8 +234,9 @@ export default function MemberImportWizardPage() {
     setPreviewResult(null)
     setFilterCategory("All")
     setSearchTerm("")
-    setPage(1)
     setResolutions({})
+    setRowEdits({})
+    setFixDialogRow(null)
     setUnresolvedOffices([])
     setConfirmChecked(false)
     setCommitResult(null)
@@ -215,13 +244,22 @@ export default function MemberImportWizardPage() {
 
   const summaryCounts = React.useMemo(() => {
     const counts: Record<MemberValidationCategory, number> = { New: 0, Exact: 0, Probable: 0, Possible: 0, Invalid: 0 }
-    for (const r of rows) counts[r.category]++
+    for (const r of rows) {
+      if (r.category === "Invalid" && isRowFixed(r)) continue
+      counts[r.category]++
+    }
     return counts
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, rowEdits])
+
+  // No positions master list exists in the backend — options come from distinct
+  // values already present in this worksheet so the picker still has something useful.
+  const positionOptions = React.useMemo(() => {
+    const values = new Set<string>()
+    for (const r of rows) if (r.data.position) values.add(r.data.position)
+    return Array.from(values).sort((a, b) => a.localeCompare(b))
   }, [rows])
 
-  // Search always runs against the full `rows` array (every record in this
-  // worksheet, already loaded client-side from the preview response) — not
-  // `pagedRows` — so it finds matches on any page, not just the one showing.
   const normalizedSearch = searchTerm.trim().toLowerCase()
   const searchedRows = normalizedSearch
     ? rows.filter((r) => {
@@ -232,20 +270,125 @@ export default function MemberImportWizardPage() {
         return haystack.includes(normalizedSearch)
       })
     : rows
-  const visibleRows = filterCategory === "All" ? searchedRows : searchedRows.filter((r) => r.category === filterCategory)
-  const pagedRows = visibleRows.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE)
-  const totalPages = Math.max(1, Math.ceil(visibleRows.length / ROWS_PER_PAGE))
+  const visibleRows =
+    filterCategory === "All"
+      ? searchedRows
+      : filterCategory === "Invalid"
+        ? searchedRows.filter((r) => r.category === "Invalid" && !isRowFixed(r))
+        : searchedRows.filter((r) => r.category === filterCategory)
 
   const invalidRows = rows.filter((r) => r.category === "Invalid")
+  const unresolvedInvalidRows = invalidRows.filter((r) => !isRowFixed(r) && resolutions[r.rowNumber] !== "skip")
   const ambiguousRows = rows.filter((r) => ["Exact", "Probable", "Possible"].includes(r.category) && r.duplicateCandidates.length > 0)
   const unresolvedAmbiguous = ambiguousRows.filter((r) => !resolutions[r.rowNumber])
   const beneficiaryRows = rows.filter((r) => r.data.beneficiary_1 || r.data.beneficiary_2)
   const legacyLoanRows = rows.filter((r) => r.data.legacy_loan_status !== "No legacy loan information")
 
+  const previewColumns: ColumnDef<MemberImportRowResult, unknown>[] = [
+    { id: "row", header: "Row", enableSorting: false, cell: ({ row }) => row.original.rowNumber + 1 },
+    {
+      id: "fullName",
+      header: "Full Name",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const edit = rowEdits[row.original.rowNumber]
+        const firstName = edit?.first_name ?? row.original.data.first_name ?? ""
+        const middleName = edit?.middle_name ?? row.original.data.middle_name ?? ""
+        const lastName = edit?.last_name ?? row.original.data.last_name ?? ""
+        return `${firstName} ${middleName} ${lastName}`.replace(/\s+/g, " ").trim()
+      },
+    },
+    {
+      id: "office",
+      header: "Office",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const edit = rowEdits[row.original.rowNumber]
+        if (edit?.office_name_raw) return edit.office_name_raw
+        return row.original.data.resolved_office_name ?? row.original.data.office_name_raw ?? "—"
+      },
+    },
+    {
+      id: "position",
+      header: "Position",
+      enableSorting: false,
+      cell: ({ row }) => rowEdits[row.original.rowNumber]?.position || row.original.data.position || "—",
+    },
+    {
+      id: "birthdate",
+      header: "Birthdate",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const edit = rowEdits[row.original.rowNumber]
+        const birthdate = edit?.birthdate ?? row.original.data.birthdate
+        return birthdate ? formatDateShort(birthdate) : "—"
+      },
+    },
+    {
+      id: "age",
+      header: "Age",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const edit = rowEdits[row.original.rowNumber]
+        if (edit?.birthdate) return calculateAge(edit.birthdate)
+        return row.original.data.computed_age ?? "—"
+      },
+    },
+    {
+      id: "contact",
+      header: "Contact",
+      enableSorting: false,
+      cell: ({ row }) => rowEdits[row.original.rowNumber]?.cellphone_number || row.original.data.cellphone_number || "—",
+    },
+    { id: "sex", header: "Sex", enableSorting: false, cell: ({ row }) => row.original.data.sex ?? "—" },
+    {
+      id: "beneficiaries",
+      header: "Beneficiaries",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const edit = rowEdits[row.original.rowNumber]
+        const beneficiary1 = edit?.beneficiary_1 ?? row.original.data.beneficiary_1
+        const beneficiary2 = edit?.beneficiary_2 ?? row.original.data.beneficiary_2
+        return [beneficiary1, beneficiary2].filter(Boolean).length
+      },
+    },
+    {
+      id: "legacyLoan",
+      header: "Legacy Loan",
+      enableSorting: false,
+      cell: ({ row }) =>
+        row.original.data.legacy_loan_status === "No legacy loan information" ? "—" : row.original.data.legacy_loan_status,
+    },
+    {
+      id: "status",
+      header: "Status",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const r = row.original
+        if (r.category === "Invalid" && isRowFixed(r)) return <StatusBadge label="Fixed" tone="success" />
+        return <StatusBadge label={r.category} tone={CATEGORY_TONE[r.category]} />
+      },
+    },
+    {
+      id: "action",
+      header: "Action",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const r = row.original
+        if (r.category !== "Invalid") return "—"
+        return (
+          <Button variant="outline" size="sm" onClick={() => setFixDialogRow(r)}>
+            {isRowFixed(r) ? "Edit" : "Fix"}
+          </Button>
+        )
+      },
+    },
+  ]
+
   const excludedCount = Object.values(resolutions).filter((a) => a === "skip").length
   const importableCount = rows.filter((r) => {
     if (resolutions[r.rowNumber] === "skip") return false
-    if (r.category === "Invalid") return false
+    if (r.category === "Invalid" && !isRowFixed(r)) return false
     return true
   }).length
 
@@ -423,15 +566,44 @@ export default function MemberImportWizardPage() {
       {step === 5 && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold text-foreground">Step 5 · Preview Records</h2>
+          {unresolvedInvalidRows.length > 0 && (
+            <AlertBanner
+              tone="danger"
+              title={`${unresolvedInvalidRows.length} invalid record(s) must be resolved before continuing`}
+              description={
+                <>
+                  Missing required fields (surname, first name, or birthdate). Search any of these names above to find
+                  them, then use Exclude in the table&apos;s Action column: {" "}
+                  {unresolvedInvalidRows.slice(0, 10).map((r, i) => (
+                    <span key={r.rowNumber}>
+                      {i > 0 && ", "}
+                      <strong>{`${r.data.first_name ?? ""} ${r.data.last_name ?? ""}`.trim() || `Row ${r.rowNumber + 1}`}</strong>
+                    </span>
+                  ))}
+                  {unresolvedInvalidRows.length > 10 && `, and ${unresolvedInvalidRows.length - 10} more`}.
+                </>
+              }
+              actions={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFilterCategory("Invalid")
+                    setSearchTerm("")
+                  }}
+                >
+                  Show Invalid Only
+                </Button>
+              }
+              className="mb-3"
+            />
+          )}
           <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
             {(Object.keys(summaryCounts) as MemberValidationCategory[]).map((cat) => (
               <button
                 key={cat}
                 type="button"
-                onClick={() => {
-                  setFilterCategory(cat)
-                  setPage(1)
-                }}
+                onClick={() => setFilterCategory(cat)}
                 className={`rounded-lg border p-3 text-left transition-colors ${filterCategory === cat ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
               >
                 <p className="text-xs text-muted-foreground">{cat}</p>
@@ -442,89 +614,48 @@ export default function MemberImportWizardPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              setFilterCategory("All")
-              setPage(1)
-            }}
+            onClick={() => setFilterCategory("All")}
             className="mb-3"
           >
             Show All ({rows.length})
           </Button>
           <SearchInput
             value={searchTerm}
-            onChange={(v) => {
-              setSearchTerm(v)
-              setPage(1)
-            }}
+            onChange={setSearchTerm}
             placeholder="Search by name, office, position, email, or contact number…"
             className="mb-3 max-w-sm"
           />
           {normalizedSearch && (
             <p className="mb-3 text-xs text-muted-foreground">
               {visibleRows.length} of {rows.length} record(s) match &quot;{searchTerm}&quot;
-              {filterCategory !== "All" ? ` in ${filterCategory}` : ""} — searched across every row in this worksheet, not just this page.
+              {filterCategory !== "All" ? ` in ${filterCategory}` : ""}
             </p>
           )}
-          <div className="max-h-[28rem] overflow-auto rounded-lg border border-border">
-            <Table>
-              <TableHeader className="sticky top-0 bg-card">
-                <TableRow>
-                  <TableHead className="bg-card">Row</TableHead>
-                  <TableHead className="bg-card">Full Name</TableHead>
-                  <TableHead className="bg-card">Office</TableHead>
-                  <TableHead className="bg-card">Position</TableHead>
-                  <TableHead className="bg-card">Birthdate</TableHead>
-                  <TableHead className="bg-card">Age</TableHead>
-                  <TableHead className="bg-card">Contact</TableHead>
-                  <TableHead className="bg-card">Sex</TableHead>
-                  <TableHead className="bg-card">Beneficiaries</TableHead>
-                  <TableHead className="bg-card">Legacy Loan</TableHead>
-                  <TableHead className="bg-card">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pagedRows.map((r) => (
-                  <TableRow key={r.rowNumber}>
-                    <TableCell>{r.rowNumber + 1}</TableCell>
-                    <TableCell>
-                      {r.data.first_name} {r.data.last_name}
-                    </TableCell>
-                    <TableCell>{r.data.resolved_office_name ?? r.data.office_name_raw ?? "—"}</TableCell>
-                    <TableCell>{r.data.position ?? "—"}</TableCell>
-                    <TableCell>{r.data.birthdate ? formatDateShort(r.data.birthdate) : "—"}</TableCell>
-                    <TableCell>{r.data.computed_age ?? "—"}</TableCell>
-                    <TableCell>{r.data.cellphone_number ?? "—"}</TableCell>
-                    <TableCell>{r.data.sex ?? "—"}</TableCell>
-                    <TableCell>{[r.data.beneficiary_1, r.data.beneficiary_2].filter(Boolean).length}</TableCell>
-                    <TableCell>{r.data.legacy_loan_status === "No legacy loan information" ? "—" : r.data.legacy_loan_status}</TableCell>
-                    <TableCell>
-                      <StatusBadge label={r.category} tone={CATEGORY_TONE[r.category]} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <DataTable
+              columns={previewColumns}
+              data={visibleRows}
+              getRowId={(r) => String(r.rowNumber)}
+              enableColumnVisibility={false}
+              emptyTitle="No records match"
+              emptyDescription="Try adjusting your search or category filter."
+              maxHeight="max-h-[28rem]"
+            />
           </div>
-          {totalPages > 1 && (
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                Page {page} of {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
-                </Button>
-                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
-          <div className="mt-4 flex justify-between">
+          <div className="mt-4 flex items-center justify-between">
             <Button variant="outline" onClick={() => setStep(4)}>
               Back
             </Button>
-            <Button onClick={() => setStep(6)}>Continue</Button>
+            <div className="flex items-center gap-3">
+              {unresolvedInvalidRows.length > 0 && (
+                <p className="text-xs font-medium text-destructive">
+                  Resolve all invalid records to continue.
+                </p>
+              )}
+              <Button onClick={() => setStep(6)} disabled={unresolvedInvalidRows.length > 0}>
+                Continue
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -536,21 +667,18 @@ export default function MemberImportWizardPage() {
             <EmptyState icon={CheckCircle2} title="No invalid rows" description="Every row has the minimum required fields (surname, first name, birthdate)." />
           ) : (
             <div className="space-y-1.5">
-              <p className="mb-2 text-sm font-semibold text-destructive">Invalid Rows ({invalidRows.length}) — missing required data</p>
-              {invalidRows.map((r) => (
-                <div key={r.rowNumber} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2.5 text-sm">
-                  <span>
-                    Row {r.rowNumber + 1}: {r.data.first_name} {r.data.last_name} — {r.reasons.join(", ")}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setResolutions((prev) => ({ ...prev, [r.rowNumber]: prev[r.rowNumber] === "skip" ? "" : "skip" }))}
-                  >
-                    {resolutions[r.rowNumber] === "skip" ? "Restore" : "Exclude"}
-                  </Button>
-                </div>
-              ))}
+              <p className="mb-2 text-sm font-semibold text-success">Corrected Rows ({invalidRows.length}) — fixed in Step 5</p>
+              {invalidRows.map((r) => {
+                const edit = rowEdits[r.rowNumber]
+                return (
+                  <div key={r.rowNumber} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-success/20 bg-success/5 p-2.5 text-sm">
+                    <span>
+                      Row {r.rowNumber + 1}: {edit?.first_name ?? r.data.first_name} {edit?.last_name ?? r.data.last_name} — originally {r.reasons.join(", ").toLowerCase()}
+                    </span>
+                    <StatusBadge label="Fixed" tone="success" />
+                  </div>
+                )
+              })}
             </div>
           )}
           {rows.some((r) => r.reasons.length > 0 && r.category !== "Invalid") && (
@@ -624,7 +752,7 @@ export default function MemberImportWizardPage() {
           {beneficiaryRows.length === 0 ? (
             <EmptyState title="No beneficiaries in this worksheet" description="Neither dependent/beneficiary column had any names to import." />
           ) : (
-            <div className="overflow-auto rounded-lg border border-border">
+            <div className="min-h-[16rem] overflow-auto rounded-lg border border-border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -637,13 +765,34 @@ export default function MemberImportWizardPage() {
                 <TableBody>
                   {beneficiaryRows.map((r) => {
                     const duplicateWarning = r.reasons.find((reason) => reason.toLowerCase().includes("duplicate beneficiary"))
+                    const edit = rowEdits[r.rowNumber]
+                    const beneficiary1 = edit?.beneficiary_1 ?? r.data.beneficiary_1 ?? ""
+                    const beneficiary2 = edit?.beneficiary_2 ?? r.data.beneficiary_2 ?? ""
                     return (
                       <TableRow key={r.rowNumber}>
                         <TableCell>
                           {r.data.first_name} {r.data.last_name}
                         </TableCell>
-                        <TableCell>{r.data.beneficiary_1 ?? "—"}</TableCell>
-                        <TableCell>{r.data.beneficiary_2 ?? "—"}</TableCell>
+                        <TableCell>
+                          <Input
+                            className="h-8 w-48"
+                            placeholder="Optional"
+                            value={beneficiary1}
+                            onChange={(e) =>
+                              setRowEdits((prev) => ({ ...prev, [r.rowNumber]: { ...prev[r.rowNumber], beneficiary_1: e.target.value } }))
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            className="h-8 w-48"
+                            placeholder="Optional"
+                            value={beneficiary2}
+                            onChange={(e) =>
+                              setRowEdits((prev) => ({ ...prev, [r.rowNumber]: { ...prev[r.rowNumber], beneficiary_2: e.target.value } }))
+                            }
+                          />
+                        </TableCell>
                         <TableCell>{duplicateWarning ? <StatusBadge label="Duplicate Names" tone="warning" /> : "—"}</TableCell>
                       </TableRow>
                     )
@@ -786,6 +935,16 @@ export default function MemberImportWizardPage() {
           </div>
         </div>
       )}
+
+      <FixInvalidMemberRowDialog
+        row={fixDialogRow}
+        edit={fixDialogRow ? rowEdits[fixDialogRow.rowNumber] : undefined}
+        positionOptions={positionOptions}
+        onOpenChange={(open) => {
+          if (!open) setFixDialogRow(null)
+        }}
+        onSave={(rowNumber, values) => setRowEdits((prev) => ({ ...prev, [rowNumber]: values }))}
+      />
     </div>
   )
 }

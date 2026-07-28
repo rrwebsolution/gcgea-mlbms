@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useIsFetching } from "@tanstack/react-query"
 import { createPortal } from "react-dom"
 import {
   flexRender,
@@ -46,6 +47,8 @@ interface DataTableProps<TData> {
   enableColumnVisibility?: boolean
   maxHeight?: string
   toolbar?: React.ReactNode
+  /** Rendered as a summary bar below the table (e.g. running totals) — not shown while loading, in error, or empty. */
+  footer?: React.ReactNode
 }
 
 export function DataTable<TData>({
@@ -65,9 +68,14 @@ export function DataTable<TData>({
   enableColumnVisibility = true,
   maxHeight = "max-h-[calc(100vh-22rem)]",
   toolbar,
+  footer,
 }: DataTableProps<TData>) {
   const { isRefreshing } = usePageRefresh()
-  const showSkeleton = Boolean(isLoading || isRefreshing)
+  const activeQueryCount = useIsFetching()
+  // Most pages pass their loading state explicitly. This fallback prevents a
+  // premature empty-state flash on query-backed tables that have not received
+  // their first row yet.
+  const showSkeleton = Boolean(isLoading || isRefreshing || (data.length === 0 && activeQueryCount > 0))
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const rootRef = React.useRef<HTMLDivElement>(null)
   const [externalToolbar, setExternalToolbar] = React.useState<HTMLElement | null>(null)
@@ -175,7 +183,7 @@ export function DataTable<TData>({
   ) : null
 
   return (
-    <div ref={rootRef} className="flex flex-col border border-border/60 bg-card overflow-hidden shadow-sm rounded-xl">
+    <div ref={rootRef} className="flex flex-col overflow-hidden shadow-sm ">
       {externalToolbar && columnVisibilityMenu && createPortal(columnVisibilityMenu, externalToolbar)}
       {showToolbar && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/15 px-5 py-3 transition-all duration-200">
@@ -184,15 +192,22 @@ export function DataTable<TData>({
         </div>
       )}
       {showSkeleton && <IndeterminateBar className="rounded-none" />}
-      <Table containerClassName={cn("data-table-scrollbar overflow-y-auto", maxHeight)}>
-        <TableHeader className="sticky top-0 z-10 border-b border-border bg-muted/50 backdrop-blur-md">
+      
+      {/* Scrollable Container with Custom Webkit scrollbars */}
+      <Table 
+        containerClassName={cn(
+          "overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15 [&::-webkit-scrollbar-thumb]:rounded-full", 
+          maxHeight
+        )}
+      >
+        <TableHeader className="sticky top-0 z-10 border-b border-border bg-background">
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="hover:bg-transparent border-b border-border/50">
               {headerGroup.headers.map((header) => {
                 const canSort = header.column.getCanSort()
                 const sortDir = header.column.getIsSorted()
                 return (
-                  <TableHead key={header.id} className="h-10 px-4 text-left align-middle font-medium text-muted-foreground first:pl-5 last:pr-5">
+                  <TableHead key={header.id} className="h-10 px-4 text-left align-middle font-medium text-muted-foreground first:pl-5 last:pr-5 animate-none">
                     {header.isPlaceholder ? null : canSort ? (
                       <button
                         type="button"
@@ -256,7 +271,7 @@ export function DataTable<TData>({
               <TableRow 
                 key={row.id} 
                 data-state={row.getIsSelected() ? "selected" : undefined}
-                className="transition-colors border-b border-border/40 last:border-0 data-[state=selected]:bg-primary/[0.03] hover:data-[state=selected]:bg-primary/[0.06] hover:bg-muted/30 duration-150"
+                className="transition-all border-b border-border/40 last:border-0 data-[state=selected]:bg-primary/[0.03] hover:data-[state=selected]:bg-primary/[0.06] hover:bg-muted/30 duration-150"
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id} className="py-3.5 px-4 text-xs md:text-sm font-normal text-foreground/90 first:pl-5 last:pr-5">
@@ -268,6 +283,13 @@ export function DataTable<TData>({
           )}
         </TableBody>
       </Table>
+
+      {/* Styled Premium Table Footer */}
+      {footer && !showSkeleton && !isError && table.getRowModel().rows.length > 0 && (
+        <div className="flex flex-col gap-1 border-t border-border/60 bg-muted/20 dark:bg-muted/10 px-5 py-3.5 text-xs font-semibold select-none text-muted-foreground/95 rounded-b-xl">
+          {footer}
+        </div>
+      )}
     </div>
   )
 }

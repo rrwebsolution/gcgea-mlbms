@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { AlertTriangle, CheckCircle2, Loader2, Save, User, Calendar, Coins, Receipt } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -22,15 +22,28 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { getMember } from "@/services/members.service"
 import { getAllContributions, getContribution, hasExistingContribution, createContribution, updateContribution, defaultContributionAmountForType } from "@/services/contributions.service"
 import { getMemberLoans } from "@/services/loans.service"
+import { listDeductionTypes } from "@/services/deduction-types.service"
 import { formatCurrency } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
+import { getSettings, loadSystemSettings } from "@/services/settings.service"
 import { cn } from "@/lib/utils"
-import type { Contribution, ContributionType, PaymentMethod } from "@/types"
+import type { Contribution, ContributionType, ContributionSettings, PaymentMethod } from "@/types"
 
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
 function currentPeriod(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+}
+
+function defaultPostingDate(): string {
+  const now = new Date()
+  const day = Math.min(getSettings().contribution.contributionDueDay, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+
+function defaultPaymentMethodSetting(): PaymentMethod {
+  const value = getSettings().contribution.defaultPaymentMethod
+  return (PAYMENT_METHODS as string[]).includes(value) ? (value as PaymentMethod) : "Payroll Deduction"
 }
 
 interface ContributionEntry {
@@ -54,10 +67,10 @@ function makeEntry(overrides?: Partial<ContributionEntry>): ContributionEntry {
     contributionType,
     contributionPeriod: currentPeriod(),
     amount: defaultContributionAmountForType(contributionType),
-    paymentMethod: "Payroll Deduction",
+    paymentMethod: defaultPaymentMethodSetting(),
     officialReceiptNumber: "",
     payrollReference: "",
-    paymentDate: new Date().toISOString().slice(0, 10),
+    paymentDate: defaultPostingDate(),
     remarks: "",
     ...overrides,
   }
@@ -68,6 +81,7 @@ export default function ContributionFormPage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const isEditMode = !!id
 
   const { data: existing, isLoading: isLoadingExisting } = useQuery({
@@ -99,12 +113,38 @@ export default function ContributionFormPage() {
   const [editRemarks, setEditRemarks] = React.useState("")
 
   // Contribution types are fixed to Monthly Dues; Cash Pabaon belongs to deductions.
-  const [entries, setEntries] = React.useState<ContributionEntry[]>(() => [makeEntry()])
+  // A voided period is re-contributable — its detail page deep-links here with
+  // ?period=YYYY-MM so the re-contribution defaults to the same period.
+  const [entries, setEntries] = React.useState<ContributionEntry[]>(() => {
+    const period = searchParams.get("period")
+    return [makeEntry(period ? { contributionPeriod: period } : undefined)]
+  })
 
   const [isSaving, setIsSaving] = React.useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = React.useState(false)
   const [successDialog, setSuccessDialog] = React.useState<{ created: Contribution[] } | null>(null)
   const [pendingAddAnother, setPendingAddAnother] = React.useState(false)
+
+  // Contribution Settings, kept live: a save from the Settings page (this tab
+  // or another) should immediately reflect here without needing a reload.
+  const [contributionSettings, setContributionSettings] = React.useState<ContributionSettings>(() => getSettings().contribution)
+
+  React.useEffect(() => {
+    void loadSystemSettings().then((loaded) => setContributionSettings(loaded.settings.contribution))
+
+    function handleSettingsChanged(event: Event) {
+      const detail = (event as CustomEvent<{ section: string; value: unknown }>).detail
+      if (detail.section !== "contribution") return
+      const value = detail.value as ContributionSettings
+      setContributionSettings(value)
+      setEntries((prev) => prev.map((entry) =>
+        entry.contributionType === "Monthly Dues" ? { ...entry, amount: value.defaultMonthlyContribution } : entry
+      ))
+    }
+
+    window.addEventListener("gcgea:settings-changed", handleSettingsChanged)
+    return () => window.removeEventListener("gcgea:settings-changed", handleSettingsChanged)
+  }, [])
 
   React.useEffect(() => {
     if (!existing) return
@@ -120,6 +160,8 @@ export default function ContributionFormPage() {
   }, [existing])
 
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
+  const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes })
+  const globalPabaonAmount = deductionTypes.find((t) => t.code.toLowerCase() === "pabaon" && t.isActive)?.defaultAmount
 
   const memberContributions = memberId ? getAllContributions().filter((c) => c.memberId === memberId && c.status === "Posted" && c.id !== id) : []
   const totalContributions = memberContributions.reduce((sum, c) => sum + c.amount, 0)
@@ -145,12 +187,48 @@ export default function ContributionFormPage() {
     )
     return dupWithinForm || hasExistingContribution(memberId, entry.contributionPeriod, entry.contributionType)
   }
+
+  // A voided record for this exact period/type doesn't block saving (hasExistingContribution
+  // only looks at Posted records) — but the encoder should still see that it was voided.
+  function findVoidedEntryContribution(entry: ContributionEntry) {
+    if (!memberId || !entry.contributionPeriod) return undefined
+    return getAllContributions().find(
+      (c) => c.memberId === memberId && c.contributionPeriod === entry.contributionPeriod && c.contributionType === entry.contributionType && c.status === "Voided"
+    )
+  }
+
+  // --- Create mode: advisory-only checks against Contribution Settings (warn, never block Save) ---
+  function isEntryAdvance(entry: ContributionEntry): boolean {
+    return !!entry.contributionPeriod && entry.contributionPeriod > currentPeriod()
+  }
+
+  // Require Resolved Voided Months: find the earliest voided period before this
+  // entry's period, for this member/type, that has no Posted re-contribution yet.
+  function findUnresolvedVoidedPeriod(entry: ContributionEntry): string | undefined {
+    if (!memberId || !entry.contributionPeriod) return undefined
+    const memberTypeContributions = getAllContributions().filter(
+      (c) => c.memberId === memberId && c.contributionType === entry.contributionType
+    )
+    const voidedPeriods = Array.from(new Set(
+      memberTypeContributions
+        .filter((c) => c.status === "Voided" && c.contributionPeriod < entry.contributionPeriod)
+        .map((c) => c.contributionPeriod)
+    )).sort()
+    return voidedPeriods.find((period) =>
+      !memberTypeContributions.some((c) => c.contributionPeriod === period && c.status === "Posted")
+    )
+  }
+
   const entryDuplicates = entries.filter(isEntryDuplicate)
+  const entriesBlockedByVoidedMonth = contributionSettings.requireResolvedVoidedMonths
+    ? entries.filter((e) => !!findUnresolvedVoidedPeriod(e))
+    : []
   const canSaveEntries =
     !!member &&
     entries.length > 0 &&
     entries.every((e) => !!e.contributionPeriod && !!e.amount && e.amount > 0 && !!e.paymentDate) &&
-    entryDuplicates.length === 0
+    entryDuplicates.length === 0 &&
+    entriesBlockedByVoidedMonth.length === 0
 
   const canSave = isEditMode ? canSaveEdit : canSaveEntries
 
@@ -206,6 +284,11 @@ export default function ContributionFormPage() {
         })
         created.push(result)
       }
+
+      // A Monthly Dues / Payroll Deduction contribution auto-posts a matching
+      // Cash Pabaon deduction server-side — refresh so it shows immediately
+      // wherever deductions are displayed (e.g. the member's profile).
+      queryClient.invalidateQueries({ queryKey: ["deductions"] })
 
       toast.success(
         created.length > 1
@@ -380,12 +463,14 @@ export default function ContributionFormPage() {
           <div className="space-y-6">
             {entries.map((entry, index) => {
               const duplicate = isEntryDuplicate(entry)
+              const voidedRecord = !duplicate ? findVoidedEntryContribution(entry) : undefined
+              const blockingVoidedPeriod = contributionSettings.requireResolvedVoidedMonths ? findUnresolvedVoidedPeriod(entry) : undefined
               return (
-                <div 
-                  key={entry.key} 
+                <div
+                  key={entry.key}
                   className={cn(
                     "rounded-2xl border bg-muted/5 p-5 shadow-sm space-y-4 transition-all duration-200 hover:bg-muted/10",
-                    duplicate ? "border-destructive/30 bg-destructive/[0.01]" : "border-border/60"
+                    duplicate || blockingVoidedPeriod ? "border-destructive/30 bg-destructive/[0.01]" : "border-border/60"
                   )}
                 >
                   <div className="border-b border-border/45 pb-3 flex items-center justify-between">
@@ -397,6 +482,29 @@ export default function ContributionFormPage() {
                     </div>
                   </div>
 
+                  {voidedRecord && !blockingVoidedPeriod && (
+                    <AlertBanner
+                      tone="info"
+                      title="This month was previously voided."
+                      description="You can still re-contribute for this period — saving this entry will record a new contribution."
+                      className="animate-in fade-in slide-in-from-top-2 duration-200"
+                    />
+                  )}
+
+                  {blockingVoidedPeriod && (
+                    <AlertBanner
+                      tone="danger"
+                      title="Earlier voided month not yet resolved"
+                      description={`A voided ${entry.contributionType} contribution for ${blockingVoidedPeriod} has not been re-contributed. Post ${blockingVoidedPeriod} before proceeding to ${entry.contributionPeriod}.`}
+                      actions={
+                        <Button type="button" size="sm" variant="outline" onClick={() => updateEntry(entry.key, { contributionPeriod: blockingVoidedPeriod })}>
+                          Set Period to {blockingVoidedPeriod}
+                        </Button>
+                      }
+                      className="animate-in fade-in slide-in-from-top-2 duration-200"
+                    />
+                  )}
+
                   {duplicate && (
                     <AlertBanner
                       tone="danger"
@@ -406,7 +514,16 @@ export default function ContributionFormPage() {
                     />
                   )}
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {!contributionSettings.allowAdvanceContribution && isEntryAdvance(entry) && (
+                    <AlertBanner
+                      tone="warning"
+                      title="Advance contribution"
+                      description="This period is ahead of the current month. Allow Advance Contribution is off in Contribution Settings."
+                      className="animate-in fade-in slide-in-from-top-2 duration-200"
+                    />
+                  )}
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
                         Contribution Period <span className="text-destructive font-bold">*</span>
@@ -414,10 +531,16 @@ export default function ContributionFormPage() {
                       <Input type="month" value={entry.contributionPeriod} onChange={(e) => updateEntry(entry.key, { contributionPeriod: e.target.value })} className="h-10 text-sm" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
-                        Amount <span className="text-destructive font-bold">*</span>
-                      </Label>
-                      <CurrencyInput value={entry.amount} onChange={(v) => updateEntry(entry.key, { amount: v })} />
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Monthly Contribution</Label>
+                      <CurrencyInput value={entry.amount} onChange={() => {}} readOnly disabled className="bg-muted/40" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Cash Pabaon (Contribution Settings)</Label>
+                      <CurrencyInput value={contributionSettings.defaultCashPabaonContribution} onChange={() => {}} readOnly disabled className="bg-muted/40" />
+                      <p className="text-[11px] text-muted-foreground">
+                        Informational only. Actually posted from Deduction Types → Pabaon
+                        {typeof globalPabaonAmount === "number" ? ` (currently ${formatCurrency(globalPabaonAmount)})` : ""}.
+                      </p>
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payment Method</Label>
@@ -443,7 +566,7 @@ export default function ContributionFormPage() {
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payroll Reference</Label>
                       <Input placeholder="e.g. PR-2026-07-001" value={entry.payrollReference} onChange={(e) => updateEntry(entry.key, { payrollReference: e.target.value })} className="h-10 text-sm" />
                     </div>
-                    <div className="space-y-1.5 sm:col-span-2">
+                    <div className="space-y-1.5 sm:col-span-3">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Remarks</Label>
                       <Textarea rows={2} placeholder="Additional notes about this contribution (optional)" value={entry.remarks} onChange={(e) => updateEntry(entry.key, { remarks: e.target.value })} className="text-sm bg-background resize-none" />
                     </div>

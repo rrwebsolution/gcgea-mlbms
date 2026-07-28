@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { CommandSelect } from "@/components/shared/CommandSelect"
-import { listMembers } from "@/services/members.service"
+import { listAllActiveMembers } from "@/services/members.service"
 import { getLoanSettings } from "@/services/loan-settings.service"
 import { calculateDurationMonths } from "@/utils/format"
 import { isRegistrationApproved } from "@/utils/eligibility"
@@ -48,16 +48,15 @@ interface MemberEligibilitySelectProps {
  */
 export function MemberEligibilitySelect({ value, onSelect, selectedMember, disabled }: MemberEligibilitySelectProps) {
   const [open, setOpen] = React.useState(false)
-  const [filter, setFilter] = React.useState<EligibilityFilter>("eligible")
+  const [filter, setFilter] = React.useState<EligibilityFilter>("all")
 
-  const { data: membersData, isLoading } = useQuery({
-    queryKey: ["members", "search-select", "Active"],
-    queryFn: () => listMembers({ perPage: 200, membershipStatus: "Active" }),
+  const { data: members = [], isLoading } = useQuery({
+    queryKey: ["members", "all-active", "loan-select"],
+    queryFn: listAllActiveMembers,
   })
   const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
 
   const requiredMonths = loanSettings?.minimumMembershipMonths ?? 6
-  const members = membersData?.data ?? []
   const approvedMembers = members.filter((m) => isRegistrationApproved(m))
 
   const visibleMembers = approvedMembers.filter((m) => {

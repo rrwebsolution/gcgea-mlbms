@@ -21,7 +21,7 @@ export interface WorkflowStage {
   isFinal: boolean
 }
 
-export type WorkflowModuleKey = "member_registration" | "loan_application" | "benefit_application"
+export type WorkflowModuleKey = "member_registration" | "loan_application" | "benefit_application" | "annual_budget" | "disbursement"
 
 export interface WorkflowDefinition {
   id: string

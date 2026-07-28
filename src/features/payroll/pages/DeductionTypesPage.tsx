@@ -17,7 +17,7 @@ import { DeductionTypeFormDialog } from "@/features/payroll/components/Deduction
 import type { DeductionType } from "@/types"
 import { formatCurrency } from "@/utils/format"
 
-export default function DeductionTypesPage() {
+export default function DeductionTypesPage({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient()
   const { isRefreshing } = usePageRefresh()
   const [dialogOpen, setDialogOpen] = React.useState(false)
@@ -42,6 +42,18 @@ export default function DeductionTypesPage() {
   })
   const toggleMutation = useMutation({
     mutationFn: toggleDeductionTypeStatus,
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["deduction-types"] })
+      const previous = queryClient.getQueryData<DeductionType[]>(["deduction-types"])
+      queryClient.setQueryData<DeductionType[]>(["deduction-types"], (current = []) =>
+        current.map((type) => type.id === id ? { ...type, isActive: !type.isActive } : type)
+      )
+      return { previous }
+    },
+    onError: (_error, _id, context) => {
+      queryClient.setQueryData(["deduction-types"], context?.previous)
+      toast.error("Unable to update deduction type status.")
+    },
     onSuccess: () => {
       toast.success("Deduction type status updated.")
       queryClient.invalidateQueries({ queryKey: ["deduction-types"] })
@@ -50,7 +62,7 @@ export default function DeductionTypesPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader
+      {!embedded && <PageHeader
         title="Deduction Types"
         description="Configurable payroll deduction categories (e.g. Pabaon) — rename or disable without touching the import logic."
         actions={
@@ -65,7 +77,7 @@ export default function DeductionTypesPage() {
             <Plus className="size-4" /> Add Deduction Type
           </PermissionButton>
         }
-      />
+      />}
 
       {showSkeleton ? (
         <div className="space-y-3">
@@ -100,7 +112,7 @@ export default function DeductionTypesPage() {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="font-heading text-sm font-semibold text-foreground">{dt.name}</h3>
                 <div className="flex items-center gap-1.5">
-                  <StatusBadge label={dt.isActive ? "Active" : "Inactive"} tone={dt.isActive ? "success" : "neutral"} />
+                  <StatusBadge label={dt.isActive ? "Active" : "Disabled"} tone={dt.isActive ? "success" : "danger"} />
                   <PermissionGuard permission="deduction_types.update">
                     <Button
                       variant="ghost"
@@ -123,8 +135,8 @@ export default function DeductionTypesPage() {
                 <span className="text-muted-foreground">Default: <strong className="text-foreground">{formatCurrency(dt.defaultAmount)}</strong></span>
                 <PermissionGuard permission="deduction_types.deactivate">
                   <label className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Enabled</span>
-                    <Switch checked={dt.isActive} onCheckedChange={() => toggleMutation.mutate(dt.id)} />
+                    <span className={dt.isActive ? "text-success" : "text-destructive"}>{dt.isActive ? "Enabled" : "Disabled"}</span>
+                    <Switch checked={dt.isActive} disabled={toggleMutation.isPending} onCheckedChange={() => toggleMutation.mutate(dt.id)} />
                   </label>
                 </PermissionGuard>
               </div>

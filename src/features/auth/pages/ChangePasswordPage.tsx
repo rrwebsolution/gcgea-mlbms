@@ -11,8 +11,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AlertBanner } from "@/components/shared/AlertBanner"
+import { useAuth } from "@/contexts/AuthContext"
+import { useNavigate } from "react-router-dom"
+import { getLandingPage } from "@/utils/landing-page"
 
 export default function ChangePasswordPage() {
+  const { user, updateCurrentUser } = useAuth()
+  const navigate = useNavigate()
   const [formError, setFormError] = React.useState<string | null>(null)
 
   const {
@@ -28,9 +33,11 @@ export default function ChangePasswordPage() {
   async function onSubmit(values: ChangePasswordFormValues) {
     setFormError(null)
     try {
-      await authService.changePassword(values.currentPassword, values.newPassword, values.confirmPassword)
+      const updatedUser = await authService.changePassword(values.currentPassword, values.newPassword, values.confirmPassword)
+      updateCurrentUser(updatedUser)
       toast.success("Password updated successfully.")
       reset()
+      navigate(getLandingPage(updatedUser.permissions), { replace: true })
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Unable to update your password.")
     }
@@ -39,6 +46,13 @@ export default function ChangePasswordPage() {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <PageHeader title="Change Password" description="Update your account password. You will remain logged in on this device." />
+      {user?.requirePasswordChange && (
+        <AlertBanner
+          tone="warning"
+          title="Password change required"
+          description="Your administrator requires you to set a new password before you can access the system."
+        />
+      )}
       <FormSection title="Password Details" description="Choose a strong password that you have not used before.">
         <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
           {formError && <AlertBanner tone="danger" title="Update failed" description={formError} />}

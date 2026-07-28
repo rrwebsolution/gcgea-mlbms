@@ -1,13 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
     --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
+    --font-sans: 'Century Gothic', CenturyGothic, AppleGothic, Arial, sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -60,7 +59,7 @@
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.2 0.02 258);
-  --card: oklch(1 0 0);
+  --card: oklch(1 0 0 / 56%);
   --card-foreground: oklch(0.2 0.02 258);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.2 0.02 258);
@@ -91,20 +90,20 @@
   --chart-4: oklch(0.72 0.16 55);
   --chart-5: oklch(0.577 0.212 27.325);
   --radius: 0.625rem;
-  --sidebar: oklch(0.2 0.045 258);
-  --sidebar-foreground: oklch(0.94 0.01 255);
+  --sidebar: oklch(1 0 0 / 62%);
+  --sidebar-foreground: oklch(0.22 0.03 258);
   --sidebar-primary: oklch(0.78 0.15 85);
   --sidebar-primary-foreground: oklch(0.22 0.05 258);
-  --sidebar-accent: oklch(0.28 0.055 258);
-  --sidebar-accent-foreground: oklch(0.98 0.005 255);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent: oklch(0.92 0.015 258 / 75%);
+  --sidebar-accent-foreground: oklch(0.22 0.03 258);
+  --sidebar-border: oklch(0.2 0.02 258 / 14%);
   --sidebar-ring: oklch(0.55 0.08 258);
 }
 
 .dark {
   --background: oklch(0.19 0.015 258);
   --foreground: oklch(0.95 0.005 255);
-  --card: oklch(0.23 0.018 258);
+  --card: oklch(0.23 0.018 258 / 54%);
   --card-foreground: oklch(0.95 0.005 255);
   --popover: oklch(0.23 0.018 258);
   --popover-foreground: oklch(0.95 0.005 255);
@@ -134,7 +133,7 @@
   --chart-3: oklch(0.78 0.15 85);
   --chart-4: oklch(0.75 0.15 60);
   --chart-5: oklch(0.704 0.18 22.216);
-  --sidebar: oklch(0.16 0.02 258);
+  --sidebar: oklch(0.19 0.015 258 / 68%);
   --sidebar-foreground: oklch(0.94 0.01 255);
   --sidebar-primary: oklch(0.78 0.15 85);
   --sidebar-primary-foreground: oklch(0.18 0.03 258);
@@ -158,6 +157,14 @@
     scrollbar-color: var(--primary) transparent;
     scrollbar-width: thin;
     }
+}
+
+/* Glass surfaces let the branded application background remain visible
+   through cards, data tables, and chart panels without sacrificing contrast. */
+.bg-card,
+.from-card {
+  -webkit-backdrop-filter: blur(4px) saturate(110%);
+  backdrop-filter: blur(4px) saturate(110%);
 }
 
 ::-webkit-scrollbar {

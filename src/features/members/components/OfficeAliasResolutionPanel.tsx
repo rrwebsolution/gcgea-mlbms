@@ -61,6 +61,10 @@ function OfficeGroupRow({
         await onResolve({ rawText: group.rawText, newOffice: { code: newCode, name: newName }, saveAsAlias })
       }
       setResolved(true)
+    } catch {
+      // onResolve already surfaced the reason (e.g. duplicate office code/name)
+      // via a toast — leave the form open so the admin can adjust and retry,
+      // instead of marking this group "Resolved" when it actually failed.
     } finally {
       setIsSubmitting(false)
     }

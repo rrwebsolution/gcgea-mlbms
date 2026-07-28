@@ -17,6 +17,8 @@ export const REPORT_ROUTES: Partial<Record<ReportCategory, Record<string, string
     "Unpaid Contributions": "/reports/contributions/unpaid",
     "Member Contribution History": "/reports/contributions/member-history",
     "Payroll Deduction Summary": "/reports/contributions/payroll-summary",
+    "Fund Allocation Report": "/reports/contributions/fund-allocation",
+    "Monthly Dues Summary": "/reports/contributions/member-monthly-dues-summary",
   },
   "Loan Reports": {
     "Loan Applications": "/reports/loans/applications",
@@ -42,6 +44,9 @@ export const REPORT_ROUTES: Partial<Record<ReportCategory, Record<string, string
   "Financial Reports": {
     "Daily Collection Report": "/reports/financial/daily-collections",
     "Monthly Collection Report": "/reports/financial/monthly-collections",
+    "Remittance Breakdown": "/reports/financial/remittance-breakdown",
+    "Annual Budget": "/reports/financial/annual-budget",
+    "Monthly Disbursements": "/reports/financial/monthly-disbursements",
     "Annual Collection Report": "/reports/financial/annual-collections",
     "Loan Release Summary": "/reports/financial/loan-release-summary",
     "Benefits Release Summary": "/reports/financial/benefits-release-summary",

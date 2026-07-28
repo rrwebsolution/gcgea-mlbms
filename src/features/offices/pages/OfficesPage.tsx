@@ -89,6 +89,7 @@ export default function OfficesPage() {
               fallback={<span className="text-sm font-medium">{row.original.status}</span>}
             >
               <Switch
+                variant="status"
                 checked={row.original.status === "Active"}
                 disabled={isPending}
                 onCheckedChange={() => toggleMutation.mutate(row.original.id)}

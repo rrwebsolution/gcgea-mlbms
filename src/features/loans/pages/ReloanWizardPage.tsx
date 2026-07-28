@@ -24,6 +24,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge"
 import { getLoan, getReloanEligibility, listLoanTypes, createReloanDraft, updateLoanApplication, type CreateLoanApplicationInput } from "@/services/loans.service"
 import { getMember } from "@/services/members.service"
 import { getAllLoanPayments, listAllLoanPayments } from "@/services/loan-payments.service"
+import { getLoanSettings } from "@/services/loan-settings.service"
 import { computeLoan, bracketForNetPay } from "@/utils/loan-math"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
@@ -46,7 +47,7 @@ export default function ReloanWizardPage() {
   const { id } = useParams()
   const queryClient = useQueryClient()
   const { hasPermission } = useAuth()
-  const canOverride = hasPermission("loans.override_eligibility")
+  const hasOverridePermission = hasPermission("loans.override_eligibility")
 
   const [step, setStep] = React.useState(1)
   const [isCreatingDraft, setIsCreatingDraft] = React.useState(false)
@@ -84,6 +85,8 @@ export default function ReloanWizardPage() {
     enabled: !!previousLoan,
   })
   const { data: loanTypes = [] } = useQuery({ queryKey: ["loan-types"], queryFn: listLoanTypes })
+  const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
+  const canOverride = hasOverridePermission && (loanSettings?.allowEligibilityOverride ?? true)
   const { data: initialEligibility, isLoading: isLoadingInitialEligibility } = useQuery({
     queryKey: ["reloan-eligibility", previousLoanId],
     queryFn: () => getReloanEligibility(previousLoanId!),
@@ -103,6 +106,11 @@ export default function ReloanWizardPage() {
   )
   const [fileMeta, setFileMeta] = React.useState<{ fileName: string; fileSize: string } | undefined>()
   const [agree, setAgree] = React.useState(false)
+
+  React.useEffect(() => {
+    if (reloan || !loanSettings?.defaultPaymentMethod) return
+    setPaymentMethod(loanSettings.defaultPaymentMethod as PaymentMethod)
+  }, [loanSettings?.defaultPaymentMethod, reloan])
 
   const [reloanEligible, setReloanEligible] = React.useState(true)
   const [blockedReason, setBlockedReason] = React.useState<string>()

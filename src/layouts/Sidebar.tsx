@@ -3,18 +3,29 @@ import { useNavigate } from "react-router-dom"
 import { ChevronLeft, ChevronRight, Loader2, LogOut } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
 import { SidebarNav } from "@/layouts/SidebarNav"
 import { SidebarBrand } from "@/layouts/SidebarBrand"
 import { useSidebar } from "@/contexts/SidebarContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { cn } from "@/lib/utils"
+import { getAppearance } from "@/services/settings.service"
+import type { AppearanceSettings } from "@/types"
 
 export function Sidebar() {
   const { isCollapsed, toggleCollapsed } = useSidebar()
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = React.useState(false)
+  const [footerBranding, setFooterBranding] = React.useState(() => getAppearance())
+
+  React.useEffect(() => {
+    function handleAppearanceChange(event: Event) {
+      setFooterBranding((event as CustomEvent<AppearanceSettings>).detail)
+    }
+    window.addEventListener("gcgea:appearance-changed", handleAppearanceChange)
+    return () => window.removeEventListener("gcgea:appearance-changed", handleAppearanceChange)
+  }, [])
 
   async function handleLogout() {
     setIsLoggingOut(true)
@@ -32,69 +43,121 @@ export function Sidebar() {
       variant="ghost"
       size="sm"
       className={cn(
-        "w-full text-sidebar-foreground/75 hover:bg-destructive/10 hover:text-destructive transition-all duration-200 font-medium",
-        isCollapsed ? "justify-center px-0 h-10" : "justify-start px-3 gap-3 h-10"
+        "w-full rounded-xl text-sidebar-foreground/75 hover:bg-destructive/12 hover:text-destructive transition-all duration-300 font-medium group/btn shadow-none",
+        isCollapsed ? "justify-center px-0 h-10 w-10 mx-auto" : "justify-start px-3.5 gap-3 h-10"
       )}
       onClick={handleLogout}
       disabled={isLoggingOut}
       aria-label="Logout"
     >
       {isLoggingOut ? (
-        <Loader2 className="size-4 animate-spin shrink-0" aria-hidden="true" />
+        <Loader2 className="size-4 animate-spin shrink-0 text-destructive" aria-hidden="true" />
       ) : (
-        <LogOut className="size-4 shrink-0 transition-transform duration-200" aria-hidden="true" />
+        <LogOut 
+          className="size-4 shrink-0 transition-transform duration-300 group-hover/btn:-translate-x-0.5 group-hover/btn:scale-105" 
+          aria-hidden="true" 
+        />
       )}
-      {!isCollapsed && <span className="truncate">Logout</span>}
+      {!isCollapsed && <span className="truncate text-xs font-semibold">Logout</span>}
     </Button>
   )
 
   return (
-    <aside
-      className={cn(
-        "sticky top-0 hidden h-svh shrink-0 flex-col border-r border-sidebar-border bg-sidebar/95 text-sidebar-foreground backdrop-blur-md shadow-sm transition-[width] duration-300 ease-in-out lg:flex",
-        isCollapsed ? "w-[72px]" : "w-[260px]"
-      )}
-    >
-      {/* Brand Header */}
-      <div 
+    <TooltipProvider delay={100}>
+      <aside
         className={cn(
-          "flex h-14 items-center gap-3 border-b border-sidebar-border/80 px-4 transition-all duration-300", 
-          isCollapsed && "justify-center px-0"
+          "group/sidebar sticky top-0 hidden h-svh shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar/90 text-sidebar-foreground backdrop-blur-xl shadow-lg shadow-black/5 transition-[width] duration-300 ease-in-out lg:flex z-30",
+          isCollapsed ? "w-[76px]" : "w-[270px]"
         )}
       >
-        <SidebarBrand collapsed={isCollapsed} />
-      </div>
+        {/* Brand Header */}
+        <div 
+          className={cn(
+            "flex h-16 items-center gap-3 border-b border-sidebar-border/40 px-5 transition-all duration-300 bg-gradient-to-b from-sidebar-accent/15 via-transparent to-transparent", 
+            isCollapsed && "justify-center px-0"
+          )}
+        >
+          <SidebarBrand collapsed={isCollapsed} />
+        </div>
 
-      {/* Navigation Links Area */}
-      <div className="flex-1 overflow-y-auto py-4 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-sidebar-border">
-        <SidebarNav collapsed={isCollapsed} />
-      </div>
+        {/* Navigation Links Area */}
+        <div className="flex-1 overflow-y-auto py-5 px-3 scrollbar-thin scrollbar-thumb-sidebar-border/60 scrollbar-track-transparent">
+          <SidebarNav collapsed={isCollapsed} />
+        </div>
 
-      {/* Footer Area with Logout Action */}
-      <div className="border-t border-sidebar-border/80 p-3 bg-sidebar/30">
-        {isCollapsed ? (
-          <Tooltip>
-            <TooltipTrigger render={logoutButton} />
-            <TooltipContent side="right" className="font-medium">Logout</TooltipContent>
-          </Tooltip>
-        ) : (
-          logoutButton
-        )}
-      </div>
+        {/* Footer Area with Logos & Logout Action */}
+        <div className="border-t border-sidebar-border/40 bg-sidebar-accent/10 p-3.5 flex flex-col gap-3">
+          {/* Organization Logos Badge */}
+          <div
+            className={cn(
+              "flex items-center justify-center rounded-2xl border border-sidebar-border/30 bg-sidebar-accent/20 p-2.5 backdrop-blur-md transition-all duration-300",
+              isCollapsed ? "flex-col gap-2.5 bg-transparent border-transparent p-0" : "flex-row gap-4"
+            )}
+            aria-label="Organization logos"
+          >
+            {[
+              { src: footerBranding.sidebarFooterLeftLogoUrl, label: footerBranding.sidebarFooterLeftLogoLabel },
+              { src: footerBranding.sidebarFooterRightLogoUrl, label: footerBranding.sidebarFooterRightLogoLabel },
+            ].map((logo, index) => (
+              <div 
+                key={index} 
+                className={cn(
+                  "flex min-w-0 flex-col items-center gap-1.5 transition-all duration-300",
+                  isCollapsed ? "scale-95" : "scale-100 flex-1"
+                )}
+              >
+                <div className="relative flex items-center justify-center rounded-xl bg-background/80 p-2 shadow-2xs ring-1 ring-border/10 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-xs">
+                  <img
+                    src={logo.src}
+                    alt={`${logo.label} logo`}
+                    title={logo.label}
+                    className={cn(
+                      "shrink-0 object-contain transition-all duration-300",
+                      isCollapsed ? "size-6" : "size-8"
+                    )}
+                  />
+                </div>
+                {!isCollapsed && (
+                  <span className="max-w-[90px] truncate text-center text-[9px] font-bold uppercase tracking-wider text-sidebar-foreground/50">
+                    {logo.label}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
 
-      {/* Edge toggle control button */}
-      <button
-        type="button"
-        onClick={toggleCollapsed}
-        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute top-1/2 -right-3 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-background text-muted-foreground shadow-md transition-all duration-200 hover:text-foreground hover:bg-accent hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {isCollapsed ? (
-          <ChevronRight className="size-3.5 transition-transform duration-200" />
-        ) : (
-          <ChevronLeft className="size-3.5 transition-transform duration-200" />
-        )}
-      </button>
-    </aside>
+          {/* Logout Action */}
+          <div className="w-full">
+            {isCollapsed ? (
+              <Tooltip>
+                <TooltipTrigger render={logoutButton} />
+                <TooltipContent side="right" align="center" className="font-semibold text-xs">
+                  Logout
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              logoutButton
+            )}
+          </div>
+        </div>
+
+        {/* Edge toggle control button */}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={cn(
+            "absolute top-1/2 -right-3.5 z-40 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-background/95 text-sidebar-foreground/70 shadow-md ring-1 ring-black/5 backdrop-blur-sm transition-all duration-300 hover:text-foreground hover:bg-sidebar-accent hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "opacity-0 group-hover/sidebar:opacity-100"
+          )}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="size-4 text-sidebar-foreground" />
+          ) : (
+            <ChevronLeft className="size-4 text-sidebar-foreground" />
+          )}
+        </button>
+      </aside>
+    </TooltipProvider>
   )
 }

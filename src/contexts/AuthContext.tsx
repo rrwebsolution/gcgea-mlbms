@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import type { AuthUser, LoginCredentials, PermissionCode } from "@/types"
 import * as authService from "@/services/auth.service"
 import { warmSyncCaches } from "@/lib/warm-caches"
@@ -9,7 +10,7 @@ interface AuthContextValue {
   isInitializing: boolean
   isLoggingIn: boolean
   sessionExpired: boolean
-  login: (credentials: LoginCredentials) => Promise<void>
+  login: (credentials: LoginCredentials) => Promise<AuthUser>
   logout: () => Promise<void>
   dismissSessionExpired: () => void
   updateCurrentUser: (user: AuthUser) => void
@@ -22,6 +23,7 @@ interface AuthContextValue {
 const AuthContext = React.createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const [user, setUser] = React.useState<AuthUser | null>(null)
   const [isInitializing, setIsInitializing] = React.useState(true)
   const [isLoggingIn, setIsLoggingIn] = React.useState(false)
@@ -64,23 +66,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoggingIn(true)
     try {
       const authUser = await authService.login(credentials)
+      // Cached API responses belong to the previous account. Keeping them
+      // across an account switch can hide the new user's approval queue or,
+      // worse, briefly show data the new role should not inherit.
+      queryClient.clear()
       setUser(authUser)
       warmSyncCaches()
+      return authUser
     } finally {
       setIsLoggingIn(false)
     }
-  }, [])
+  }, [queryClient])
 
   const logout = React.useCallback(async () => {
     await authService.logout()
+    queryClient.clear()
     setUser(null)
     setSessionExpired(false)
-  }, [])
+  }, [queryClient])
 
   const dismissSessionExpired = React.useCallback(() => {
+    queryClient.clear()
     setSessionExpired(false)
     setUser(null)
-  }, [])
+  }, [queryClient])
 
   const updateCurrentUser = React.useCallback((updatedUser: AuthUser) => {
     setUser(updatedUser)

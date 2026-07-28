@@ -1,4 +1,5 @@
 import * as React from "react"
+import { Link } from "react-router-dom"
 import { useFieldArray, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { 
@@ -45,6 +46,8 @@ const DEFAULT_VALUES: LoanTypeFormValues = {
   status: "Active",
 }
 
+const SOLIDARITY_LOAN_NAME = "Solidarity Cash Assistance Loan"
+
 export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: LoanTypeFormDialogProps) {
   const [submitError, setSubmitError] = React.useState<string | null>(null)
   const {
@@ -62,6 +65,9 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
 
   const bracketsArray = useFieldArray({ control, name: "incomeBrackets" })
   const isIncomeTiered = watch("incomeBrackets").length > 0
+  const isTierReadOnly = !!loanType
+  const isSolidarityLoan = loanType?.name === SOLIDARITY_LOAN_NAME
+  const managedBySolidaritySettings = isSolidarityLoan
 
   React.useEffect(() => {
     if (open) {
@@ -174,6 +180,22 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
               <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Financial Terms &amp; Rates</h4>
             </div>
 
+            {managedBySolidaritySettings && (
+              <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                <p className="leading-relaxed text-muted-foreground">
+                  Amount limits, monthly interest, service charge, maximum term, and net-pay tiers are managed together in{" "}
+                  <Link
+                    to="/admin/settings?section=loan"
+                    className="font-semibold text-primary underline-offset-4 hover:underline"
+                    onClick={() => onOpenChange(false)}
+                  >
+                    SOLIDARITY CASH ASSISTANCE LOAN in Admin Settings
+                  </Link>.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="loan-type-min-amount" className="text-xs font-medium">
@@ -186,7 +208,8 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                     step="0.01" 
                     min={0} 
                     placeholder="0.00" 
-                    className={errors.minAmount ? "border-destructive focus-visible:ring-destructive" : ""}
+                    readOnly={managedBySolidaritySettings}
+                    className={`${managedBySolidaritySettings ? "cursor-not-allowed bg-muted/50" : ""} ${errors.minAmount ? "border-destructive focus-visible:ring-destructive" : ""}`}
                     aria-invalid={!!errors.minAmount} 
                     {...register("minAmount", { valueAsNumber: true })} 
                   />
@@ -207,7 +230,8 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                   step="0.01" 
                   min={0} 
                   placeholder="0.00" 
-                  className={errors.maxAmount ? "border-destructive focus-visible:ring-destructive" : ""}
+                  readOnly={managedBySolidaritySettings}
+                  className={`${managedBySolidaritySettings ? "cursor-not-allowed bg-muted/50" : ""} ${errors.maxAmount ? "border-destructive focus-visible:ring-destructive" : ""}`}
                   aria-invalid={!!errors.maxAmount} 
                   {...register("maxAmount", { valueAsNumber: true })} 
                 />
@@ -230,7 +254,8 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                   step="0.01"
                   min={0}
                   placeholder="0.00"
-                  className={errors.defaultInterestRate ? "border-destructive focus-visible:ring-destructive" : ""}
+                  readOnly={managedBySolidaritySettings}
+                  className={`${managedBySolidaritySettings ? "cursor-not-allowed bg-muted/50" : ""} ${errors.defaultInterestRate ? "border-destructive focus-visible:ring-destructive" : ""}`}
                   aria-invalid={!!errors.defaultInterestRate}
                   {...register("defaultInterestRate", { valueAsNumber: true })}
                 />
@@ -287,7 +312,8 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                   min={0}
                   max={100}
                   placeholder="Optional %"
-                  className={errors.serviceChargePercent ? "border-destructive focus-visible:ring-destructive" : ""}
+                  readOnly={managedBySolidaritySettings}
+                  className={`${managedBySolidaritySettings ? "cursor-not-allowed bg-muted/50" : ""} ${errors.serviceChargePercent ? "border-destructive focus-visible:ring-destructive" : ""}`}
                   aria-invalid={!!errors.serviceChargePercent}
                   {...register("serviceChargePercent", { setValueAs: (v) => (v === "" ? null : Number(v)) })}
                 />
@@ -306,7 +332,8 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                   type="number" 
                   min={1} 
                   placeholder="12" 
-                  className={errors.maxTermMonths ? "border-destructive focus-visible:ring-destructive" : ""}
+                  readOnly={managedBySolidaritySettings}
+                  className={`${managedBySolidaritySettings ? "cursor-not-allowed bg-muted/50" : ""} ${errors.maxTermMonths ? "border-destructive focus-visible:ring-destructive" : ""}`}
                   aria-invalid={!!errors.maxTermMonths} 
                   {...register("maxTermMonths", { valueAsNumber: true })} 
                 />
@@ -333,8 +360,17 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                   Dynamically adjust maximum loan limits based on the applicant's salary range.
                 </p>
               </div>
-              <Switch id="income-tiering-toggle" checked={isIncomeTiered} onCheckedChange={toggleIncomeTiered} />
+              <Switch id="income-tiering-toggle" checked={isIncomeTiered} disabled={isTierReadOnly} onCheckedChange={toggleIncomeTiered} />
             </div>
+
+            {isTierReadOnly && !managedBySolidaritySettings && (
+              <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                <p className="leading-relaxed text-muted-foreground">
+                  Existing income tiers are read-only while editing this loan type.
+                </p>
+              </div>
+            )}
 
             {isIncomeTiered && (
               <div className="space-y-4 pt-4 border-t border-border/40">
@@ -342,15 +378,17 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
                     Configured Income Brackets
                   </Label>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-xs gap-1.5 border-dashed border-primary/30 hover:border-primary/50 transition-colors"
-                    onClick={() => bracketsArray.append({ minNetPay: 0, maxNetPay: null, loanableAmount: 0 })}
-                  >
-                    <Plus className="size-3.5" /> Add Bracket Rule
-                  </Button>
+                  {!isTierReadOnly && (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs gap-1.5 border-dashed border-primary/30 hover:border-primary/50 transition-colors"
+                      onClick={() => bracketsArray.append({ minNetPay: 0, maxNetPay: null, loanableAmount: 0 })}
+                    >
+                      <Plus className="size-3.5" /> Add Bracket Rule
+                    </Button>
+                  )}
                 </div>
 
                 {/* Empty State when no brackets */}
@@ -387,7 +425,8 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                           type="number"
                           min={0}
                           placeholder="0.00"
-                          className="h-9 text-xs"
+                          readOnly={isTierReadOnly}
+                          className="h-9 text-xs read-only:cursor-not-allowed read-only:bg-muted/50"
                           {...register(`incomeBrackets.${index}.minNetPay`, { valueAsNumber: true })}
                         />
                       </div>
@@ -402,7 +441,8 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                           type="number"
                           min={watch(`incomeBrackets.${index}.minNetPay`) || 0}
                           placeholder="No limit"
-                          className={`h-9 text-xs ${errors.incomeBrackets?.[index]?.maxNetPay ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                          readOnly={isTierReadOnly}
+                          className={`h-9 text-xs read-only:cursor-not-allowed read-only:bg-muted/50 ${errors.incomeBrackets?.[index]?.maxNetPay ? "border-destructive focus-visible:ring-destructive" : ""}`}
                           aria-invalid={!!errors.incomeBrackets?.[index]?.maxNetPay}
                           {...register(`incomeBrackets.${index}.maxNetPay`, { setValueAs: (v) => (v === "" ? null : Number(v)) })}
                         />
@@ -424,12 +464,13 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                           min={0}
                           step="0.01"
                           placeholder="Limit"
-                          className="h-9 text-xs"
+                          readOnly={isTierReadOnly}
+                          className="h-9 text-xs read-only:cursor-not-allowed read-only:bg-muted/50"
                           {...register(`incomeBrackets.${index}.loanableAmount`, { valueAsNumber: true })}
                         />
                       </div>
 
-                      <div className="pt-5">
+                      {!isTierReadOnly && <div className="pt-5">
                         <Button 
                           type="button" 
                           variant="ghost" 
@@ -439,7 +480,7 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
                         >
                           <Trash2 className="size-4" />
                         </Button>
-                      </div>
+                      </div>}
                     </div>
                   ))}
                 </div>
@@ -457,7 +498,7 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="loan-type-req-membership" className="text-xs font-medium">
-                  Min. Membership Tenure (months) <span className="text-destructive">*</span>
+                  Product Membership Requirement (months) <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="loan-type-req-membership"
@@ -476,7 +517,7 @@ export function LoanTypeFormDialog({ open, onOpenChange, loanType, onSubmit }: L
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="loan-type-req-contribution" className="text-xs font-medium">
-                  Min. Contributions Count (months) <span className="text-destructive">*</span>
+                  Product Contribution Requirement (months) <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="loan-type-req-contribution"

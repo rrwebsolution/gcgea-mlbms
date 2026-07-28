@@ -8,6 +8,7 @@ export interface GeneralSettings {
   fiscalYearStart: string
   recordsPerPage: number
   maintenanceMode: boolean
+  enableAlertTranslations: boolean
 }
 
 export interface OrganizationProfileSettings {
@@ -91,13 +92,15 @@ export interface ContributionSettings {
   /** GCGEA Cash Pabaon Program (Board Resolution 06-2024) — default monthly contribution amount. */
   defaultCashPabaonContribution: number
   contributionDueDay: number
+  enableAutomaticFundAllocation: boolean
+  requireAllocationValidation: boolean
   allowPartialContribution: boolean
   allowAdvanceContribution: boolean
-  payrollImportEnabled: boolean
   duplicateHandling: string
   defaultPaymentMethod: string
-  requirePayrollReference: boolean
   contributionReminderEnabled: boolean
+  /** If a member has an earlier voided Monthly Dues/Cash Pabaon period that hasn't been re-contributed (re-posted), block contributions for any later period for that member until it is resolved. */
+  requireResolvedVoidedMonths: boolean
 }
 
 export interface BenefitSettings {
@@ -109,6 +112,8 @@ export interface BenefitSettings {
   requireSupportingDocuments: boolean
   allowMultiplePendingApplications: boolean
   benefitYearResetMonth: string
+  /** GCGEA Board Resolution No. 24-2026, Table 2 note — spouses who are both regular members each keep an independent right to all benefits, unaffected by the other spouse's membership status. */
+  independentSpousalBenefitRights: boolean
 }
 
 export interface NotificationSettings {
@@ -221,6 +226,10 @@ export interface SystemSettings {
 
 export interface AppearanceSettings {
   sidebarLogoUrl: string
+  sidebarFooterLeftLogoUrl: string
+  sidebarFooterLeftLogoLabel: string
+  sidebarFooterRightLogoUrl: string
+  sidebarFooterRightLogoLabel: string
   primaryColor: string
   secondaryColor: string
   accentColor: string
@@ -231,7 +240,7 @@ export interface AppearanceSettings {
   progressColorEnd: string
   baseFontSize: number
   fontWeight: 400 | 500 | 600 | 700
-  fontFamily: "geist" | "system" | "serif" | "monospace"
+  fontFamily: "century-gothic" | "arial" | "calibri" | "verdana" | "geist" | "system" | "serif" | "monospace"
   fontStyle: "normal" | "italic"
   borderRadius: number
   compactMode: boolean

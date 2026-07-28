@@ -1,7 +1,16 @@
+import { getSettings } from "@/services/settings.service"
+
+function generalFormatting() {
+  const general = getSettings().general
+  const locale = general.defaultLanguage === "Tagalog" ? "fil-PH" : "en-PH"
+  return { general, locale }
+}
+
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-PH", {
+  const { general, locale } = generalFormatting()
+  return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency: "PHP",
+    currency: general.currency === "USD" ? "USD" : "PHP",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount)
@@ -11,10 +20,17 @@ export function formatDate(dateString?: string): string {
   if (!dateString) return "—"
   const date = new Date(dateString)
   if (Number.isNaN(date.getTime())) return "—"
-  return new Intl.DateTimeFormat("en-PH", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+  const { general, locale } = generalFormatting()
+  const formats: Record<string, Intl.DateTimeFormatOptions> = {
+    "MMMM d, yyyy": { year: "numeric", month: "long", day: "numeric" },
+    "MMM d, yyyy": { year: "numeric", month: "short", day: "numeric" },
+    "MM/dd/yyyy": { year: "numeric", month: "2-digit", day: "2-digit" },
+    "dd/MM/yyyy": { year: "numeric", month: "2-digit", day: "2-digit" },
+  }
+  const localeForFormat = general.dateFormat === "dd/MM/yyyy" ? "en-GB" : locale
+  return new Intl.DateTimeFormat(localeForFormat, {
+    ...(formats[general.dateFormat] ?? formats["MMMM d, yyyy"]),
+    timeZone: general.timeZone,
   }).format(date)
 }
 
@@ -22,10 +38,24 @@ export function formatDateShort(dateString?: string): string {
   if (!dateString) return "—"
   const date = new Date(dateString)
   if (Number.isNaN(date.getTime())) return "—"
-  return new Intl.DateTimeFormat("en-PH", {
+  const { general, locale } = generalFormatting()
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: general.timeZone,
+  }).format(date)
+}
+
+export function formatMonthYear(dateString?: string): string {
+  if (!dateString) return "â€”"
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return "â€”"
+  const { general, locale } = generalFormatting()
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "long",
+    timeZone: general.timeZone,
   }).format(date)
 }
 
@@ -33,13 +63,15 @@ export function formatDateTime(dateString?: string): string {
   if (!dateString) return "—"
   const date = new Date(dateString)
   if (Number.isNaN(date.getTime())) return "—"
-  return new Intl.DateTimeFormat("en-PH", {
+  const { general, locale } = generalFormatting()
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: general.timeZone,
   }).format(date)
 }
 

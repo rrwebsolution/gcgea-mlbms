@@ -18,7 +18,12 @@ export function PageRefreshProvider({ children }: { children: React.ReactNode })
     if (isRefreshing) return
     setIsRefreshing(true)
     try {
-      await queryClient.refetchQueries({ type: "active" }, { throwOnError: true })
+      const detail: { tasks: Promise<unknown>[] } = { tasks: [] }
+      window.dispatchEvent(new CustomEvent("gcgea:refresh-data", { detail }))
+      await Promise.all([
+        queryClient.refetchQueries({ type: "active" }, { throwOnError: true }),
+        ...detail.tasks,
+      ])
     } finally {
       setIsRefreshing(false)
     }

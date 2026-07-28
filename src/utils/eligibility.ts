@@ -1,7 +1,75 @@
 import type { BenefitType, EligibilityCheckItem, LoanApplication, LoanType, Member } from "@/types"
 import type { EligibilityResult } from "@/components/shared/EligibilityChecklist"
-import { calculateDurationMonths } from "@/utils/format"
+import { calculateAge, calculateDurationMonths } from "@/utils/format"
 import { isProfileComplete } from "@/services/members.service"
+
+/** GCGEA Board Resolution No. 24-2026, Table 2 — the one benefit type whose claim path (retirement / separation / a deceased member's nuclear family) is enforced beyond the generic checks below. */
+export const CASH_PABAON_PROGRAM_NAME = "Cash Pabaon Program"
+
+/** Recipient relationships (from the member's registered Beneficiary list) that qualify as "nuclear family" for a Cash Pabaon death claim — spouse/children if the deceased member was married, otherwise parent/sibling. Mirrors the sibling-schedule relationship matching already used for the Nuclear Family Mortuary benefit. */
+function qualifiedNuclearFamilyPattern(civilStatus: Member["civilStatus"]): RegExp {
+  return civilStatus === "Married" ? /spouse|wife|husband|child|son|daughter/i : /parent|father|mother|sibling|brother|sister/i
+}
+
+/**
+ * Cash Pabaon Program-specific checks layered on top of the generic benefit
+ * checks — retirement age (60-65), separation age (59 and below; a
+ * promotion-based separation can't be verified from member data, so an
+ * over-59 separation is a warning, not a hard block), the qualified nuclear
+ * family beneficiary rule for a deceased member's claim, and outstanding
+ * obligations. Mirrors BenefitEligibilityService::cashPabaonChecks() in the
+ * backend 1:1.
+ */
+function evaluateCashPabaonClaimChecks(
+  member: Member,
+  claim: { recipientType: "Member" | "Beneficiary"; recipientNames: string[]; hasOutstandingObligations: boolean }
+): EligibilityCheckItem[] {
+  const items: EligibilityCheckItem[] = []
+
+  if (member.membershipStatus === "Deceased") {
+    const relationships = claim.recipientNames.map((name) => member.beneficiaries.find((b) => b.fullName === name)?.relationship ?? "")
+    const pattern = qualifiedNuclearFamilyPattern(member.civilStatus)
+    const passed = claim.recipientType === "Beneficiary" && relationships.length > 0 && relationships.every((r) => pattern.test(r))
+    items.push({
+      label: "Qualified Nuclear Family Beneficiary",
+      passed,
+      detail: passed
+        ? `Recipient relationship(s) (${relationships.join(", ")}) qualify as nuclear family for this deceased member's Cash Pabaon claim.`
+        : "Cash Pabaon death claims must be filed for a registered beneficiary who is a qualified nuclear family member (spouse or child if married; parent or sibling if unmarried).",
+    })
+  } else {
+    const age = calculateAge(member.birthdate)
+    if (member.retireeStatus === "Retired") {
+      const passed = age >= 60 && age <= 65
+      items.push({
+        label: "Retirement Age Within Policy",
+        passed,
+        detail: passed
+          ? `Member is ${age} year(s) old, within the 60–65 retirement bracket.`
+          : `Member is ${age} year(s) old; Cash Pabaon retirement claims require an age between 60 and 65.`,
+      })
+    } else {
+      const passed = age <= 59
+      items.push({
+        label: "Separation Age Within Policy",
+        passed,
+        detail: passed
+          ? `Member is ${age} year(s) old, within the 59-and-below separation bracket.`
+          : `Member is ${age} year(s) old, above the 59-and-below separation bracket — only qualifies if the separation is due to promotion (verify manually).`,
+      })
+    }
+  }
+
+  items.push({
+    label: "No Outstanding Obligations",
+    passed: !claim.hasOutstandingObligations,
+    detail: claim.hasOutstandingObligations
+      ? "Member has outstanding/overdue obligations with GCGEA that must be settled before this Cash Pabaon claim can proceed."
+      : "No outstanding overdue obligations on record.",
+  })
+
+  return items
+}
 
 export interface DuesStanding {
   /** Has a Posted contribution of the given type on record for the current or immediately preceding contribution_period — mirrors the backend's pragmatic "current" definition; there's no arrears ledger. */
@@ -78,7 +146,9 @@ export function evaluateLoanEligibility(
         ? "Paid Monthly Dues eligibility is disabled in Loan Settings."
         : paidMonthlyDues.paidMonths === 0
           ? "This member cannot apply for a loan because no fully paid Monthly Dues contributions are recorded."
-          : `${verifiedPaidMonths} fully paid Monthly Dues month(s) verified; requires ${paidMonthlyDues.requiredMonths} at ₱${paidMonthlyDues.requiredAmount.toLocaleString()} per month.`,
+          : paidMonthlyDues.requireConsecutiveMonths
+            ? `${paidMonthlyDues.paidMonths} total fully paid Monthly Dues month(s) found; ${verifiedPaidMonths} consecutive month(s) verified. Requires ${paidMonthlyDues.requiredMonths} consecutive month(s) at ₱${paidMonthlyDues.requiredAmount.toLocaleString()} per month.`
+            : `${verifiedPaidMonths} fully paid Monthly Dues month(s) verified; requires ${paidMonthlyDues.requiredMonths} at ₱${paidMonthlyDues.requiredAmount.toLocaleString()} per month.`,
     },
     {
       label: "Monthly Dues Current",
@@ -137,15 +207,21 @@ export function evaluateBenefitEligibility(
   benefitType: BenefitType,
   requestedAmount: number | undefined,
   priorBenefitCount: number,
-  hasPendingApplication: boolean
+  hasPendingApplication: boolean,
+  cashPabaonClaim?: { recipientType: "Member" | "Beneficiary"; recipientNames: string[]; hasOutstandingObligations: boolean }
 ): EligibilityCheckItem[] {
   const membershipMonths = calculateDurationMonths(member.membershipDate)
+  const isCashPabaonDeathClaim = benefitType.name === CASH_PABAON_PROGRAM_NAME && member.membershipStatus === "Deceased"
 
-  return [
+  const items: EligibilityCheckItem[] = [
     {
       label: "Active Member",
-      passed: member.membershipStatus === "Active",
-      detail: member.membershipStatus === "Active" ? "Member status is Active." : `Member status is ${member.membershipStatus}, not Active.`,
+      passed: member.membershipStatus === "Active" || isCashPabaonDeathClaim,
+      detail: member.membershipStatus === "Active"
+        ? "Member status is Active."
+        : isCashPabaonDeathClaim
+          ? "Member is deceased; claim filed on behalf of a qualified nuclear family member under the Cash Pabaon Program."
+          : `Member status is ${member.membershipStatus}, not Active.`,
     },
     {
       label: "Minimum Membership Duration Met",
@@ -173,6 +249,12 @@ export function evaluateBenefitEligibility(
       detail: `Maximum amount for ${benefitType.name}: ₱${benefitType.maximumAmount.toLocaleString()}.`,
     },
   ]
+
+  if (benefitType.name === CASH_PABAON_PROGRAM_NAME && cashPabaonClaim) {
+    items.push(...evaluateCashPabaonClaimChecks(member, cashPabaonClaim))
+  }
+
+  return items
 }
 
 export function resultFor(items: EligibilityCheckItem[]): EligibilityResult {
@@ -190,6 +272,9 @@ export function resultFor(items: EligibilityCheckItem[]): EligibilityResult {
     "Previous Loan Status Eligible",
     "No Duplicate Pending Reloan",
     "Previous Obligation Settled",
+    "Retirement Age Within Policy",
+    "Qualified Nuclear Family Beneficiary",
+    "No Outstanding Obligations",
   ]
   const hasCritical = failed.some((i) => criticalLabels.includes(i.label))
   return hasCritical ? "Not Eligible" : "Eligible with Warning"

@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ permission, anyOf }: ProtectedRouteProps) {
-  const { isAuthenticated, isInitializing, hasPermission, hasAnyPermission } = useAuth()
+  const { user, isAuthenticated, isInitializing, hasPermission, hasAnyPermission } = useAuth()
   const location = useLocation()
 
   if (isInitializing) {
@@ -18,6 +18,10 @@ export function ProtectedRoute({ permission, anyOf }: ProtectedRouteProps) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  if (user?.requirePasswordChange && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />
   }
 
   let allowed = true

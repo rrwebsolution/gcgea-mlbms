@@ -52,8 +52,24 @@ export async function resolveMemberImportDuplicates(token: string, resolutions: 
   await api.post(`/member-imports/${token}/resolve-duplicates`, { resolutions })
 }
 
-export async function commitMemberImport(token: string, resolutions: Record<number, string> = {}): Promise<MemberImportCommitResponse> {
-  const { data } = await api.post<MemberImportCommitResponse>(`/member-imports/${token}/commit`, { resolutions })
+export interface MemberImportRowCorrection {
+  first_name: string
+  middle_name: string
+  last_name: string
+  birthdate: string
+  office_name_raw: string
+  position: string
+  cellphone_number: string
+  beneficiary_1: string
+  beneficiary_2: string
+}
+
+export async function commitMemberImport(
+  token: string,
+  resolutions: Record<number, string> = {},
+  edits: Record<number, Partial<MemberImportRowCorrection>> = {}
+): Promise<MemberImportCommitResponse> {
+  const { data } = await api.post<MemberImportCommitResponse>(`/member-imports/${token}/commit`, { resolutions, edits })
   return data
 }
 

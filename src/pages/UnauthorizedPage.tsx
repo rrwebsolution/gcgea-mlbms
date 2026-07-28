@@ -3,10 +3,12 @@ import { ShieldAlert, ArrowLeft, LayoutDashboard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { ORGANIZATION } from "@/constants/organization"
+import { getLandingPage } from "@/utils/landing-page"
 
 export default function UnauthorizedPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const landingPage = user ? getLandingPage(user.permissions) : "/login"
 
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted/30 px-4 text-center">
@@ -25,9 +27,9 @@ export default function UnauthorizedPage() {
           <ArrowLeft />
           Go Back
         </Button>
-        <Button render={<Link to="/dashboard" />}>
+        <Button render={<Link to={landingPage} />}>
           <LayoutDashboard />
-          Return to Dashboard
+          Return to My Home
         </Button>
       </div>
     </div>

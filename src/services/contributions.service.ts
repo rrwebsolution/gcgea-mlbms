@@ -1,6 +1,7 @@
 import type { Contribution, ContributionType, PaginatedResponse, PaginationParams, PaymentMethod } from "@/types"
 import { api, getPaginated } from "@/lib/api"
 import { getSettings } from "@/services/settings.service"
+import { listAllDeductions } from "@/services/deductions.service"
 
 /** Never hardcoded — read fresh from Settings › Contribution Settings each time (defaults: ₱150 Monthly Dues, ₱200 Cash Pabaon per the GCGEA Cash Pabaon Program, Board Resolution 06-2024). */
 export function defaultContributionAmountForType(type: ContributionType): number | undefined {
@@ -54,6 +55,20 @@ export function hasExistingContribution(memberId: string, period: string, contri
   )
 }
 
+export async function checkDuplicateContributions(
+  memberIds: string[],
+  contributionPeriod: string,
+  contributionType: ContributionType = "Monthly Dues"
+): Promise<string[]> {
+  if (memberIds.length === 0) return []
+  const { data } = await api.post<{ memberIds: string[] }>("/contributions/check-duplicates", {
+    memberIds,
+    contributionPeriod,
+    contributionType,
+  })
+  return data.memberIds
+}
+
 export interface CreateContributionInput {
   memberId: string
   memberNumber: string
@@ -73,6 +88,10 @@ export interface CreateContributionInput {
 export async function createContribution(input: CreateContributionInput): Promise<Contribution> {
   const { data } = await api.post<Contribution>("/contributions", input)
   cachedContributions = [data, ...cachedContributions]
+  // A Monthly Dues / Payroll Deduction contribution auto-posts a matching Cash
+  // Pabaon deduction server-side — refresh the deductions cache so it shows
+  // up immediately (e.g. on the member's profile) without a manual reload.
+  void listAllDeductions()
   return data
 }
 
@@ -112,6 +131,7 @@ export interface BulkCreateContributionsInput {
   contributionType?: ContributionType
   paymentDate: string
   paymentMethod: PaymentMethod
+  cashPabaonAmount?: number
   payrollReference?: string
   encodedBy: string
   rows: BulkContributionRow[]
@@ -123,6 +143,8 @@ export interface BulkCreateContributionsInput {
 export interface BulkCreateResult {
   saved: number
   skippedDuplicates: number
+  /** Skipped because an earlier period was voided and never re-contributed — see Contribution Settings' "Require Resolved Voided Months". */
+  skippedUnresolvedVoided: number
   replaced: number
   failed: number
   cashPabaonSaved: number

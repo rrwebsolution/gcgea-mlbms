@@ -10,7 +10,7 @@ export const LOAN_STATUS_TONE: Record<string, StatusTone> = {
   Approved: "success",
   Rejected: "danger",
   Released: "success",
-  Active: "info",
+  Active: "success",
   "Fully Paid": "success",
   Cancelled: "neutral",
   Overdue: "danger",

@@ -1,5 +1,10 @@
 export interface BulkPayrollMemberContext {
   hasActiveLoan: boolean
+  loanNumber: string | null
+  loanableAmount: number | null
+  outstandingPrincipal: number | null
+  outstandingInterest: number | null
+  outstandingBalance: number | null
   loanDeduction: number
 }
 
@@ -14,6 +19,9 @@ export interface SaveBulkPayrollInput {
     monthlyDues: number
     cashPabaon: number
     loanDeduction: number
+    loanableAmount?: number | null
+    outstandingInterest?: number | null
+    outstandingBalance?: number | null
   }[]
 }
 

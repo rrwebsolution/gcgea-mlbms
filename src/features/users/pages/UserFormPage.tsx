@@ -22,7 +22,7 @@ import { CommandSelect } from "@/components/shared/CommandSelect"
 import { userFormSchema, type UserFormValues } from "@/schemas/user.schema"
 import { createUser, getUser, isEmailTaken, isLastActiveSuperAdmin, isUsernameTaken, updateUser } from "@/services/users.service"
 import { listAllRoles } from "@/services/roles.service"
-import type { PermissionCode } from "@/types"
+import type { PaginatedResponse, PermissionCode, SystemUser } from "@/types"
 
 export default function UserFormPage() {
   const { id } = useParams()
@@ -89,6 +89,30 @@ export default function UserFormPage() {
 
   const isProtectedSuperAdmin = isEdit && existingUser ? isLastActiveSuperAdmin(existingUser) : false
 
+  async function synchronizeUserCache(user: SystemUser): Promise<void> {
+    queryClient.setQueriesData({ queryKey: ["users"] }, (cached: unknown) => {
+      if (Array.isArray(cached)) {
+        return cached.map((entry) => (
+          typeof entry === "object" && entry !== null && "id" in entry && entry.id === user.id
+            ? user
+            : entry
+        ))
+      }
+
+      const paginated = cached as PaginatedResponse<SystemUser> | undefined
+      if (paginated?.data && Array.isArray(paginated.data)) {
+        return {
+          ...paginated,
+          data: paginated.data.map((entry) => entry.id === user.id ? user : entry),
+        }
+      }
+
+      return cached
+    })
+    queryClient.setQueryData(["users", user.id], user)
+    await queryClient.invalidateQueries({ queryKey: ["users"], refetchType: "all" })
+  }
+
   async function onSubmit(values: UserFormValues) {
     if (isUsernameTaken(values.username, id)) {
       toast.error("This username is already taken.")
@@ -124,7 +148,7 @@ export default function UserFormPage() {
       }
       const user = isEdit && id ? await updateUser(id, payload) : await createUser(payload)
       toast.success(isEdit ? "User updated successfully." : "User created successfully.")
-      queryClient.invalidateQueries({ queryKey: ["users"] })
+      await synchronizeUserCache(user)
       navigate(`/admin/users`, { state: { focusUserId: user.id } })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to save user.")
@@ -145,14 +169,14 @@ export default function UserFormPage() {
       return
     }
     try {
-      await createUser({
+      const user = await createUser({
         fullName: values.fullName, username: values.username, email: values.email, contactNumber: values.contactNumber,
         password: values.password,
         roleId: values.roleId, additionalRoleIds: values.additionalRoleIds, status: values.status,
         requirePasswordChange: values.requirePasswordChange, allowedPermissions, deniedPermissions, remarks: values.remarks,
       })
       toast.success("User created successfully.")
-      queryClient.invalidateQueries({ queryKey: ["users"] })
+      await synchronizeUserCache(user)
       reset({ fullName: "", username: "", email: "", contactNumber: "", password: "", confirmPassword: "", roleId: "", additionalRoleIds: [], status: "Active", requirePasswordChange: false, remarks: "" })
       setAllowedPermissions([])
       setDeniedPermissions([])
@@ -179,7 +203,7 @@ export default function UserFormPage() {
       }
       const user = isEdit && id ? await updateUser(id, payload) : await createUser(payload)
       toast.success("User saved. Configure detailed permissions below.")
-      queryClient.invalidateQueries({ queryKey: ["users"] })
+      await synchronizeUserCache(user)
       navigate(`/admin/users/${user.id}/permissions`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to save user.")

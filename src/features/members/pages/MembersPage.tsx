@@ -2,7 +2,7 @@ import * as React from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef, RowSelectionState, SortingState } from "@tanstack/react-table"
-import { Archive, ArchiveRestore, Eye, PencilLine, Plus, UploadCloud } from "lucide-react"
+import { Archive, ArchiveRestore, Eye, PencilLine, Plus, UploadCloud, X } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
@@ -173,6 +173,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
           >
             <div className="flex items-center gap-2">
               <Switch
+                variant="status"
                 checked={isActive}
                 disabled={isUpdating || archived || draftsOnly}
                 aria-label={`Set ${member.fullName} membership status`}
@@ -327,6 +328,14 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
           {selectedCount > 0 && (
             <span className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
               {selectedCount} selected
+              <button
+                type="button"
+                onClick={() => setRowSelection({})}
+                className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Clear selection"
+              >
+                <X className="size-3.5" />
+              </button>
               <ExportButtons permission="members.export" label={`${selectedCount} member(s)`} />
             </span>
           )}

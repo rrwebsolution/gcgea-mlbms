@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import {
   AlertTriangle,
@@ -15,6 +16,7 @@ import {
   FileCheck,
   Sparkles,
   Info,
+  XCircle,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
@@ -39,11 +41,12 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CommandSelect } from "@/components/shared/CommandSelect"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatusBadge } from "@/components/shared/StatusBadge"
+import { DataTable } from "@/components/shared/DataTable"
 import { UserSearch } from "lucide-react"
 import { getMember } from "@/services/members.service"
-import { getAllContributions } from "@/services/contributions.service"
+import { listAllContributions } from "@/services/contributions.service"
+import { listAllDeductions } from "@/services/deductions.service"
 import { getLoanSettings } from "@/services/loan-settings.service"
 import { createLoanApplication, getLoan, listLoanTypes, getMemberLoans, updateLoanApplication, type CreateLoanApplicationInput } from "@/services/loans.service"
 import { bracketForNetPay, computeLoan, type LoanComputationResult } from "@/utils/loan-math"
@@ -54,7 +57,7 @@ import { useDraft } from "@/hooks/useDraft"
 import { useAutosaveDraft } from "@/hooks/useAutosaveDraft"
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges"
 import { cn } from "@/lib/utils"
-import type { EligibilityCheckItem, LoanApplication, LoanRequirementItem, LoanType, Member, PaymentMethod } from "@/types"
+import type { AmortizationEntry, EligibilityCheckItem, LoanApplication, LoanRequirementItem, LoanType, Member, PaymentMethod } from "@/types"
 
 const STEPS = ["Select Member", "Loan Details", "Eligibility Check", "Loan Computation", "Requirements", "Review & Submit"]
 
@@ -67,6 +70,55 @@ const REQUIREMENT_LABELS = [
 ]
 
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
+
+const AMORTIZATION_COLUMNS: ColumnDef<AmortizationEntry, unknown>[] = [
+  { accessorKey: "installmentNumber", header: "#", cell: ({ row }) => <span className="font-medium">{row.original.installmentNumber}</span> },
+  { accessorKey: "dueDate", header: "Due Date", cell: ({ row }) => formatDateShort(row.original.dueDate) },
+  { accessorKey: "beginningBalance", header: "Beginning Balance", cell: ({ row }) => formatCurrency(row.original.beginningBalance) },
+  { accessorKey: "principal", header: "Principal", cell: ({ row }) => formatCurrency(row.original.principal) },
+  { accessorKey: "interest", header: "Interest", cell: ({ row }) => formatCurrency(row.original.interest) },
+  { accessorKey: "amountDue", header: "Amount Due", cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amountDue)}</span> },
+  { accessorKey: "remainingBalance", header: "Remaining Balance", cell: ({ row }) => formatCurrency(row.original.remainingBalance) },
+]
+
+type MonthlyDuesStatus = { period: string; label: string; status: "paid" | "due" | "overdue" }
+
+function monthlyDuesWindow(paidPeriods: string[], requiredMonths: number): MonthlyDuesStatus[] {
+  if (requiredMonths < 1) return []
+  const paid = new Set(paidPeriods)
+  const current = new Date()
+  current.setDate(1)
+  const currentPeriod = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}`
+  const latestPaidPeriod = paidPeriods.at(-1)
+  const timelineEnd = latestPaidPeriod && latestPaidPeriod > currentPeriod
+    ? new Date(`${latestPaidPeriod}-01T12:00:00`)
+    : current
+  const rollingStart = new Date(current)
+  rollingStart.setMonth(rollingStart.getMonth() - requiredMonths + 1)
+  const earliestPaid = paidPeriods.at(0)
+  const earliest = earliestPaid && earliestPaid < `${rollingStart.getFullYear()}-${String(rollingStart.getMonth() + 1).padStart(2, "0")}`
+    ? new Date(`${earliestPaid}-01T00:00:00`)
+    : rollingStart
+  const cursor = new Date(earliest)
+  const months: MonthlyDuesStatus[] = []
+  while (cursor <= timelineEnd) {
+    const period = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
+    months.push({
+      period,
+      label: cursor.toLocaleDateString("en-PH", { month: "long", year: "numeric" }),
+      status: paid.has(period) ? "paid" : period >= currentPeriod ? "due" : "overdue",
+    })
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+  return months
+}
+
+function previousContributionPeriod(period: string): string {
+  const [year, month] = period.split("-").map(Number)
+  const previousMonth = month === 1 ? 12 : month - 1
+  const previousYear = month === 1 ? year - 1 : year
+  return `${previousYear}-${String(previousMonth).padStart(2, "0")}`
+}
 
 interface LoanEntry {
   key: string
@@ -120,7 +172,7 @@ export default function CreateLoanApplicationPage() {
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const { hasPermission } = useAuth()
-  const canOverride = hasPermission("loans.override_eligibility")
+  const hasOverridePermission = hasPermission("loans.override_eligibility")
 
   const { data: existingLoan, isLoading: isLoadingLoan } = useQuery({
     queryKey: ["loans", id],
@@ -160,11 +212,29 @@ export default function CreateLoanApplicationPage() {
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
   const { data: loanTypes = [] } = useQuery({ queryKey: ["loan-types"], queryFn: listLoanTypes })
   const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
+  const canOverride = hasOverridePermission && (loanSettings?.allowEligibilityOverride ?? true)
+  React.useEffect(() => {
+    if (isEdit || !loanSettings?.defaultPaymentMethod) return
+    setEntries((current) => current.map((entry) =>
+      entry.loanTypeId || entry.requestedAmount || entry.purpose
+        ? entry
+        : { ...entry, paymentMethod: loanSettings.defaultPaymentMethod as PaymentMethod }
+    ))
+  }, [isEdit, loanSettings?.defaultPaymentMethod])
+  const { data: liveContributions = [] } = useQuery({
+    queryKey: ["contributions", "all"],
+    queryFn: listAllContributions,
+  })
+  const { data: liveDeductions = [] } = useQuery({
+    queryKey: ["deductions", "all"],
+    queryFn: listAllDeductions,
+  })
   const minimumMembershipMonths = loanSettings?.minimumMembershipMonths ?? 6
   const requiredMonthlyDuesAmount = loanSettings?.requiredMonthlyDuesAmount ?? 100
 
   const memberLoans = memberId ? getMemberLoans(memberId) : []
-  const memberContributions = memberId ? getAllContributions().filter((c) => c.memberId === memberId && c.status === "Posted") : []
+  const memberContributions = memberId ? liveContributions.filter((c) => c.memberId === memberId && c.status === "Posted") : []
+  const memberDeductions = memberId ? liveDeductions.filter((deduction) => deduction.memberId === memberId && deduction.status === "Posted") : []
   const paidMonthlyDuesPeriods = [...new Set(
     memberContributions
       .filter((c) => c.contributionType === "Monthly Dues" && c.amount >= requiredMonthlyDuesAmount)
@@ -172,9 +242,7 @@ export default function CreateLoanApplicationPage() {
   )].sort()
   let consecutivePaidMonths = paidMonthlyDuesPeriods.length > 0 ? 1 : 0
   for (let index = paidMonthlyDuesPeriods.length - 1; index > 0; index--) {
-    const current = new Date(`${paidMonthlyDuesPeriods[index]}-01T00:00:00`)
-    current.setMonth(current.getMonth() - 1)
-    if (current.toISOString().slice(0, 7) !== paidMonthlyDuesPeriods[index - 1]) break
+    if (previousContributionPeriod(paidMonthlyDuesPeriods[index]) !== paidMonthlyDuesPeriods[index - 1]) break
     consecutivePaidMonths++
   }
   const requiredPaidMonths = loanSettings?.minimumPaidContributionMonths ?? 6
@@ -194,7 +262,10 @@ export default function CreateLoanApplicationPage() {
   const priorPeriod = priorPeriodDate.toISOString().slice(0, 7)
   const duesStanding: DuesStanding = {
     hasCurrentMonthlyDues: memberContributions.some((c) => c.contributionType === "Monthly Dues" && c.amount >= requiredMonthlyDuesAmount && [currentPeriod, priorPeriod].includes(c.contributionPeriod)),
-    hasCurrentCashPabaon: memberContributions.some((c) => c.contributionType === "Cash Pabaon" && [currentPeriod, priorPeriod].includes(c.contributionPeriod)),
+    hasCurrentCashPabaon: memberDeductions.some(
+      (deduction) => deduction.deductionTypeCode?.toLowerCase() === "pabaon"
+        && [currentPeriod, priorPeriod].includes(deduction.period)
+    ),
   }
   const activeLoans = memberLoans.filter((l) => ["Active", "Overdue", "Released"].includes(l.status))
   const overdueLoans = memberLoans.filter((l) => l.status === "Overdue")
@@ -205,7 +276,7 @@ export default function CreateLoanApplicationPage() {
     if (loanSettings?.requirePaidContributions === false) return
 
     const qualifyingPeriods = new Set(
-      getAllContributions()
+      liveContributions
         .filter((contribution) =>
           contribution.memberId === selectedMemberId
           && contribution.status === "Posted"
@@ -223,10 +294,7 @@ export default function CreateLoanApplicationPage() {
   function deriveEntry(entry: LoanEntry, memberForEval: Member | undefined): EntryDerived {
     const loanType = loanTypes.find((lt) => lt.id === entry.loanTypeId)
     const isBracketedLoanType = Boolean(loanType && loanType.incomeBrackets.length > 0)
-    const incomeBracket = loanType && isBracketedLoanType && memberForEval?.netPay != null
-      ? bracketForNetPay(loanType.incomeBrackets, memberForEval.netPay)
-      : null
-    const effectiveAmount = isBracketedLoanType ? incomeBracket?.loanableAmount : entry.requestedAmount
+    const effectiveAmount = entry.requestedAmount
     const paidMonthlyDues: PaidMonthlyDuesSummary = {
       paidMonths: paidMonthlyDuesPeriods.length,
       consecutivePaidMonths,
@@ -362,6 +430,9 @@ export default function CreateLoanApplicationPage() {
 
   function handleLoanTypeChange(key: string, loanTypeId: string) {
     const loanType = loanTypes.find((lt) => lt.id === loanTypeId)
+    const incomeBracket = loanType && loanType.incomeBrackets.length > 0 && member?.netPay != null
+      ? bracketForNetPay(loanType.incomeBrackets, member.netPay)
+      : null
     setEntries((prev) =>
       prev.map((e) =>
         e.key === key
@@ -369,7 +440,7 @@ export default function CreateLoanApplicationPage() {
               ...e,
               loanTypeId,
               termMonths: e.termMonths ?? (loanType ? Math.min(12, loanType.maxTermMonths) : e.termMonths),
-              requestedAmount: loanType && loanType.incomeBrackets.length === 0 ? (e.requestedAmount ?? loanType.minAmount) : e.requestedAmount,
+              requestedAmount: incomeBracket?.loanableAmount ?? loanType?.maxAmount ?? e.requestedAmount,
             }
           : e
       )
@@ -380,8 +451,19 @@ export default function CreateLoanApplicationPage() {
     if (s === 1) return !!member && hasAnyFullyPaidMonthlyDues
     if (s === 2) return entries.length > 0 && entries.every((e) => {
       const monthlyDuesCheck = derivedFor(e.key).eligibilityItems.find((item) => item.label === "Fully Paid Monthly Dues")
+      const selectedLoanType = loanTypes.find((loanType) => loanType.id === e.loanTypeId)
+      const bracket = selectedLoanType && selectedLoanType.incomeBrackets.length > 0 && member?.netPay != null
+        ? bracketForNetPay(selectedLoanType.incomeBrackets, member.netPay)
+        : null
+      const amountWithinBracket = !selectedLoanType?.incomeBrackets.length || (
+        bracket !== null
+        && e.requestedAmount != null
+        && e.requestedAmount >= selectedLoanType.minAmount
+        && e.requestedAmount <= bracket.loanableAmount
+      )
       return !!e.loanTypeId
         && !!e.requestedAmount
+        && amountWithinBracket
         && !!e.termMonths
         && !!e.purpose.trim()
         && monthlyDuesCheck?.passed !== false
@@ -555,6 +637,19 @@ export default function CreateLoanApplicationPage() {
           }
           description="Enter one loan type and one requested amount for this application."
         >
+          {member && (
+            <div className="mb-5">
+              <MemberSummaryCard
+                member={member}
+                totalContributions={totalContributions}
+                outstandingLoanBalance={outstandingLoanBalance}
+                activeLoanCount={activeLoans.length}
+                overdueLoanCount={overdueLoans.length}
+                onChangeMember={() => setStep(1)}
+              />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Application Date <span className="text-destructive">*</span></Label>
@@ -585,15 +680,32 @@ export default function CreateLoanApplicationPage() {
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Requested Amount <span className="text-destructive">*</span></Label>
                       {derived.isBracketedLoanType ? (
-                        /* Dynamic Limit Placard */
                         <div className="space-y-2 bg-muted/20 border border-border/60 rounded-xl p-4 shadow-inner">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 block">Calculated Loanable Limit</span>
-                          <div className="text-xl font-bold text-foreground">{formatCurrency(derived.effectiveAmount ?? 0)}</div>
-                          <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                          <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Loanable Amount Range</span>
+                          <div className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-semibold text-foreground">
+                            {member?.netPay == null
+                              ? "Unavailable"
+                              : `${formatCurrency(derived.loanType?.minAmount ?? 0)} – ${formatCurrency(
+                                  bracketForNetPay(derived.loanType?.incomeBrackets ?? [], member.netPay)?.loanableAmount ?? 0
+                                )}`}
+                          </div>
+                          <Label className="block pt-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                            Requested Amount <span className="text-destructive">*</span>
+                          </Label>
+                          <CurrencyInput value={entry.requestedAmount} onChange={(value) => updateEntry(entry.key, { requestedAmount: value })} />
+                          <p className={cn("mt-1 text-[11px] leading-relaxed", member?.netPay == null ? "font-medium text-destructive" : "text-muted-foreground")}>
                             {member?.netPay == null
                               ? "Member has no net pay on file — set it on the member's profile to compute the correct loanable limit."
-                              : "Determined dynamically from the member's net pay bracket. Not editable."}
+                              : "Enter the actual amount the member wants to borrow within the calculated range above."}
                           </p>
+                          {member?.netPay != null && entry.requestedAmount != null && (() => {
+                            const bracket = bracketForNetPay(derived.loanType?.incomeBrackets ?? [], member.netPay)
+                            return bracket && (entry.requestedAmount < (derived.loanType?.minAmount ?? 0) || entry.requestedAmount > bracket.loanableAmount) ? (
+                              <p className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+                                <AlertTriangle className="size-3.5" /> Enter an amount within the allowed net-pay range.
+                              </p>
+                            ) : null
+                          })()}
                         </div>
                       ) : (
                         <CurrencyInput value={entry.requestedAmount} onChange={(v) => updateEntry(entry.key, { requestedAmount: v })} />
@@ -684,11 +796,55 @@ export default function CreateLoanApplicationPage() {
                   )}
                   {derived.loanType && (() => {
                     const monthlyDuesCheck = derived.eligibilityItems.find((item) => item.label === "Fully Paid Monthly Dues")
+                    const requiredMonths = Math.max(derived.loanType.requiredContributionMonths, requiredPaidMonths)
+                    const monthStatuses = loanSettings?.requireConsecutiveContributionMonths === false
+                      ? []
+                      : monthlyDuesWindow(paidMonthlyDuesPeriods, requiredMonths)
                     return monthlyDuesCheck && !monthlyDuesCheck.passed ? (
                       <AlertBanner
                         tone="danger"
                         title="Fully Paid Monthly Dues — Not Eligible"
-                        description={`${monthlyDuesCheck.detail} Requirement applied for ${derived.loanType.name}: ${Math.max(derived.loanType.requiredContributionMonths, requiredPaidMonths)} fully paid month(s).`}
+                        description={
+                          <div className="space-y-2.5">
+                            <p>{monthlyDuesCheck.detail} Requirement applied for {derived.loanType.name}: {requiredMonths} fully paid month(s).</p>
+                            {monthStatuses.length > 0 && (
+                              <div>
+                                <p className="mb-1.5 text-xs font-semibold text-foreground/80">Required monthly payment status</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {monthStatuses.map((month) => (
+                                    <span
+                                      key={month.period}
+                                      className={cn(
+                                        "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold",
+                                        month.status === "paid"
+                                          ? "border-success/30 bg-success/10 text-success"
+                                          : month.status === "due"
+                                            ? "border-warning/40 bg-warning/10 text-warning"
+                                            : "border-destructive/30 bg-destructive/10 text-destructive"
+                                      )}
+                                    >
+                                      {month.status === "paid"
+                                        ? <CheckCircle2 className="size-3.5" />
+                                        : month.status === "due"
+                                          ? <AlertTriangle className="size-3.5" />
+                                          : <XCircle className="size-3.5" />}
+                                      {month.label}
+                                    </span>
+                                  ))}
+                                </div>
+                                <p className="mt-2 text-xs font-semibold text-success">
+                                  Paid month(s): {monthStatuses.filter((month) => month.status === "paid").map((month) => month.label).join(", ") || "None"}
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-warning">
+                                  Current month to pay: {monthStatuses.filter((month) => month.status === "due").map((month) => month.label).join(", ") || "None"}
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-destructive">
+                                  Missed past month(s): {monthStatuses.filter((month) => month.status === "overdue").map((month) => month.label).join(", ") || "None"}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        }
                       />
                     ) : null
                   })()}
@@ -792,6 +948,28 @@ export default function CreateLoanApplicationPage() {
                       Entry {idx + 1}{derived.loanType ? ` · ${derived.loanType.name}` : ""}
                     </p>
                   )}
+                  <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-4 py-3">
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Payment Term</p>
+                      <p className="text-[11px] text-muted-foreground">Change the number of payment months to recalculate the loan.</p>
+                    </div>
+                    <div className="w-full sm:w-52">
+                      <Label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Months to Pay
+                      </Label>
+                      <CommandSelect
+                        className="h-9 w-full bg-background text-sm"
+                        hideSearch
+                        value={entry.termMonths ? String(entry.termMonths) : undefined}
+                        onValueChange={(value) => updateEntry(entry.key, { termMonths: value ? Number(value) : undefined })}
+                        options={Array.from({ length: derived.loanType?.maxTermMonths ?? 1 }, (_, month) => ({
+                          value: String(month + 1),
+                          label: `${month + 1} month${month === 0 ? "" : "s"}`,
+                        }))}
+                        placeholder="Select months"
+                      />
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <ComputationStat label="Principal Amount" value={formatCurrency(computation.principal)} />
                     <ComputationStat label="Total Interest" value={formatCurrency(computation.totalInterest)} />
@@ -803,33 +981,51 @@ export default function CreateLoanApplicationPage() {
                     <ComputationStat label="Maturity Date" value={formatDateShort(computation.maturityDate)} />
                   </div>
 
-                  <div className="max-h-96 overflow-auto rounded-xl border border-border/60 bg-card shadow-sm">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-muted/50 backdrop-blur-md border-b border-border z-10">
-                        <TableRow>
-                          <TableHead className="bg-transparent h-10 font-bold text-xs uppercase tracking-wider">#</TableHead>
-                          <TableHead className="bg-transparent h-10 font-bold text-xs uppercase tracking-wider">Due Date</TableHead>
-                          <TableHead className="bg-transparent h-10 font-bold text-xs uppercase tracking-wider">Beginning Balance</TableHead>
-                          <TableHead className="bg-transparent h-10 font-bold text-xs uppercase tracking-wider">Principal</TableHead>
-                          <TableHead className="bg-transparent h-10 font-bold text-xs uppercase tracking-wider">Interest</TableHead>
-                          <TableHead className="bg-transparent h-10 font-bold text-xs uppercase tracking-wider">Amount Due</TableHead>
-                          <TableHead className="bg-transparent h-10 font-bold text-xs uppercase tracking-wider">Remaining Balance</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {computation.schedule.map((sEntry) => (
-                          <TableRow key={sEntry.installmentNumber} className="hover:bg-muted/10 border-b border-border/40 last:border-0 transition-colors">
-                            <TableCell className="font-medium text-foreground text-xs">{sEntry.installmentNumber}</TableCell>
-                            <TableCell className="text-muted-foreground text-xs">{formatDateShort(sEntry.dueDate)}</TableCell>
-                            <TableCell className="font-medium text-foreground text-xs">{formatCurrency(sEntry.beginningBalance)}</TableCell>
-                            <TableCell className="font-medium text-foreground text-xs">{formatCurrency(sEntry.principal)}</TableCell>
-                            <TableCell className="font-medium text-foreground text-xs">{formatCurrency(sEntry.interest)}</TableCell>
-                            <TableCell className="font-semibold text-foreground text-xs">{formatCurrency(sEntry.amountDue)}</TableCell>
-                            <TableCell className="font-medium text-foreground text-xs">{formatCurrency(sEntry.remainingBalance)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  <div className="rounded-lg border border-info/25 bg-info/5 px-4 py-3 text-xs leading-relaxed text-foreground/80">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <p className="font-semibold text-foreground">Computation Basis</p>
+                      <span className="text-[10px] font-medium text-muted-foreground">
+                        {derived.loanType?.interestMethod ?? "Configured method"} · {derived.loanType?.defaultInterestRate ?? 0}%/month · {entry.termMonths} month(s)
+                      </span>
+                    </div>
+                    <div className="mt-2 grid gap-x-5 gap-y-1 sm:grid-cols-2">
+                      <p>
+                        <span className="font-medium text-foreground">Interest = </span>
+                        {derived.loanType?.interestMethod === "Zero Interest"
+                          ? <><strong>{formatCurrency(computation.principal)}</strong> Principal Loan Amount × <strong>0%</strong> Monthly Interest = <strong>{formatCurrency(computation.totalInterest)}</strong></>
+                          : derived.loanType?.interestMethod === "Flat Interest"
+                            ? <><strong>{formatCurrency(computation.principal)}</strong> Principal Loan Amount × <strong>{derived.loanType.defaultInterestRate}%</strong> Monthly Interest × <strong>{entry.termMonths}</strong> Months = <strong>{formatCurrency(computation.totalInterest)}</strong></>
+                            : <>Sum of (<strong>Remaining Principal Balance</strong> × <strong>{derived.loanType?.defaultInterestRate ?? 0}%</strong> Monthly Interest) for <strong>{entry.termMonths}</strong> Months = <strong>{formatCurrency(computation.totalInterest)}</strong></>}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Total Payable = </span>
+                        <strong>{formatCurrency(computation.principal)}</strong> Principal Loan Amount + <strong>{formatCurrency(computation.totalInterest)}</strong> Total Interest = <strong>{formatCurrency(computation.totalAmountPayable)}</strong>
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Monthly Amortization = </span>
+                        {derived.loanType?.interestMethod === "Diminishing Balance"
+                          ? <><strong>{formatCurrency(computation.principal)}</strong> Principal × Monthly Rate Formula for <strong>{entry.termMonths}</strong> Months = <strong>{formatCurrency(computation.monthlyAmortization)}</strong></>
+                          : <><strong>{formatCurrency(computation.totalAmountPayable)}</strong> Total Payable ÷ <strong>{entry.termMonths}</strong> Payment Months = <strong>{formatCurrency(computation.monthlyAmortization)}</strong></>}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Net Proceeds = </span>
+                        <strong>{formatCurrency(computation.principal)}</strong> Principal Loan Amount − <strong>{formatCurrency(computation.processingFee)}</strong> Processing Fee
+                        {computation.serviceCharge > 0 && <> − <strong>{formatCurrency(computation.serviceCharge)}</strong> Service Charge</>}
+                        {" = "}<strong>{formatCurrency(computation.netProceeds)}</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+                    <DataTable
+                      columns={AMORTIZATION_COLUMNS}
+                      data={computation.schedule}
+                      getRowId={(row) => String(row.installmentNumber)}
+                      enableColumnVisibility={false}
+                      maxHeight="max-h-96"
+                      emptyTitle="No amortization schedule"
+                      emptyDescription="Complete the loan amount and term to generate the schedule."
+                    />
                   </div>
                 </div>
               )

@@ -67,16 +67,19 @@ export function getBenefitTypesSync(): BenefitType[] {
 
 export async function createBenefitType(input: BenefitTypeInput): Promise<BenefitType> {
   const { data } = await api.post<BenefitType>("/benefit-types", input)
+  cachedBenefitTypes = [data, ...cachedBenefitTypes]
   return data
 }
 
 export async function updateBenefitType(id: string, input: Partial<BenefitTypeInput>): Promise<BenefitType> {
   const { data } = await api.put<BenefitType>(`/benefit-types/${id}`, input)
+  cachedBenefitTypes = cachedBenefitTypes.map((benefitType) => benefitType.id === data.id ? data : benefitType)
   return data
 }
 
 export async function deleteBenefitType(id: string): Promise<void> {
   await api.delete(`/benefit-types/${id}`)
+  cachedBenefitTypes = cachedBenefitTypes.filter((benefitType) => benefitType.id !== id)
 }
 
 // Best-effort synchronous cache of all benefits — mirrors getAllLoans() in

@@ -22,6 +22,12 @@ export default function BenefitTypesPage() {
 
   const { data: benefitTypes = [] } = useQuery({ queryKey: ["benefit-types"], queryFn: listBenefitTypes })
 
+  React.useEffect(() => {
+    if (!editingBenefitType) return
+    const latest = benefitTypes.find((benefitType) => benefitType.id === editingBenefitType.id)
+    if (latest && latest !== editingBenefitType) setEditingBenefitType(latest)
+  }, [benefitTypes, editingBenefitType])
+
   const createMutation = useMutation({
     mutationFn: createBenefitType,
     onSuccess: () => {

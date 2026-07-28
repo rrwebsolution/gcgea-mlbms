@@ -25,7 +25,7 @@ function applyTheme(resolved: ResolvedTheme) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = React.useState<ThemePreference>(() => readStorage<ThemePreference>(STORAGE_KEYS.themePreference, "dark"))
+  const [theme, setThemeState] = React.useState<ThemePreference>(() => readStorage<ThemePreference>(STORAGE_KEYS.themePreference, "light"))
   const [resolvedTheme, setResolvedTheme] = React.useState<ResolvedTheme>(() => (theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme))
 
   React.useEffect(() => {

@@ -13,7 +13,11 @@ const MIN_VISIBLE_MS = 400
  * overlay for in-app navigation so it never stacks on top of each page's own skeleton.
  */
 export function RouteProgressBar() {
-  const isFetching = useIsFetching() > 0
+  // Background synchronization already has usable cached data and should stay
+  // visually silent. Show the global bar only for genuine first-load requests.
+  const isFetching = useIsFetching({
+    predicate: (query) => query.state.data === undefined,
+  }) > 0
   const [visible, setVisible] = React.useState(false)
   const [progress, setProgress] = React.useState(0)
   const shownAtRef = React.useRef<number | null>(null)

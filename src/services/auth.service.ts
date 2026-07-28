@@ -29,6 +29,7 @@ export async function resetPassword(token: string, email: string, password: stri
   await api.post("/auth/reset-password", { token, email, password, confirmPassword })
 }
 
-export async function changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<void> {
-  await api.post("/auth/change-password", { currentPassword, newPassword, confirmPassword })
+export async function changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<AuthUser> {
+  const { data } = await api.post<AuthUser>("/auth/change-password", { currentPassword, newPassword, confirmPassword })
+  return data
 }

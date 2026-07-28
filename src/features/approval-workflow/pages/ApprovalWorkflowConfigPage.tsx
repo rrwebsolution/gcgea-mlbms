@@ -19,18 +19,25 @@ import { listAllRoles } from "@/services/roles.service"
 import { listAllUsers } from "@/services/users.service"
 import { listAllOffices } from "@/services/offices.service"
 import type { WorkflowDefinition, WorkflowStage } from "@/types"
+import { useAuth } from "@/contexts/AuthContext"
 
 function permissionForStage(definition: WorkflowDefinition, stageType: WorkflowStage["stageType"]) {
+  if (definition.moduleKey === "annual_budget") return "annual_budgets.approve"
+  if (definition.moduleKey === "disbursement") return "disbursements.approve"
   const module = {
     member_registration: "members",
     loan_application: "loans",
     benefit_application: "benefits",
+    annual_budget: "annual_budgets",
+    disbursement: "disbursements",
   }[definition.moduleKey]
   return `${module}.${stageType}` as WorkflowStage["requiredPermissionCode"]
 }
 
 function DefinitionCard({ definition }: { definition: WorkflowDefinition }) {
   const queryClient = useQueryClient()
+  const { hasPermission } = useAuth()
+  const canConfigure = hasPermission("approval_workflow.configure")
   const [stages, setStages] = React.useState<WorkflowStage[]>(definition.stages)
 
   const { data: roles = [] } = useQuery({ queryKey: ["roles", "all"], queryFn: listAllRoles })
@@ -43,20 +50,28 @@ function DefinitionCard({ definition }: { definition: WorkflowDefinition }) {
 
   const isDirty = JSON.stringify(stages) !== JSON.stringify(definition.stages)
 
+  function applySavedDefinition(saved: WorkflowDefinition) {
+    queryClient.setQueryData<WorkflowDefinition[]>(
+      ["admin", "workflow-definitions"],
+      (current = []) => current.map((item) => item.id === saved.id ? saved : item)
+    )
+  }
+
   const toggleMutation = useMutation({
     mutationFn: (isEnabled: boolean) => toggleWorkflowDefinition(definition.id, isEnabled),
-    onSuccess: () => {
-      toast.success(`${definition.label} workflow ${definition.isEnabled ? "disabled" : "enabled"}.`)
-      queryClient.invalidateQueries({ queryKey: ["admin", "workflow-definitions"] })
+    onSuccess: (saved) => {
+      applySavedDefinition(saved)
+      toast.success(`${saved.label} workflow ${saved.isEnabled ? "enabled" : "disabled"}.`)
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Unable to update this workflow."),
   })
 
   const saveStagesMutation = useMutation({
     mutationFn: () => updateWorkflowStages(definition.id, stages),
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      applySavedDefinition(saved)
+      setStages(saved.stages)
       toast.success("Approver assignments saved.")
-      queryClient.invalidateQueries({ queryKey: ["admin", "workflow-definitions"] })
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Unable to save these assignments."),
   })
@@ -119,7 +134,7 @@ function DefinitionCard({ definition }: { definition: WorkflowDefinition }) {
             id={`toggle-${definition.id}`}
             checked={definition.isEnabled}
             onCheckedChange={(checked) => toggleMutation.mutate(checked)}
-            disabled={toggleMutation.isPending}
+            disabled={!canConfigure || toggleMutation.isPending}
           />
         </div>
       </div>
@@ -131,23 +146,24 @@ function DefinitionCard({ definition }: { definition: WorkflowDefinition }) {
           </p>
         )}
         {stages.map((stage, index) => (
-          <WorkflowStageEditor
-            key={stage.id}
-            stage={stage}
-            roles={roles}
-            users={users}
-            offices={offices}
-            onChange={(next) => updateStage(index, next)}
-            onRemove={stages.length > 1 ? () => removeStage(index) : undefined}
-          />
+          <fieldset key={stage.id} disabled={!canConfigure}>
+            <WorkflowStageEditor
+              stage={stage}
+              roles={roles}
+              users={users}
+              offices={offices}
+              onChange={(next) => updateStage(index, next)}
+              onRemove={canConfigure && stages.length > 1 ? () => removeStage(index) : undefined}
+            />
+          </fieldset>
         ))}
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addStage} disabled={roles.length === 0}>
+        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addStage} disabled={!canConfigure || roles.length === 0}>
           <Plus className="size-3.5" /> Add Stage
         </Button>
       </div>
 
       <div className="flex justify-end border-t border-border p-4">
-        <Button size="sm" className="gap-1.5" disabled={!isDirty || saveStagesMutation.isPending} onClick={() => saveStagesMutation.mutate()}>
+        <Button size="sm" className="gap-1.5" disabled={!canConfigure || !isDirty || saveStagesMutation.isPending} onClick={() => saveStagesMutation.mutate()}>
           <Save className="size-3.5" />
           Save Workflow Setup
         </Button>

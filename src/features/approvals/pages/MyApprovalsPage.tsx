@@ -14,6 +14,7 @@ import { listMyApprovals } from "@/services/approvals.service"
 import { formatDateTime } from "@/utils/format"
 import type { StatusTone } from "@/constants/status"
 import type { MyApprovalItem, MyApprovalTab } from "@/types"
+import { useAuth } from "@/contexts/AuthContext"
 
 const TABS: { value: MyApprovalTab; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -32,17 +33,18 @@ function statusTone(status: string): StatusTone {
 }
 
 export default function MyApprovalsPage() {
+  const { user } = useAuth()
   const [tab, setTab] = React.useState<MyApprovalTab>("pending")
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["my-approvals", { tab, page, perPage }],
+    queryKey: ["my-approvals", user?.id, { tab, page, perPage }],
     queryFn: () => listMyApprovals({ tab, page, perPage }),
   })
 
   const { data: pendingData } = useQuery({
-    queryKey: ["my-approvals", { tab: "pending", page: 1, perPage: 1 }],
+    queryKey: ["my-approvals", user?.id, { tab: "pending", page: 1, perPage: 1 }],
     queryFn: () => listMyApprovals({ tab: "pending", page: 1, perPage: 1 }),
     enabled: tab !== "pending",
   })
