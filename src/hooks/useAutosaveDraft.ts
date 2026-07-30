@@ -30,9 +30,9 @@ export function useAutosaveDraft<T>(value: T, save: (value: T) => Promise<unknow
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, enabled, delayMs])
 
-  const triggerNow = React.useCallback(() => {
+  const triggerNow = React.useCallback((overrideValue?: T) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    return saveRef.current(latestValue.current)
+    return saveRef.current(overrideValue ?? latestValue.current)
   }, [])
 
   return { triggerNow }

@@ -55,11 +55,23 @@ export interface EligibilityCheckItem {
   label: string
   passed: boolean
   detail: string
+  severity?: "warning" | "error"
 }
 
 export type LoanApplicationType = "new" | "reloan"
 
 export type PreviousObligationSettlementMethod = "full_payment_required" | "deducted"
+
+export interface LoanDocument {
+  id: string
+  loanId: string
+  requirementLabel: string
+  fileName: string
+  fileUrl: string
+  fileSizeBytes: number
+  uploadedBy: string
+  uploadedAt: string
+}
 
 export interface LoanApplication {
   id: string
@@ -118,6 +130,7 @@ export interface LoanApplication {
   previousObligationSettledAt?: string
 
   requirements: LoanRequirementItem[]
+  documents?: LoanDocument[]
 
   releaseDate?: string
   releaseReferenceNumber?: string
@@ -157,6 +170,8 @@ export interface ApprovalHistoryEntry {
   id: string
   action: string
   performedBy: string
+  /** The role that authorized this action (the stage's assigned approver role), not necessarily the actor's primary role — a user can hold more than one. */
+  performedByRole?: string
   performedAt: string
   remarks?: string
 }

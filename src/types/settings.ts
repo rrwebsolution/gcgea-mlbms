@@ -112,6 +112,10 @@ export interface BenefitSettings {
   requireSupportingDocuments: boolean
   allowMultiplePendingApplications: boolean
   benefitYearResetMonth: string
+  nuclearFamilyParentAmount: number
+  nuclearFamilyFirstSiblingAmount: number
+  nuclearFamilySecondSiblingAmount: number
+  nuclearFamilyThirdSiblingAmount: number
   /** GCGEA Board Resolution No. 24-2026, Table 2 note — spouses who are both regular members each keep an independent right to all benefits, unaffected by the other spouse's membership status. */
   independentSpousalBenefitRights: boolean
 }
@@ -207,7 +211,7 @@ export interface BackupHistoryEntry {
   date: string
   type: "Manual" | "Automatic"
   size: string
-  status: "Completed" | "Failed"
+  status: "Processing" | "Completed" | "Failed"
   createdBy: string
 }
 
@@ -230,6 +234,7 @@ export interface AppearanceSettings {
   sidebarFooterLeftLogoLabel: string
   sidebarFooterRightLogoUrl: string
   sidebarFooterRightLogoLabel: string
+  showSidebarFooterLogos: boolean
   primaryColor: string
   secondaryColor: string
   accentColor: string
@@ -238,6 +243,9 @@ export interface AppearanceSettings {
   progressColorStart: string
   progressColorMiddle: string
   progressColorEnd: string
+  progressDarkColorStart: string
+  progressDarkColorMiddle: string
+  progressDarkColorEnd: string
   baseFontSize: number
   fontWeight: 400 | 500 | 600 | 700
   fontFamily: "century-gothic" | "arial" | "calibri" | "verdana" | "geist" | "system" | "serif" | "monospace"

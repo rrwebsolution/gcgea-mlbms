@@ -42,6 +42,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const resolved: ResolvedTheme = e.matches ? "dark" : "light"
       setResolvedTheme(resolved)
       applyTheme(resolved)
+      applyAppearanceTheme(getAppearance())
     }
     media.addEventListener("change", handleChange)
     return () => media.removeEventListener("change", handleChange)

@@ -16,8 +16,8 @@ export function isProfileComplete(member: Member): boolean {
     member.email &&
       member.cellphoneNumber &&
       member.permanentAddress &&
-      member.beneficiaries.length > 0 &&
-      member.documents.length > 0
+      (member.beneficiaries?.length ?? 0) > 0 &&
+      (member.documents?.length ?? 0) > 0
   )
 }
 
@@ -27,8 +27,8 @@ export function profileCompleteness(member: Member): number {
     Boolean(member.cellphoneNumber),
     Boolean(member.permanentAddress),
     Boolean(member.nameOfSpouse) || member.civilStatus !== "Married",
-    member.beneficiaries.length > 0,
-    member.documents.length > 0,
+    (member.beneficiaries?.length ?? 0) > 0,
+    (member.documents?.length ?? 0) > 0,
     Boolean(member.profilePhotoUrl),
   ]
   const complete = checks.filter(Boolean).length

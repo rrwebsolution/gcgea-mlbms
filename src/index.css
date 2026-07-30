@@ -159,6 +159,17 @@
     }
 }
 
+html[data-compact="true"] [data-slot="table-head"] {
+  height: 2rem;
+  padding-block: 0.25rem;
+}
+html[data-compact="true"] [data-slot="table-cell"] {
+  padding-block: 0.3rem;
+}
+html[data-compact="true"] [data-slot="card"] {
+  --card-spacing: 0.75rem;
+}
+
 /* Glass surfaces let the branded application background remain visible
    through cards, data tables, and chart panels without sacrificing contrast. */
 .bg-card,

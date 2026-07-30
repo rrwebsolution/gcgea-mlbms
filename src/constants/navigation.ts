@@ -12,6 +12,7 @@ import {
   FilePlus2,
   BadgeCheck,
   CreditCard,
+  ReceiptText,
   AlertTriangle,
   Settings2,
   HeartHandshake,
@@ -132,7 +133,7 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "My Approvals",
+    label: "Approval Inbox",
     path: "/my-approvals",
     icon: ClipboardCheck,
     anyOf: APPROVAL_NAV_PERMISSIONS,
@@ -143,6 +144,12 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Wallet,
     permission: "annual_budgets.view",
     children: [
+      {
+        label: "Payments",
+        path: "/financial/direct-payments",
+        icon: ReceiptText,
+        anyOf: ["contributions.create", "loan_payments.create"],
+      },
       {
         label: "Annual Budgets",
         path: "/financial/annual-budgets",

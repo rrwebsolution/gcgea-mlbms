@@ -31,7 +31,7 @@ export function DatePicker({ value, onChange, placeholder = "Select date", disab
           />
         }
       >
-        <CalendarIcon className="size-4" />
+        <CalendarIcon className="size-4 text-muted-foreground dark:text-white" aria-hidden="true" />
         {selected ? format(selected, "MMMM d, yyyy") : placeholder}
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

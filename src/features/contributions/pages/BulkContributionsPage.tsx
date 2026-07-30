@@ -14,7 +14,9 @@ import { CommandSelect } from "@/components/shared/CommandSelect"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { AlertBanner } from "@/components/shared/AlertBanner"
+import { Pagination } from "@/components/shared/Pagination"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -84,6 +86,8 @@ export default function BulkContributionsPage() {
   const [rows, setRows] = React.useState<BulkRow[]>([])
   const [isLoadingMembers, setIsLoadingMembers] = React.useState(false)
   const [search, setSearch] = React.useState("")
+  const [page, setPage] = React.useState(1)
+  const [perPage, setPerPage] = React.useState(50)
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
 
   const [showConfirm, setShowConfirm] = React.useState(false)
@@ -220,7 +224,25 @@ export default function BulkContributionsPage() {
   const filteredRows = rows.filter(
     (r) => !search || r.fullName.toLowerCase().includes(search.toLowerCase()) || r.memberNumber.toLowerCase().includes(search.toLowerCase())
   )
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage))
+  const currentPage = Math.min(page, totalPages)
+  const pagedRows = filteredRows.slice((currentPage - 1) * perPage, currentPage * perPage)
   const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id])
+  const selectedIdSet = new Set(selectedIds)
+  const selectedVisibleCount = filteredRows.filter((row) => selectedIdSet.has(row.memberId)).length
+  const allVisibleSelected = filteredRows.length > 0 && selectedVisibleCount === filteredRows.length
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected
+
+  function toggleAllVisible(checked: boolean) {
+    setRowSelection((current) => {
+      const next = { ...current }
+      filteredRows.forEach((row) => {
+        if (checked) next[row.memberId] = true
+        else delete next[row.memberId]
+      })
+      return next
+    })
+  }
 
   function updateRow(memberId: string, patch: Partial<BulkRow>) {
     setRows((prev) => prev.map((r) => (r.memberId === memberId ? { ...r, ...patch } : r)))
@@ -228,17 +250,18 @@ export default function BulkContributionsPage() {
 
   function applyToSelected(patch: Partial<BulkRow> | ((row: BulkRow) => Partial<BulkRow>)) {
     setRows((prev) =>
-      prev.map((r) => (selectedIds.includes(r.memberId) ? { ...r, ...(typeof patch === "function" ? patch(r) : patch) } : r))
+      prev.map((r) => (selectedIdSet.has(r.memberId) ? { ...r, ...(typeof patch === "function" ? patch(r) : patch) } : r))
     )
   }
 
   function excludeSelected() {
-    setRows((prev) => prev.filter((r) => !selectedIds.includes(r.memberId)))
+    setRows((prev) => prev.filter((r) => !selectedIdSet.has(r.memberId)))
     setRowSelection({})
+    toast.success(`${selectedIds.length} selected member(s) excluded.`)
   }
 
   const paidRows = rows.filter((r) => r.status === "Paid")
-  const selectedPaidRows = paidRows.filter((row) => selectedIds.includes(row.memberId))
+  const selectedPaidRows = paidRows.filter((row) => selectedIdSet.has(row.memberId))
   const unpaidRows = rows.filter((r) => r.status === "Unpaid")
   const duplicateRows = rows.filter((r) => r.isDuplicate)
   const totalAmount = selectedPaidRows.reduce((sum, r) => sum + (r.amount || 0), 0)
@@ -311,7 +334,11 @@ export default function BulkContributionsPage() {
       header: "Contribution Amount",
       enableSorting: false,
       cell: ({ row }) => (
-        <CurrencyInput className="h-8 w-32" value={row.original.amount} onChange={() => undefined} disabled />
+        <CurrencyInput
+          className="h-8 w-32"
+          value={row.original.amount}
+          onChange={(value) => updateRow(row.original.memberId, { amount: value ?? 0 })}
+        />
       ),
     },
     {
@@ -393,6 +420,7 @@ export default function BulkContributionsPage() {
               error={officeError}
               onValuesChange={(values) => {
                 setOffices(values)
+                handleClear()
                 if (values.length > 0) setOfficeError(false)
               }}
             />
@@ -509,25 +537,47 @@ export default function BulkContributionsPage() {
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
             <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
-              <SearchInput value={search} onChange={setSearch} placeholder="Search loaded members…" className="max-w-sm" />
+              <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-xs font-medium">
+                <Checkbox
+                  checked={allVisibleSelected}
+                  indeterminate={someVisibleSelected}
+                  onCheckedChange={(checked) => toggleAllVisible(checked)}
+                  aria-label="Select or deselect all displayed members"
+                />
+                Select All
+              </label>
+              <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1) }} placeholder="Search loaded members…" className="max-w-sm" />
               <div className="ml-auto flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected({ amount: defaultAmount })}>Apply Default Amount</Button>
-                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected({ status: "Paid" })}>Mark Selected Paid</Button>
-                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected({ status: "Unpaid" })}>Mark Selected Unpaid</Button>
-                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected({ remarks: "" })}>Clear Remarks</Button>
-                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => applyToSelected((row) => ({ amount: row.originalAmount }))}>Reset Amount</Button>
+                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => { applyToSelected({ amount: defaultAmount }); toast.success(`Default amount applied to ${selectedIds.length} member(s).`) }}>Apply Default Amount</Button>
+                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => { applyToSelected({ status: "Paid" }); toast.success(`${selectedIds.length} member(s) marked Paid.`) }}>Mark Selected Paid</Button>
+                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => { applyToSelected({ status: "Unpaid" }); toast.success(`${selectedIds.length} member(s) marked Unpaid.`) }}>Mark Selected Unpaid</Button>
+                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => { applyToSelected({ remarks: "" }); toast.success(`Remarks cleared for ${selectedIds.length} member(s).`) }}>Clear Remarks</Button>
+                <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={() => { applyToSelected((row) => ({ amount: row.originalAmount })); toast.success(`Amounts reset for ${selectedIds.length} member(s).`) }}>Reset Amount</Button>
                 <Button variant="outline" size="sm" disabled={selectedIds.length === 0} onClick={excludeSelected}>Exclude Selected</Button>
               </div>
             </div>
             <DataTable
               columns={columns}
-              data={filteredRows}
+              data={pagedRows}
               enableRowSelection
               rowSelection={rowSelection}
               onRowSelectionChange={setRowSelection}
               getRowId={(r) => r.memberId}
               enableColumnVisibility={false}
               emptyTitle="No members match your search"
+            />
+            <Pagination
+              meta={{
+                currentPage,
+                perPage,
+                totalRecords: filteredRows.length,
+                totalPages,
+              }}
+              onPageChange={setPage}
+              onPerPageChange={(value) => {
+                setPerPage(value)
+                setPage(1)
+              }}
             />
           </div>
 

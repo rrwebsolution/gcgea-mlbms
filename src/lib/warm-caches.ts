@@ -6,6 +6,7 @@ import { listAllLoanPayments } from "@/services/loan-payments.service"
 import { listAllBenefits } from "@/services/benefits.service"
 import { listAllRoles } from "@/services/roles.service"
 import { listAllUsers } from "@/services/users.service"
+import type { PermissionCode } from "@/types"
 
 /**
  * Several pages read list data synchronously (e.g. duplicate-detection,
@@ -15,13 +16,17 @@ import { listAllUsers } from "@/services/users.service"
  * restore or fresh login) so those caches aren't empty on first render.
  * Fire-and-forget — never awaited by callers.
  */
-export function warmSyncCaches(): void {
-  void listAllActiveMembers()
-  void listAllContributions()
-  void listAllDeductions()
-  void listAllLoans()
-  void listAllLoanPayments()
-  void listAllBenefits()
-  void listAllRoles()
-  void listAllUsers()
+export function warmSyncCaches(permissions: PermissionCode[] = []): void {
+  const granted = new Set(permissions)
+  const warm = (allowed: boolean, load: () => Promise<unknown>) => {
+    if (allowed) void load().catch(() => undefined)
+  }
+  warm(granted.has("members.view"), listAllActiveMembers)
+  warm(granted.has("contributions.view"), listAllContributions)
+  warm(granted.has("deductions.view"), listAllDeductions)
+  warm(granted.has("loans.view"), listAllLoans)
+  warm(granted.has("loan_payments.view"), listAllLoanPayments)
+  warm(granted.has("benefits.view"), listAllBenefits)
+  warm(granted.has("roles.view"), listAllRoles)
+  warm(granted.has("users.view"), listAllUsers)
 }

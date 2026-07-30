@@ -1,6 +1,6 @@
 import type { AppNotification } from "@/types"
 import { api } from "@/lib/api"
-import { getSettings } from "@/services/settings.service"
+import { loadSystemSettings } from "@/services/settings.service"
 
 interface NotificationApiRecord {
   id: string
@@ -15,8 +15,11 @@ interface NotificationApiRecord {
 }
 
 export async function listNotifications(): Promise<AppNotification[]> {
-  const { data } = await api.get<{ data: NotificationApiRecord[] }>("/notifications", { params: { perPage: 100 } })
-  const settings = getSettings().notification
+  const [{ data }, loaded] = await Promise.all([
+    api.get<{ data: NotificationApiRecord[] }>("/notifications", { params: { perPage: 100 } }),
+    loadSystemSettings(),
+  ])
+  const settings = loaded.settings.notification
   if (!settings.inAppNotifications) return []
 
   return data.data

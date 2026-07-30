@@ -2,7 +2,7 @@ import type { StageType } from "./approval-workflow"
 
 export type ApprovalSubjectType = "members" | "loans" | "benefits" | "annual-budgets" | "disbursements"
 
-export type MyApprovalTab = "pending" | "approved" | "rejected" | "returned" | "released"
+export type MyApprovalTab = "pending" | "for-approval" | "approved" | "rejected" | "returned" | "released"
 
 export type ApprovalAction = "review" | "approve" | "reject" | "return" | "release"
 

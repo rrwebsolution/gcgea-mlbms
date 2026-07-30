@@ -195,7 +195,10 @@ export function evaluateLoanEligibility(
     {
       label: "Required Member Profile Fields Complete",
       passed: isProfileComplete(member),
-      detail: isProfileComplete(member) ? "Member profile is complete." : "Member profile is missing required information (contact, beneficiaries, or documents).",
+      severity: "error",
+      detail: isProfileComplete(member)
+        ? "Member profile is complete."
+        : "Member profile is missing required information.",
     },
   ]
 
@@ -267,6 +270,7 @@ export function resultFor(items: EligibilityCheckItem[]): EligibilityResult {
     "Fully Paid Monthly Dues",
     "Monthly Dues Current",
     "No Overdue Loan",
+    "Required Member Profile Fields Complete",
     "No Duplicate Pending Application",
     "Previous Loan Belongs to Member",
     "Previous Loan Status Eligible",

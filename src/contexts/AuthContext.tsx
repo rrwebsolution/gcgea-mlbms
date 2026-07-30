@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import type { AuthUser, LoginCredentials, PermissionCode } from "@/types"
 import * as authService from "@/services/auth.service"
 import { warmSyncCaches } from "@/lib/warm-caches"
+import { applyAppearanceTheme, loadAppearance } from "@/services/settings.service"
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -40,7 +41,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authService.getCurrentUser().then((resolved) => {
       if (cancelled) return
       // Not awaited — isInitializing doesn't wait on this. See warm-caches.ts.
-      if (resolved) warmSyncCaches()
+      if (resolved) {
+        warmSyncCaches(resolved.permissions)
+        void loadAppearance().then(applyAppearanceTheme)
+      }
       const elapsed = performance.now() - start
       setTimeout(() => {
         if (cancelled) return
@@ -71,7 +75,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // worse, briefly show data the new role should not inherit.
       queryClient.clear()
       setUser(authUser)
-      warmSyncCaches()
+      warmSyncCaches(authUser.permissions)
+      void loadAppearance().then(applyAppearanceTheme)
       return authUser
     } finally {
       setIsLoggingIn(false)

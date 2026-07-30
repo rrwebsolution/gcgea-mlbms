@@ -87,44 +87,52 @@ export function Sidebar() {
 
         {/* Footer Area with Logos & Logout Action */}
         <div className="border-t border-sidebar-border/40 bg-sidebar-accent/10 p-3.5 flex flex-col gap-3">
-          {/* Organization Logos Badge */}
-          <div
-            className={cn(
-              "flex items-center justify-center rounded-2xl border border-sidebar-border/30 bg-sidebar-accent/20 p-2.5 backdrop-blur-md transition-all duration-300",
-              isCollapsed ? "flex-col gap-2.5 bg-transparent border-transparent p-0" : "flex-row gap-4"
-            )}
-            aria-label="Organization logos"
-          >
-            {[
-              { src: footerBranding.sidebarFooterLeftLogoUrl, label: footerBranding.sidebarFooterLeftLogoLabel },
-              { src: footerBranding.sidebarFooterRightLogoUrl, label: footerBranding.sidebarFooterRightLogoLabel },
-            ].map((logo, index) => (
-              <div 
-                key={index} 
-                className={cn(
-                  "flex min-w-0 flex-col items-center gap-1.5 transition-all duration-300",
-                  isCollapsed ? "scale-95" : "scale-100 flex-1"
-                )}
-              >
-                <div className="relative flex items-center justify-center rounded-xl bg-background/80 p-2 shadow-2xs ring-1 ring-border/10 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-xs">
-                  <img
-                    src={logo.src}
-                    alt={`${logo.label} logo`}
-                    title={logo.label}
-                    className={cn(
-                      "shrink-0 object-contain transition-all duration-300",
-                      isCollapsed ? "size-6" : "size-8"
-                    )}
-                  />
+          {/* Association footer logos are optional and hidden by default. */}
+          {footerBranding.showSidebarFooterLogos && (
+            <div
+              className={cn(
+                "flex items-center justify-center rounded-2xl border border-sidebar-border/30 bg-sidebar-accent/20 p-2.5 backdrop-blur-md transition-all duration-300",
+                isCollapsed ? "flex-col gap-2.5 bg-transparent border-transparent p-0" : "flex-row gap-4"
+              )}
+              aria-label="Association logos"
+            >
+              {[
+                { src: footerBranding.sidebarFooterLeftLogoUrl, label: footerBranding.sidebarFooterLeftLogoLabel },
+                { src: footerBranding.sidebarFooterRightLogoUrl, label: footerBranding.sidebarFooterRightLogoLabel },
+              ].map((logo, index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    "flex min-w-0 flex-col items-center gap-1.5 transition-all duration-300",
+                    isCollapsed ? "scale-95" : "scale-100 flex-1"
+                  )}
+                >
+                  <div className="relative flex items-center justify-center rounded-xl bg-background/80 p-2 shadow-2xs ring-1 ring-border/10 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-xs">
+                    <img
+                      src={logo.src}
+                      alt={`${logo.label} logo`}
+                      title={logo.label}
+                      className={cn(
+                        "shrink-0 object-contain transition-all duration-300",
+                        isCollapsed
+                          ? "size-6"
+                          : footerBranding.logoSize === "small"
+                            ? "size-6"
+                            : footerBranding.logoSize === "large"
+                              ? "size-10"
+                              : "size-8"
+                      )}
+                    />
+                  </div>
+                  {!isCollapsed && (
+                    <span className="max-w-[90px] truncate text-center text-[9px] font-bold uppercase tracking-wider text-sidebar-foreground/50">
+                      {logo.label}
+                    </span>
+                  )}
                 </div>
-                {!isCollapsed && (
-                  <span className="max-w-[90px] truncate text-center text-[9px] font-bold uppercase tracking-wider text-sidebar-foreground/50">
-                    {logo.label}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Logout Action */}
           <div className="w-full">

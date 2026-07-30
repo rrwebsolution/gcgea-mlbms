@@ -1,6 +1,7 @@
 import { CheckCircle2, FilePlus, Send, ThumbsUp, XCircle } from "lucide-react"
 import type { ApprovalHistoryEntry } from "@/types"
 import { ActivityTimeline, type TimelineEntry } from "@/components/shared/ActivityTimeline"
+import { approvalActionLabel } from "@/utils/approval-action-label"
 
 function iconFor(action: string) {
   const lower = action.toLowerCase()
@@ -14,10 +15,11 @@ function iconFor(action: string) {
 export function ApprovalTimeline({ history }: { history: ApprovalHistoryEntry[] }) {
   const entries: TimelineEntry[] = history.map((h) => ({
     id: h.id,
-    title: h.action,
+    title: approvalActionLabel(h.action),
     description: h.remarks,
     timestamp: h.performedAt,
     actor: h.performedBy,
+    actorRole: h.performedByRole,
     ...iconFor(h.action),
   }))
 

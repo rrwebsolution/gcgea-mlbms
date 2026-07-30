@@ -90,6 +90,9 @@ export default function MemberRegistrationPage() {
   const [completionPercentage, setCompletionPercentage] = React.useState<number | undefined>(existingMember?.draftCompletionPercentage)
   const [profilePhoto, setProfilePhoto] = React.useState<File | null>(null)
   const [documents, setDocuments] = React.useState<Partial<Record<DocumentCategory, File | null>>>({})
+  const [validIdError, setValidIdError] = React.useState(false)
+  const [appointmentDocumentError, setAppointmentDocumentError] = React.useState(false)
+  const [membershipFormError, setMembershipFormError] = React.useState(false)
   const [payslipError, setPayslipError] = React.useState(false)
   const [selectedLocationLabel, setSelectedLocationLabel] = React.useState<string | undefined>()
 
@@ -196,6 +199,7 @@ export default function MemberRegistrationPage() {
   const birthdate = watch("birthdate")
   const dateOfRegularAppointment = watch("dateOfRegularAppointment")
   const membershipDate = watch("membershipDate")
+  const civilStatus = watch("civilStatus")
   const officeId = watch("officeId")
   const permanentAddress = watch("permanentAddress")
 
@@ -241,8 +245,21 @@ export default function MemberRegistrationPage() {
       const controller = new AbortController()
       docAbortRefs.current[category] = controller
       setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress: 0 } }))
-      if (existingDocId) await deleteMemberDocument(id!, existingDocId)
-      return uploadMemberDocument(id!, category, file, (progress) => setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress } })), controller.signal)
+      // Keep the existing document until its replacement has uploaded
+      // successfully. This prevents a failed/cancelled replacement from
+      // permanently removing the member's current file.
+      let member = await uploadMemberDocument(
+        id!,
+        category,
+        file,
+        (progress) => setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress } })),
+        controller.signal
+      )
+      if (existingDocId) {
+        await deleteMemberDocument(id!, existingDocId)
+        member = (await getMember(id!)) ?? member
+      }
+      return member
     },
     onSuccess: (member, variables) => {
       setDocSlots((prev) => ({ ...prev, [variables.category]: { status: "uploaded", progress: 100 } }))
@@ -296,6 +313,9 @@ export default function MemberRegistrationPage() {
   }
 
   function handleDocumentUpload(category: DocumentCategory, file: File) {
+    if (category === "Valid ID") setValidIdError(false)
+    if (category === "Appointment Document") setAppointmentDocumentError(false)
+    if (category === "Membership Form") setMembershipFormError(false)
     if (category === "Payslip") setPayslipError(false)
     if (isEdit) {
       const existingDoc = existingMember?.documents.find((d) => d.category === category)
@@ -367,44 +387,56 @@ export default function MemberRegistrationPage() {
     mutationFn: async (values: MemberFormValues) => {
       const payload = { ...values, beneficiaries: values.beneficiaries }
       const targetId = id ?? memberDraft.draftId
-      const member = !targetId
+      let member = !targetId
         ? await createMember(payload)
         : isDraftContext
           ? await submitMemberDraft(targetId, payload)
           : await updateMember(targetId, payload)
+      const uploadFailures: string[] = []
 
       if (!isEdit) {
         if (profilePhoto) {
           setPhotoSlot({ status: "uploading", progress: 0 })
           try {
-            await uploadMemberPhoto(member.id, profilePhoto, (progress) => setPhotoSlot({ status: "uploading", progress }))
+            member = await uploadMemberPhoto(member.id, profilePhoto, (progress) => setPhotoSlot({ status: "uploading", progress }))
             setPhotoSlot({ status: "uploaded", progress: 100 })
           } catch {
             setPhotoSlot({ status: "failed", progress: 0 })
+            uploadFailures.push("Profile Photo")
           }
         }
         for (const [category, file] of Object.entries(documents) as [DocumentCategory, File | null][]) {
           if (!file) continue
           setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress: 0 } }))
           try {
-            await uploadMemberDocument(member.id, category, file, (progress) => setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress } })))
+            member = await uploadMemberDocument(member.id, category, file, (progress) => setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress } })))
             setDocSlots((prev) => ({ ...prev, [category]: { status: "uploaded", progress: 100 } }))
           } catch {
             setDocSlots((prev) => ({ ...prev, [category]: { status: "failed", progress: 0 } }))
+            uploadFailures.push(category)
           }
         }
       }
 
-      return member
+      // Always use the authoritative server response after all attachments.
+      // The create/update response predates document uploads and otherwise
+      // overwrites the detail cache with an empty documents array.
+      member = (await getMember(member.id)) ?? member
+      return { member, uploadFailures }
     },
-    onSuccess: (member) => {
-      toast.success(
-        isEdit
-          ? "Member profile updated successfully."
-          : member.approvalStatus === "approved"
-            ? "Member successfully registered and activated."
-            : "Member registration was submitted for approval."
-      )
+    onSuccess: ({ member, uploadFailures }) => {
+      queryClient.setQueryData(["members", member.id], member)
+      if (uploadFailures.length > 0) {
+        toast.warning(`Member saved, but these files could not be uploaded: ${uploadFailures.join(", ")}. Open Edit Member Information to retry.`)
+      } else {
+        toast.success(
+          isEdit
+            ? "Member profile updated successfully."
+            : member.approvalStatus === "approved"
+              ? "Member successfully registered and activated."
+              : "Member registration was submitted for approval."
+        )
+      }
       queryClient.invalidateQueries({ queryKey: ["members"] })
       navigate(`/members/${member.id}`)
     },
@@ -422,11 +454,41 @@ export default function MemberRegistrationPage() {
   const isSaving = isSubmitting || mutation.isPending
 
   async function onSubmit(values: MemberFormValues) {
+    const hasValidId = Boolean(
+      documents["Valid ID"]
+      || existingMember?.documents.some((document) => document.category === "Valid ID")
+    )
+    const hasAppointmentDocument = Boolean(
+      documents["Appointment Document"]
+      || existingMember?.documents.some((document) => document.category === "Appointment Document")
+    )
+    const hasMembershipForm = Boolean(
+      documents["Membership Form"]
+      || existingMember?.documents.some((document) => document.category === "Membership Form")
+    )
     const requiresPayslip = Number(values.netPay ?? 0) > 0
     const hasPayslip = Boolean(
       documents.Payslip
       || existingMember?.documents.some((document) => document.category === "Payslip")
     )
+    if (!hasValidId) {
+      setValidIdError(true)
+      toast.error("Valid ID is required. Upload the document in Section 5 before saving.")
+      return
+    }
+    setValidIdError(false)
+    if (!hasAppointmentDocument) {
+      setAppointmentDocumentError(true)
+      toast.error("Appointment Document is required under Employment Documents.")
+      return
+    }
+    setAppointmentDocumentError(false)
+    if (!hasMembershipForm) {
+      setMembershipFormError(true)
+      toast.error("Membership Form is required under Membership Documents.")
+      return
+    }
+    setMembershipFormError(false)
     if (requiresPayslip && !hasPayslip) {
       setPayslipError(true)
       toast.error("Payslip is required when Monthly Net Pay is provided.")
@@ -464,7 +526,12 @@ export default function MemberRegistrationPage() {
           <FileUploader
             key={`${category}-${docResetKeys[category]}`}
             label={category}
-            required={category === "Valid ID" || category === "Payslip"}
+            required={
+              category === "Valid ID"
+              || category === "Appointment Document"
+              || category === "Membership Form"
+              || (category === "Payslip" && hasMonthlyNetPay)
+            }
             accept={DOCUMENT_MIME_TYPES}
             acceptExtensions={DOCUMENT_EXTENSIONS}
             fileName={existingDoc?.fileName}
@@ -756,7 +823,7 @@ export default function MemberRegistrationPage() {
         {/* SECTION 4: Beneficiaries */}
         <FormSection title="Section 4 · Beneficiaries" description="Add one or more beneficiaries for this member.">
           <div className="rounded-xl border border-border bg-card p-4 sm:p-6 shadow-sm">
-            <BeneficiaryFieldArray control={control} register={register} errors={errors} />
+            <BeneficiaryFieldArray control={control} register={register} errors={errors} civilStatus={civilStatus} />
           </div>
         </FormSection>
 
@@ -773,6 +840,21 @@ export default function MemberRegistrationPage() {
           description="Upload scanned copies of supporting documents."
         >
           <div className="rounded-xl border border-border bg-muted/15 p-4 sm:p-6 shadow-sm">
+            {validIdError && (
+              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
+                Valid ID is required. Upload a PDF or image before saving the member.
+              </p>
+            )}
+            {appointmentDocumentError && (
+              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
+                Appointment Document is required under Employment Documents.
+              </p>
+            )}
+            {membershipFormError && (
+              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
+                Membership Form is required under Membership Documents.
+              </p>
+            )}
             {payslipError && hasMonthlyNetPay && (
               <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
                 Payslip is required because Monthly Net Pay has been provided.

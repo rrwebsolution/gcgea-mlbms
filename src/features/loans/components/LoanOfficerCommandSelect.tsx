@@ -27,7 +27,7 @@ export function LoanOfficerCommandSelect({ value, onValueChange, disabled }: Loa
 
   const loanOfficerRoleIds = new Set(
     roles
-      .filter((role) => ["loan officer", "assigned loan officer"].includes(role.name.trim().toLowerCase()))
+      .filter((role) => ["loan officer", "senior loan officer", "assigned loan officer"].includes(role.name.trim().toLowerCase()))
       .map((role) => role.id)
   )
   const officers = users.filter(

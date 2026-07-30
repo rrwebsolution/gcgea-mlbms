@@ -44,13 +44,15 @@ import { BenefitsOfficerCommandSelect } from "@/features/benefits/components/Ben
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { getMember } from "@/services/members.service"
-import { getAllContributions } from "@/services/contributions.service"
-import { getAllDeductions } from "@/services/deductions.service"
+import { listAllContributions } from "@/services/contributions.service"
+import { listAllDeductions } from "@/services/deductions.service"
+import { listDeductionTypes } from "@/services/deduction-types.service"
 import { getMemberLoans } from "@/services/loans.service"
 import { createBenefitApplication, getBenefit, listBenefitTypes, getMemberBenefits, updateBenefitApplication, type CreateBenefitApplicationInput } from "@/services/benefits.service"
+import { loadSystemSettings } from "@/services/settings.service"
 import { CASH_PABAON_PROGRAM_NAME, evaluateBenefitEligibility, resultFor } from "@/utils/eligibility"
 import { computeProratedAmount, countDistinctPeriods } from "@/utils/proration"
-import { formatCurrency } from "@/utils/format"
+import { formatCurrency, formatDateShort } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
 import { useDraft } from "@/hooks/useDraft"
 import { useAutosaveDraft } from "@/hooks/useAutosaveDraft"
@@ -59,10 +61,12 @@ import { cn } from "@/lib/utils"
 import type { BenefitApplication } from "@/types"
 
 const STEPS = ["Select Member", "Benefit Details", "Eligibility & Requirements", "Review & Submit"]
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
-/** Fixed per-sibling schedule for an unmarried member's Nuclear Family Mortuary claim (Resolution No. 24-2026) */
-const SIBLING_SCHEDULE = [15000, 10000, 5000]
+/** Policy defaults used while system settings are loading or for older saved settings. */
+const DEFAULT_SIBLING_SCHEDULE = [15000, 10000, 5000]
 const NUCLEAR_MORTUARY_BENEFIT_NAME = "Mortuary Cash Assistance for Nuclear Family Member"
+type NuclearClaimSubjectType = "Member" | "Spouse" | "Child" | "Parent" | "Sibling"
 
 export default function CreateBenefitApplicationPage() {
   const navigate = useNavigate()
@@ -71,7 +75,19 @@ export default function CreateBenefitApplicationPage() {
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const { user, hasPermission } = useAuth()
-  const canOverride = hasPermission("benefits.override_eligibility")
+  const { data: systemSettings } = useQuery({
+    queryKey: ["system-settings"],
+    queryFn: loadSystemSettings,
+    staleTime: 60_000,
+  })
+  const benefitSettings = systemSettings?.settings.benefit
+  const siblingSchedule = [
+    benefitSettings?.nuclearFamilyFirstSiblingAmount ?? DEFAULT_SIBLING_SCHEDULE[0],
+    benefitSettings?.nuclearFamilySecondSiblingAmount ?? DEFAULT_SIBLING_SCHEDULE[1],
+    benefitSettings?.nuclearFamilyThirdSiblingAmount ?? DEFAULT_SIBLING_SCHEDULE[2],
+  ]
+  const parentMortuaryAmount = benefitSettings?.nuclearFamilyParentAmount ?? 15000
+  const canOverride = hasPermission("benefits.override_eligibility") && (benefitSettings?.allowEligibilityOverride ?? true)
 
   const { data: existingBenefit, isLoading: isLoadingBenefit } = useQuery({
     queryKey: ["benefits", id],
@@ -97,6 +113,8 @@ export default function CreateBenefitApplicationPage() {
   const [reason, setReason] = React.useState("")
   const [recipientType, setRecipientType] = React.useState<"Member" | "Beneficiary">("Member")
   const [recipientNames, setRecipientNames] = React.useState<string[]>([])
+  const [claimSubjectType, setClaimSubjectType] = React.useState<NuclearClaimSubjectType | "">("")
+  const [claimSubjectNames, setClaimSubjectNames] = React.useState<string[]>([])
   const [assignedOfficer, setAssignedOfficer] = React.useState(user?.fullName ?? "")
   const [remarks, setRemarks] = React.useState("")
 
@@ -113,67 +131,189 @@ export default function CreateBenefitApplicationPage() {
 
   const [agree, setAgree] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [isAutosaving, setIsAutosaving] = React.useState(false)
   const [successDialog, setSuccessDialog] = React.useState<{ id: string; applicationNumber: string } | null>(null)
 
-  const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
+  const { data: member } = useQuery({
+    queryKey: ["members", memberId],
+    queryFn: () => getMember(memberId),
+    enabled: !!memberId,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  })
   const { data: benefitTypes = [] } = useQuery({ queryKey: ["benefit-types"], queryFn: listBenefitTypes })
+  const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes })
+  const { data: allContributions = [] } = useQuery({ queryKey: ["contributions", "all"], queryFn: listAllContributions })
+  const { data: allDeductions = [] } = useQuery({ queryKey: ["deductions", "all"], queryFn: listAllDeductions })
   const benefitType = benefitTypes.find((bt) => bt.id === benefitTypeId)
+  const pabaonDeductionType = deductionTypes.find((type) => type.code.toLowerCase() === "pabaon")
 
   const memberLoans = memberId ? getMemberLoans(memberId) : []
-  const memberContributions = memberId ? getAllContributions().filter((c) => c.memberId === memberId && c.status === "Posted") : []
+  const memberContributions = memberId ? allContributions.filter((c) => c.memberId === memberId && c.status === "Posted") : []
   const totalContributions = memberContributions.reduce((sum, c) => sum + c.amount, 0)
   const activeLoans = memberLoans.filter((l) => ["Active", "Overdue", "Released"].includes(l.status))
   const overdueLoans = memberLoans.filter((l) => l.status === "Overdue")
   const outstandingLoanBalance = activeLoans.reduce((sum, l) => sum + l.outstandingBalance, 0)
   const memberBenefits = memberId ? getMemberBenefits(memberId) : []
-  const priorBenefitOfType = memberBenefits.filter((b) => b.benefitTypeId === benefitTypeId && ["Released", "Completed"].includes(b.status))
-  const pendingBenefitOfType = memberBenefits.some((b) => b.benefitTypeId === benefitTypeId && ["Draft", "Submitted", "Under Review", "For Approval"].includes(b.status))
+  const resetMonth = benefitSettings?.benefitYearResetMonth ?? "January"
+  const resetMonthIndex = MONTH_NAMES.indexOf(resetMonth)
+  const now = new Date()
+  const benefitYearStart = new Date(now.getFullYear(), Math.max(0, resetMonthIndex), 1)
+  if (benefitYearStart > now) benefitYearStart.setFullYear(benefitYearStart.getFullYear() - 1)
+  const priorBenefitOfType = memberBenefits.filter((b) =>
+    b.benefitTypeId === benefitTypeId
+    && ["Released", "Completed"].includes(b.status)
+    && Boolean(b.releaseDate)
+    && new Date(b.releaseDate!) >= benefitYearStart
+  )
+  const pendingBenefitOfType = !(benefitSettings?.allowMultiplePendingApplications ?? false)
+    && memberBenefits.some((b) => b.benefitTypeId === benefitTypeId && ["Draft", "Submitted", "Under Review", "For Approval"].includes(b.status))
 
   const memberPabaonDeductions = memberId
-    ? getAllDeductions().filter((d) => d.memberId === memberId && d.status === "Posted" && d.deductionTypeCode === "pabaon")
+    ? allDeductions.filter((deduction) =>
+        deduction.memberId === memberId
+        && deduction.status === "Posted"
+        && (
+          deduction.deductionTypeId === pabaonDeductionType?.id
+          || deduction.deductionTypeCode?.toLowerCase() === "pabaon"
+        )
+      )
     : []
+  const memberDirectPabaonContributions = memberContributions.filter((contribution) => contribution.contributionType === "Cash Pabaon")
+  const monthlyDuesMonthCount = countDistinctPeriods(
+    memberContributions
+      .filter((contribution) => contribution.contributionType === "Monthly Dues")
+      .map((contribution) => contribution.contributionPeriod)
+  )
+  const cashPabaonMonthCount = countDistinctPeriods([
+    ...memberPabaonDeductions.map((deduction) => deduction.period),
+    ...memberDirectPabaonContributions.map((contribution) => contribution.contributionPeriod),
+  ])
+  const latestContributionDate = [
+    ...memberContributions.map((contribution) => contribution.paymentDate),
+    ...memberPabaonDeductions.map((deduction) => deduction.paymentDate),
+  ].filter(Boolean).sort((left, right) => right.localeCompare(left))[0]
 
-  const isSiblingSchedule = benefitType?.name === NUCLEAR_MORTUARY_BENEFIT_NAME && member?.civilStatus !== "Married"
-  const siblingSiblingBeneficiaries = member?.beneficiaries.filter((b) => /sibling|brother|sister/i.test(b.relationship)) ?? []
-  const siblingScheduleTotal = siblingBeneficiaryIds.slice(0, 3).reduce((sum, _id, i) => sum + SIBLING_SCHEDULE[i], 0)
+  const isNuclearMortuary = benefitType?.name === NUCLEAR_MORTUARY_BENEFIT_NAME
+  const isSiblingSchedule = isNuclearMortuary && claimSubjectType === "Sibling"
+  const siblingSiblingBeneficiaries = member?.beneficiaries.filter((beneficiary) =>
+    /^(single brother|single sister)$/i.test(String(beneficiary.relationship ?? "").trim())
+  ) ?? []
+  const siblingScheduleTotal = siblingBeneficiaryIds.slice(0, 3).reduce((sum, _id, i) => sum + siblingSchedule[i], 0)
+  const allowedClaimSubjectTypes: NuclearClaimSubjectType[] = member?.civilStatus === "Married"
+    ? ["Member", "Spouse", "Child"]
+    : ["Member", "Parent", "Sibling"]
+  const claimSubjectOptions = member?.beneficiaries.filter((beneficiary) => {
+    if (claimSubjectType === "Spouse") return /spouse|husband|wife/i.test(beneficiary.relationship)
+    if (claimSubjectType === "Child") return /^unmarried child$/i.test(String(beneficiary.relationship ?? "").trim())
+    if (claimSubjectType === "Parent") return /parent|father|mother/i.test(beneficiary.relationship)
+    if (claimSubjectType === "Sibling") return /^(single brother|single sister)$/i.test(String(beneficiary.relationship ?? "").trim())
+    return false
+  }) ?? []
+  const eligibleSiblingIdKey = siblingSiblingBeneficiaries.map((beneficiary) => beneficiary.id).sort().join("|")
+  const eligibleClaimSubjectNameKey = claimSubjectOptions.map((beneficiary) => beneficiary.fullName).sort().join("|")
+
+  React.useEffect(() => {
+    const eligibleIds = new Set(eligibleSiblingIdKey ? eligibleSiblingIdKey.split("|") : [])
+    setSiblingBeneficiaryIds((current) => current.filter((beneficiaryId) => eligibleIds.has(beneficiaryId)))
+  }, [eligibleSiblingIdKey])
+
+  React.useEffect(() => {
+    if (claimSubjectType === "Member") {
+      setClaimSubjectNames(member?.fullName ? [member.fullName] : [])
+      return
+    }
+    const eligibleNames = new Set(eligibleClaimSubjectNameKey ? eligibleClaimSubjectNameKey.split("|") : [])
+    setClaimSubjectNames((current) => current.filter((name) => eligibleNames.has(name)))
+  }, [eligibleClaimSubjectNameKey, claimSubjectType, member?.fullName])
+
+  const siblingClaimSubjectNames = siblingBeneficiaryIds
+    .map((beneficiaryId) => member?.beneficiaries.find((beneficiary) => beneficiary.id === beneficiaryId)?.fullName)
+    .filter((name): name is string => Boolean(name))
+  const effectiveClaimSubjectNames = isSiblingSchedule ? siblingClaimSubjectNames : claimSubjectNames
+
+  React.useEffect(() => {
+    if (!isNuclearMortuary || !member || claimSubjectType) return
+    setClaimSubjectType("Member")
+    setClaimSubjectNames([member.fullName])
+  }, [isNuclearMortuary, member, claimSubjectType])
 
   const monthsPaid = benefitType?.prorationBasis === "pabaon"
-    ? countDistinctPeriods(memberPabaonDeductions.map((d) => d.period))
+    ? countDistinctPeriods([
+        ...memberPabaonDeductions.map((deduction) => deduction.period),
+        ...memberDirectPabaonContributions.map((contribution) => contribution.contributionPeriod),
+      ])
     : countDistinctPeriods(memberContributions.map((c) => c.contributionPeriod))
   const prorationPreview = benefitType && benefitType.prorationTiers.length > 0 && !isSiblingSchedule
     ? computeProratedAmount(benefitType.prorationTiers, benefitType.fyAmounts, benefitType.maximumAmount, monthsPaid, new Date(applicationDate).getFullYear())
     : null
-  const isComputedAmount = Boolean(prorationPreview) || isSiblingSchedule
+  const isComputedAmount = Boolean(prorationPreview) || isNuclearMortuary
+  const minimumProrationMonths = benefitType?.prorationTiers.length
+    ? Math.min(...benefitType.prorationTiers.map((tier) => tier.minMonths))
+    : 0
 
   React.useEffect(() => {
     if (isSiblingSchedule) {
       setRequestedAmount(siblingScheduleTotal)
+    } else if (isNuclearMortuary && claimSubjectType === "Parent") {
+      setRequestedAmount(parentMortuaryAmount)
+    } else if (isNuclearMortuary && claimSubjectType === "Member" && prorationPreview) {
+      setRequestedAmount(prorationPreview.amount)
     } else if (prorationPreview) {
       setRequestedAmount(prorationPreview.amount)
     } else if (benefitType) {
       setRequestedAmount((prev) => prev ?? benefitType.defaultAmount)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [benefitType, prorationPreview?.amount, isSiblingSchedule, siblingScheduleTotal])
+  }, [benefitType, prorationPreview?.amount, isSiblingSchedule, siblingScheduleTotal, isNuclearMortuary, claimSubjectType, parentMortuaryAmount])
 
   React.useEffect(() => {
     if (benefitType) {
       setRequirements((prev) => Object.fromEntries(benefitType.requiredDocuments.map((d) => [d, prev[d] ?? false])))
-      setRecipientNames((prev) => prev.length > 0 ? prev : member?.fullName ? [member.fullName] : [])
+      if (recipientType === "Member") {
+        setRecipientNames(member?.fullName ? [member.fullName] : [])
+      }
     }
-  }, [benefitType, member])
+  }, [benefitType, member, recipientType])
+
+  const hydratedBenefitIdRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
     if (!existingBenefit) return
+    // Only hydrate local wizard state the first time a draft is opened.
+    // The query cache is rewritten with the server response on every
+    // autosave/manual save, which changes `existingBenefit`'s reference on
+    // every save — re-running this on each of those would snap the step
+    // (and any in-flight edits) back to whatever was last persisted.
+    if (hydratedBenefitIdRef.current === existingBenefit.id) return
+    hydratedBenefitIdRef.current = existingBenefit.id
     setMemberId(existingBenefit.memberId)
     setBenefitTypeId(existingBenefit.benefitTypeId)
     setRequestedAmount(existingBenefit.requestedAmount || undefined)
     setIncidentDate(existingBenefit.incidentDate ?? "")
     setReason(existingBenefit.reason ?? "")
-    setRecipientNames((existingBenefit.beneficiaryOrRecipient ?? "").split(",").map((name) => name.replace(/\s*\([^)]*\)\s*$/, "").trim()).filter(Boolean))
+    const storedRecipient = existingBenefit.beneficiaryOrRecipient ?? ""
+    setRecipientNames(storedRecipient.split("; Claim Subject:")[0].split(",").map((name) => name.replace(/\s*\([^)]*\)\s*$/, "").trim()).filter(Boolean))
     setRequirements(Object.fromEntries((existingBenefit.requirements ?? []).map((r) => [r.label, r.completed])))
     setStep(existingBenefit.draftCurrentStep ?? 1)
   }, [existingBenefit])
+
+  React.useEffect(() => {
+    if (!existingBenefit || benefitType?.name !== NUCLEAR_MORTUARY_BENEFIT_NAME || !member) return
+    const storedSubjects = (existingBenefit.beneficiaryOrRecipient ?? "").split(",").map((entry) => entry.trim()).filter(Boolean)
+    const storedType = storedSubjects[0]?.match(/\((Member|Spouse|Child|Parent|Sibling)\)$/)?.[1] as NuclearClaimSubjectType | undefined
+    if (!storedType) return
+    const names = storedSubjects.map((entry) => entry.replace(/\s*\((Member|Spouse|Child|Parent|Sibling)\)$/, "").trim())
+    setClaimSubjectType(storedType)
+    if (storedType === "Sibling") {
+      setSiblingBeneficiaryIds(
+        names.map((name) => member.beneficiaries.find((beneficiary) => beneficiary.fullName === name)?.id).filter((id): id is string => Boolean(id)).slice(0, 3)
+      )
+    } else {
+      setClaimSubjectNames(names.slice(0, 1))
+    }
+  }, [existingBenefit, benefitType, member])
 
   const isDraftContext = isEdit ? existingBenefit?.status === "Draft" : false
 
@@ -212,6 +352,10 @@ export default function CreateBenefitApplicationPage() {
     const beneficiary = member?.beneficiaries.find((item) => item.fullName === name)
     return recipientType === "Beneficiary" && beneficiary ? `${name} (${beneficiary.relationship})` : name
   }).join(", ")
+  const resolvedRecipientName = isNuclearMortuary ? effectiveClaimSubjectNames.join(", ") : recipientName
+  const storedRecipientLabel = isNuclearMortuary
+    ? effectiveClaimSubjectNames.map((name) => `${name} (${claimSubjectType})`).join(", ")
+    : recipientLabel
 
   const draftSnapshot: CreateBenefitApplicationInput = {
     memberId,
@@ -219,7 +363,7 @@ export default function CreateBenefitApplicationPage() {
     requestedAmount,
     incidentDate: incidentDate || undefined,
     reason: reason || undefined,
-    beneficiaryOrRecipient: recipientName ? recipientLabel : undefined,
+    beneficiaryOrRecipient: resolvedRecipientName ? storedRecipientLabel : undefined,
     requirements: requirementEntries,
     asDraft: true,
     draftCurrentStep: step,
@@ -236,19 +380,38 @@ export default function CreateBenefitApplicationPage() {
     } catch {}
   }
 
-  const autosave = useAutosaveDraft(draftSnapshot, (snap) => (memberId ? benefitDraft.save(snap) : Promise.resolve(undefined)), {
-    enabled: Boolean(memberId) && Boolean(benefitDraft.draftId) && (!isEdit || isDraftContext) && benefitDraft.status !== "saving" && !isSubmitting,
-    delayMs: 30000,
-  })
+  const autosave = useAutosaveDraft(
+    draftSnapshot,
+    async (snap) => {
+      if (!memberId) return
+      // Background autosave shouldn't flip the "Save as Draft" button into its
+      // busy/disabled spinner state — that only reflects a real user click.
+      setIsAutosaving(true)
+      try {
+        await benefitDraft.save(snap)
+      } catch {
+        // already surfaced via benefitDraft's onError toast
+      } finally {
+        setIsAutosaving(false)
+      }
+    },
+    {
+      enabled: Boolean(memberId) && Boolean(benefitDraft.draftId) && (!isEdit || isDraftContext) && benefitDraft.status !== "saving" && !isSubmitting,
+      delayMs: 30000,
+    }
+  )
+
+  const draftButtonStatus = isAutosaving && benefitDraft.status === "saving" ? "idle" : benefitDraft.status
 
   const hasUnsavedChanges = Boolean(memberId) && !successDialog
   const { showPrompt: showUnsavedPrompt, promptLeave, resolvePrompt } = useUnsavedChanges(hasUnsavedChanges)
 
   function canProceedFromStep(s: number): boolean {
-    if (s === 1) return !!member
+    if (s === 1) return Boolean(memberId)
     if (s === 2) {
       if (isSiblingSchedule && siblingBeneficiaryIds.length === 0) return false
-      return !!benefitTypeId && !!requestedAmount && !!reason.trim() && !!recipientName.trim() && !!assignedOfficer.trim()
+      if (isNuclearMortuary && (!claimSubjectType || (!isSiblingSchedule && claimSubjectNames.length === 0))) return false
+      return !!benefitTypeId && !!requestedAmount && !!reason.trim() && !!resolvedRecipientName.trim() && !!assignedOfficer.trim()
     }
     if (s === 3) return !isBlocked
     return true
@@ -259,8 +422,13 @@ export default function CreateBenefitApplicationPage() {
       toast.error("Please complete the required fields before continuing.")
       return
     }
-    setStep((s) => Math.min(STEPS.length, s + 1))
-    if (memberId && benefitDraft.draftId) void autosave.triggerNow()
+    const nextStep = Math.min(STEPS.length, step + 1)
+    setStep(nextStep)
+    // Save the step we're navigating to, not the pre-navigation `step` closure
+    // value — otherwise the persisted draftCurrentStep lags behind the UI by
+    // one step, and the next server-response cache write snaps the wizard
+    // back a step.
+    if (memberId && benefitDraft.draftId) void autosave.triggerNow({ ...draftSnapshot, draftCurrentStep: nextStep })
   }
   function goBack() {
     setStep((s) => Math.max(1, s - 1))
@@ -287,10 +455,12 @@ export default function CreateBenefitApplicationPage() {
         requestedAmount,
         incidentDate: incidentDate || undefined,
         reason: reason || undefined,
-        beneficiaryOrRecipient: recipientName ? recipientLabel : undefined,
+        beneficiaryOrRecipient: resolvedRecipientName ? storedRecipientLabel : undefined,
         requirements: requirementEntries,
         asDraft,
         draftCurrentStep: step,
+        overrideEligibility: !asDraft && overrideEnabled && overrideConfirmed,
+        overrideReason: !asDraft && overrideEnabled ? overrideReason.trim() : undefined,
       })
       if (asDraft) {
         toast.success("Draft saved successfully.")
@@ -313,6 +483,8 @@ export default function CreateBenefitApplicationPage() {
     setIncidentDate("")
     setReason("")
     setRecipientNames([])
+    setClaimSubjectType("")
+    setClaimSubjectNames([])
     setRemarks("")
     setOverrideEnabled(false)
     setOverrideReason("")
@@ -329,7 +501,7 @@ export default function CreateBenefitApplicationPage() {
   }
 
   return (
-    <div className="space-y-6 pb-24 mx-auto max-w-6xl">
+    <div className="mx-auto w-full space-y-6 pb-24">
       {/* Page Header */}
       <PageHeader
         title={isDraftContext ? "Continue Benefit Application Draft" : "Create Benefit Application"}
@@ -371,8 +543,34 @@ export default function CreateBenefitApplicationPage() {
       {/* STEP 2: Benefit Details Form */}
       {step === 2 && (
         <FormSection title="Step 2 · Benefit Details & Purpose">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <div className="space-y-2">
+          {member && (
+            <div className="mb-5 rounded-xl border border-primary/20 bg-primary/[0.03] p-4">
+              <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                <Users className="size-4" />
+                Selected Member
+              </div>
+              <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <ReviewRow label="Full Name" value={member.fullName} />
+                <ReviewRow label="Member Number" value={member.memberNumber} />
+                <ReviewRow label="Office" value={member.officeName} />
+                <ReviewRow label="Membership Status" value={member.membershipStatus} />
+              </dl>
+              <div className="mt-4 border-t border-primary/15 pt-4">
+                <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <Layers className="size-3.5 text-primary" />
+                  Contribution Snapshot
+                </div>
+                <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <ReviewRow label="Posted Contribution Amount" value={formatCurrency(totalContributions)} />
+                  <ReviewRow label="Monthly Dues Months" value={String(monthlyDuesMonthCount)} />
+                  <ReviewRow label="Cash Pabaon Months" value={String(cashPabaonMonthCount)} />
+                  <ReviewRow label="Latest Posted Payment" value={latestContributionDate ? formatDateShort(latestContributionDate) : "No posted payment"} />
+                </dl>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="space-y-2 lg:col-span-3">
               <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Application Date <span className="text-destructive font-bold">*</span>
               </Label>
@@ -384,39 +582,76 @@ export default function CreateBenefitApplicationPage() {
               />
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-2 lg:col-span-3">
               <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Benefit Type <span className="text-destructive font-bold">*</span>
               </Label>
               <CommandSelect
                 className="w-full h-10 text-sm bg-background border-border hover:bg-accent/40 transition-all rounded-xl"
                 value={benefitTypeId}
-                onValueChange={(v) => setBenefitTypeId(v ?? "")}
+                onValueChange={(v) => {
+                  const nextBenefitTypeId = v ?? ""
+                  setBenefitTypeId(nextBenefitTypeId)
+                  if (benefitTypes.find((type) => type.id === nextBenefitTypeId)?.name !== NUCLEAR_MORTUARY_BENEFIT_NAME) {
+                    setClaimSubjectType("")
+                    setClaimSubjectNames([])
+                    setSiblingBeneficiaryIds([])
+                  }
+                }}
                 options={benefitTypes.filter((bt) => bt.status === "Active").map((bt) => ({ value: bt.id, label: bt.name }))}
                 placeholder="Select benefit program type"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 lg:col-span-3">
               <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Requested Amount <span className="text-destructive font-bold">*</span>
               </Label>
               {isComputedAmount ? (
                 /* Computed Amount Display Banner */
-                <div className="rounded-2xl border border-primary/30 bg-primary/[0.03] p-4 shadow-2xs space-y-1.5 relative overflow-hidden">
+                <div className={cn(
+                  "rounded-2xl border p-4 shadow-2xs space-y-1.5 relative overflow-hidden",
+                  prorationPreview && !prorationPreview.tier
+                    ? "border-warning/40 bg-warning/[0.06]"
+                    : "border-primary/30 bg-primary/[0.03]"
+                )}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary inline-flex items-center gap-1">
+                    <span className={cn(
+                      "text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1",
+                      prorationPreview && !prorationPreview.tier ? "text-warning" : "text-primary"
+                    )}>
                       <Calculator className="size-3.5" /> Automated System Calculation
                     </span>
-                    <span className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                      Fixed Formula
+                    <span className={cn(
+                      "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                      prorationPreview && !prorationPreview.tier ? "bg-warning/10 text-warning" : "bg-primary/10 text-primary"
+                    )}>
+                      {isSiblingSchedule
+                        ? `${siblingBeneficiaryIds.length}/3 Selected`
+                        : prorationPreview && !prorationPreview.tier
+                          ? "Below Minimum"
+                          : "Fixed Formula"}
                     </span>
                   </div>
                   <div className="text-2xl font-bold tracking-tight text-foreground">{formatCurrency(requestedAmount ?? 0)}</div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     {isSiblingSchedule
-                      ? "Evaluated using unmarried member's fixed sibling mortuary schedule."
-                      : `Automated proration based on ${monthsPaid} month(s) paid (${prorationPreview?.tier ? `${prorationPreview.tier.percentage}% tier` : "no matching tier"}).`}
+                      ? siblingBeneficiaryIds.length === 0
+                        ? `Select at least one qualified single sibling. The first selected sibling receives ${formatCurrency(siblingSchedule[0])}.`
+                        : `${siblingBeneficiaryIds.length} qualified sibling${siblingBeneficiaryIds.length > 1 ? "s" : ""} selected. Automated schedule: ${siblingBeneficiaryIds.map((_id, index) => formatCurrency(siblingSchedule[index])).join(" + ")} = ${formatCurrency(siblingScheduleTotal)}.`
+                      : isNuclearMortuary && claimSubjectType === "Parent"
+                        ? `${claimSubjectNames.length} living parent${claimSubjectNames.length === 1 ? "" : "s"} selected. The configured parent mortuary amount is ${formatCurrency(parentMortuaryAmount)}.`
+                      : isNuclearMortuary && claimSubjectType === "Member"
+                        ? prorationPreview?.tier
+                          ? `${monthsPaid} distinct posted contribution month(s) qualify for the Core Benefits ${prorationPreview.tier.minMonths}${prorationPreview.tier.maxMonths == null ? "+" : `–${prorationPreview.tier.maxMonths}`} month tier at ${prorationPreview.tier.percentage}% of ${formatCurrency(benefitType?.maximumAmount ?? 0)}.`
+                          : `${monthsPaid} distinct posted contribution month(s) recorded. The first Core Benefits tier requires ${minimumProrationMonths} months.`
+                      : isNuclearMortuary
+                        ? claimSubjectType
+                          ? `The requested amount follows the configured ${claimSubjectType.toLowerCase()} mortuary benefit amount.`
+                          : "Select an eligible relationship category and qualified family member to complete the automated calculation."
+                      : prorationPreview?.tier
+                        ? `${monthsPaid} distinct fully paid Cash Pabaon month(s) qualify for the ${prorationPreview.tier.minMonths}${prorationPreview.tier.maxMonths == null ? "+" : `–${prorationPreview.tier.maxMonths}`} month tier at ${prorationPreview.tier.percentage}%.`
+                        : `${monthsPaid} distinct fully paid Cash Pabaon month(s) recorded. The first benefit tier requires at least ${minimumProrationMonths} months, so ${Math.max(0, minimumProrationMonths - monthsPaid)} more fully paid month(s) are needed.`}
                   </p>
                 </div>
               ) : (
@@ -424,7 +659,7 @@ export default function CreateBenefitApplicationPage() {
               )}
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 lg:col-span-3">
               <Label className="text-xs font-semibold text-foreground/80">Incident Date</Label>
               <Input 
                 type="date" 
@@ -434,45 +669,195 @@ export default function CreateBenefitApplicationPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-foreground/80">Recipient Type</Label>
-              <CommandSelect
-                className="w-full h-10 text-sm bg-background border-border hover:bg-accent/40 transition-all rounded-xl"
-                value={recipientType}
-                onValueChange={(v) => {
-                  const nextType = (v ?? "Member") as "Member" | "Beneficiary"
-                  setRecipientType(nextType)
-                  setRecipientNames(nextType === "Member" && member ? [member.fullName] : [])
-                }}
-                options={[
-                  { value: "Member", label: "Member" },
-                  { value: "Beneficiary", label: "Beneficiary" },
-                ]}
-                hideSearch
-              />
-            </div>
+            {isNuclearMortuary && (
+              <div
+                className="rounded-xl border border-primary/20 bg-primary/[0.025] p-4 sm:col-span-2 lg:col-span-6"
+                style={{ overflowAnchor: "none" }}
+              >
+                <div className="mb-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-primary">Nuclear Family Claim Subject</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Married members may claim only for a legal spouse or a legitimate/legally adopted unmarried child. Unmarried members may claim for living parent/s or up to three registered single siblings.
+                  </p>
+                </div>
+                {!claimSubjectType && (
+                  <AlertBanner
+                    tone="info"
+                    className="mb-4"
+                    title="Select an eligible relationship category"
+                    description={`This member is recorded as ${member?.civilStatus ?? "having no civil status"}. The available categories below are limited automatically by the policy.`}
+                  />
+                )}
+                {claimSubjectType === "Sibling" && siblingSiblingBeneficiaries.length === 0 && (
+                  <AlertBanner
+                    tone="warning"
+                    className="mb-4"
+                    title="No eligible single sibling is registered"
+                    description="Open Edit Member Information → Beneficiaries, then change the qualified sibling's relationship to Single Brother or Single Sister and save. Brother, Sister, or Sibling alone is not enough to confirm eligibility."
+                  />
+                )}
+                {claimSubjectType === "Sibling" && siblingSiblingBeneficiaries.length > 0 && (
+                  <AlertBanner
+                    tone="info"
+                    className="mb-4"
+                    title="Select a maximum of three single siblings"
+                    description={`The system applies the saved schedule in selection order: ${formatCurrency(siblingSchedule[0])}, ${formatCurrency(siblingSchedule[1])}, then ${formatCurrency(siblingSchedule[2])}.`}
+                  />
+                )}
+                {claimSubjectType && !["Member", "Sibling"].includes(claimSubjectType) && claimSubjectOptions.length === 0 && (
+                  <AlertBanner
+                    tone="warning"
+                    className="mb-4"
+                    title={`No eligible ${claimSubjectType.toLowerCase()} is registered`}
+                    description={claimSubjectType === "Child"
+                      ? "Open Edit Member Information → Beneficiaries and use the relationship Unmarried Child for a legitimate or legally adopted qualified child."
+                      : `Open Edit Member Information → Beneficiaries, add or correct the qualified ${claimSubjectType.toLowerCase()}, then save the member profile.`}
+                  />
+                )}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-foreground/80">
+                      Eligible Relationship Category <span className="text-destructive font-bold">*</span>
+                    </Label>
+                    <CommandSelect
+                      className="h-10 w-full rounded-xl"
+                      value={claimSubjectType}
+                      onValueChange={(value) => {
+                        const nextType = (value ?? "") as NuclearClaimSubjectType | ""
+                        setClaimSubjectType(nextType)
+                        setClaimSubjectNames(nextType === "Member" && member?.fullName ? [member.fullName] : [])
+                        setSiblingBeneficiaryIds([])
+                        if (nextType === "Parent") {
+                          setRequestedAmount(parentMortuaryAmount)
+                        } else if (nextType !== "Sibling") {
+                          setRequestedAmount(benefitType?.defaultAmount)
+                        }
+                      }}
+                      options={allowedClaimSubjectTypes.map((type) => ({ value: type, label: type }))}
+                      placeholder="Select relationship"
+                      hideSearch
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-foreground/80">
+                      Qualified Family Member <span className="text-destructive font-bold">*</span>
+                    </Label>
+                    {claimSubjectType === "Member" ? (
+                      <div className="flex min-h-10 items-center rounded-xl border border-primary/20 bg-primary/[0.04] px-3 text-sm font-semibold text-foreground">
+                        {member?.fullName ?? "Selected member"}
+                      </div>
+                    ) : claimSubjectType === "Sibling" ? (
+                      <div className="space-y-2">
+                        <RecipientMultiSelect
+                          values={siblingClaimSubjectNames}
+                          onChange={(names) => {
+                            setSiblingBeneficiaryIds(
+                              names.slice(0, 3)
+                                .map((name) => siblingSiblingBeneficiaries.find((beneficiary) => beneficiary.fullName === name)?.id)
+                                .filter((id): id is string => Boolean(id))
+                            )
+                          }}
+                          options={siblingSiblingBeneficiaries.map((beneficiary) => ({
+                            value: beneficiary.fullName,
+                            label: beneficiary.fullName,
+                            description: beneficiary.relationship,
+                          }))}
+                          placeholder="Select up to three registered single siblings"
+                          emptyText="No eligible single sibling found. In Edit Member Information, set the relationship to Single Brother or Single Sister."
+                        />
+                        {siblingClaimSubjectNames.length > 0 && (
+                          <div className="space-y-1 rounded-lg border border-primary/15 bg-background/70 p-2.5">
+                            {siblingClaimSubjectNames.map((name, index) => (
+                              <div key={name} className="flex items-center justify-between gap-3 text-xs">
+                                <span className="truncate font-medium">{index + 1}. {name}</span>
+                                <span className="shrink-0 font-bold text-primary">{formatCurrency(siblingSchedule[index])}</span>
+                              </div>
+                            ))}
+                            <div className="flex items-center justify-between border-t border-border/60 pt-1.5 text-xs font-bold">
+                              <span>Total Requested Amount</span>
+                              <span className="text-primary">{formatCurrency(siblingScheduleTotal)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <RecipientMultiSelect
+                        values={claimSubjectNames}
+                        onChange={(names) => setClaimSubjectNames(names.slice(claimSubjectType === "Parent" ? -2 : -1))}
+                        options={claimSubjectOptions.map((beneficiary) => ({
+                          value: beneficiary.fullName,
+                          label: beneficiary.fullName,
+                          description: beneficiary.relationship,
+                        }))}
+                        placeholder={claimSubjectType === "Parent"
+                          ? "Select up to two registered living parents"
+                          : claimSubjectType
+                            ? `Select registered ${claimSubjectType.toLowerCase()}`
+                            : "Select claim subject type first"}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
-                Recipient Name <span className="text-destructive font-bold">*</span>
-              </Label>
-              <RecipientMultiSelect
-                values={recipientNames}
-                onChange={setRecipientNames}
-                options={recipientType === "Member"
-                  ? (member ? [{ value: member.fullName, label: member.fullName, description: "Member" }] : [])
-                  : (member?.beneficiaries.map((beneficiary) => ({
-                      value: beneficiary.fullName,
-                      label: beneficiary.fullName,
-                      description: beneficiary.relationship,
-                    })) ?? [])}
-                placeholder={recipientType === "Member" ? "Select member" : "Select one or more beneficiaries"}
-              />
-            </div>
-
-            {recipientType === "Beneficiary" && (
+            {!isNuclearMortuary && (
               <>
-                <div className="space-y-2 animate-in fade-in duration-200">
+                <div className="space-y-2 lg:col-span-2 lg:col-start-1">
+                  <Label className="text-xs font-semibold text-foreground/80">Recipient Type</Label>
+                  <CommandSelect
+                    className="w-full h-10 text-sm bg-background border-border hover:bg-accent/40 transition-all rounded-xl"
+                    value={recipientType}
+                    onValueChange={(v) => {
+                      const nextType = (v ?? "Member") as "Member" | "Beneficiary"
+                      setRecipientType(nextType)
+                      setRecipientNames(nextType === "Member" && member ? [member.fullName] : [])
+                    }}
+                    options={[
+                      { value: "Member", label: "Member" },
+                      { value: "Beneficiary", label: "Beneficiary" },
+                    ]}
+                    hideSearch
+                  />
+                </div>
+
+                <div className="space-y-2 lg:col-span-2">
+                  <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
+                    Recipient Name <span className="text-destructive font-bold">*</span>
+                  </Label>
+                  {recipientType === "Member" ? (
+                    <Input
+                      value={member?.fullName ?? ""}
+                      readOnly
+                      aria-readonly="true"
+                      className="h-10 rounded-xl bg-muted/20 text-sm font-medium"
+                    />
+                  ) : (
+                    <RecipientMultiSelect
+                      values={recipientNames}
+                      onChange={setRecipientNames}
+                      options={member?.beneficiaries.map((beneficiary) => ({
+                          value: beneficiary.fullName,
+                          label: beneficiary.fullName,
+                          description: beneficiary.relationship,
+                        })) ?? []}
+                      placeholder="Select one or more beneficiaries"
+                    />
+                  )}
+                </div>
+              </>
+            )}
+
+            <div className={cn("space-y-2 sm:col-span-2", isNuclearMortuary ? "lg:col-span-3 lg:col-start-1" : "lg:col-span-2")}>
+              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
+                Assigned Benefits Officer <span className="text-destructive font-bold">*</span>
+              </Label>
+              <BenefitsOfficerCommandSelect value={assignedOfficer} onValueChange={setAssignedOfficer} />
+            </div>
+
+            {!isNuclearMortuary && recipientType === "Beneficiary" && (
+              <>
+                <div className="space-y-2 animate-in fade-in duration-200 lg:col-span-3">
                   <Label className="text-xs font-semibold text-muted-foreground">Relationship to Member</Label>
                   <Input
                     value={recipientNames.map((name) => member?.beneficiaries.find((b) => b.fullName === name)?.relationship).filter(Boolean).join(", ")}
@@ -481,7 +866,7 @@ export default function CreateBenefitApplicationPage() {
                     className="h-10 text-sm rounded-xl bg-muted/20"
                   />
                 </div>
-                <div className="space-y-2 animate-in fade-in duration-200">
+                <div className="space-y-2 animate-in fade-in duration-200 lg:col-span-3">
                   <Label className="text-xs font-semibold text-muted-foreground">Contact Number</Label>
                   <Input
                     value={recipientNames.map((name) => member?.beneficiaries.find((b) => b.fullName === name)?.contactNumber).filter(Boolean).join(", ")}
@@ -493,14 +878,7 @@ export default function CreateBenefitApplicationPage() {
               </>
             )}
 
-            <div className="space-y-2 sm:col-span-2">
-              <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
-                Assigned Benefits Officer <span className="text-destructive font-bold">*</span>
-              </Label>
-              <BenefitsOfficerCommandSelect value={assignedOfficer} onValueChange={setAssignedOfficer} />
-            </div>
-
-            <div className="space-y-2 sm:col-span-2">
+            <div className="space-y-2 sm:col-span-2 lg:col-span-6">
               <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1">
                 Purpose / Reason <span className="text-destructive font-bold">*</span>
               </Label>
@@ -513,7 +891,7 @@ export default function CreateBenefitApplicationPage() {
               />
             </div>
 
-            <div className="space-y-2 sm:col-span-2">
+            <div className="space-y-2 sm:col-span-2 lg:col-span-6">
               <Label className="text-xs font-semibold text-foreground/80">Additional Remarks</Label>
               <Textarea 
                 rows={2} 
@@ -524,57 +902,6 @@ export default function CreateBenefitApplicationPage() {
               />
             </div>
           </div>
-
-          {/* Sibling Schedule Tile Picker */}
-          {isSiblingSchedule && (
-            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/[0.02] p-5 shadow-2xs space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
-                <Users className="size-4" />
-                Sibling Mortuary Schedule (Unmarried Member)
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Select up to 3 registered siblings in claim order — 1st sibling {formatCurrency(SIBLING_SCHEDULE[0])}, 2nd {formatCurrency(SIBLING_SCHEDULE[1])}, 3rd {formatCurrency(SIBLING_SCHEDULE[2])}.
-              </p>
-              {siblingSiblingBeneficiaries.length === 0 ? (
-                <p className="font-medium text-xs text-amber-600 dark:text-amber-400">
-                  No registered beneficiary is tagged as a sibling. Add one to the member's profile first.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 gap-2.5 pt-1">
-                  {siblingSiblingBeneficiaries.map((b) => {
-                    const order = siblingBeneficiaryIds.indexOf(b.id)
-                    const checked = order !== -1
-                    return (
-                      <label 
-                        key={b.id} 
-                        className={cn(
-                          "flex items-center justify-between gap-3 rounded-xl border p-3.5 cursor-pointer transition-all duration-200",
-                          checked 
-                            ? "bg-primary/5 border-primary/40 ring-1 ring-primary/20 shadow-2xs" 
-                            : "bg-card border-border/70 hover:border-border hover:bg-muted/30"
-                        )}
-                      >
-                        <span className="flex items-center gap-3">
-                          <Checkbox
-                            checked={checked}
-                            disabled={!checked && siblingBeneficiaryIds.length >= 3}
-                            onCheckedChange={(v) =>
-                              setSiblingBeneficiaryIds((prev) => (v ? [...prev, b.id].slice(0, 3) : prev.filter((id) => id !== b.id)))
-                            }
-                          />
-                          <div>
-                            <p className="font-semibold text-sm text-foreground">{b.fullName}</p>
-                            <p className="text-xs text-muted-foreground">{b.relationship}</p>
-                          </div>
-                        </span>
-                        {checked && <StatusBadge label={`${formatCurrency(SIBLING_SCHEDULE[order])} · Order #${order + 1}`} tone="info" />}
-                      </label>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Policy Information Summary Grid */}
           {benefitType && (
@@ -723,7 +1050,8 @@ export default function CreateBenefitApplicationPage() {
             <ReviewBlock title="Benefit Details" icon={Building2}>
               <ReviewRow label="Benefit Program" value={benefitType.name} />
               <ReviewRow label="Requested Amount" value={formatCurrency(requestedAmount ?? 0)} />
-              <ReviewRow label="Recipient Name" value={recipientName} />
+              {isNuclearMortuary && <ReviewRow label="Claim Subject" value={`${effectiveClaimSubjectNames.join(", ")} (${claimSubjectType || "Not selected"})`} />}
+              {!isNuclearMortuary && <ReviewRow label="Recipient Name" value={resolvedRecipientName} />}
               <ReviewRow label="Purpose / Reason" value={reason} />
             </ReviewBlock>
 
@@ -749,7 +1077,7 @@ export default function CreateBenefitApplicationPage() {
       )}
 
       {/* FLOATING ACTION TOOLBAR */}
-      <div className="sticky bottom-5 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/90 backdrop-blur-xl px-6 py-4 shadow-xl transition-all duration-200">
+      <div className="sticky bottom-5 z-30 flex flex-wrap items-center justify-between gap-3 border border-border/80 bg-background/90 backdrop-blur-xl px-6 py-4 shadow-xl transition-all duration-200">
         <Button variant="outline" onClick={() => promptLeave(() => navigate("/benefits"))} className="h-9 text-xs rounded-xl">
           Cancel
         </Button>
@@ -761,9 +1089,9 @@ export default function CreateBenefitApplicationPage() {
             </Button>
           )}
 
-          <SaveDraftButton 
-            status={benefitDraft.status} 
-            lastSavedAt={benefitDraft.lastSavedAt} 
+          <SaveDraftButton
+            status={draftButtonStatus}
+            lastSavedAt={benefitDraft.lastSavedAt}
             onClick={saveDraft} 
             disabled={!memberId || isSubmitting} 
           />
@@ -866,15 +1194,35 @@ function RecipientMultiSelect({
   onChange,
   options,
   placeholder,
+  emptyText = "No registered recipient found.",
 }: {
   values: string[]
   onChange: (values: string[]) => void
   options: Array<{ value: string; label: string; description: string }>
   placeholder: string
+  emptyText?: string
 }) {
   const [open, setOpen] = React.useState(false)
+  const pendingScrollTop = React.useRef<number | null>(null)
+
+  React.useLayoutEffect(() => {
+    if (pendingScrollTop.current == null) return
+    const scrollTop = pendingScrollTop.current
+    const restoreScroll = () => window.scrollTo(window.scrollX, scrollTop)
+    restoreScroll()
+    const frame = requestAnimationFrame(restoreScroll)
+    const timer = window.setTimeout(() => {
+      restoreScroll()
+      pendingScrollTop.current = null
+    }, 50)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [values])
 
   function toggle(value: string) {
+    pendingScrollTop.current = window.scrollY
     onChange(values.includes(value) ? values.filter((item) => item !== value) : [...values, value])
   }
 
@@ -902,7 +1250,7 @@ function RecipientMultiSelect({
         <Command>
           <CommandInput placeholder="Search recipient…" />
           <CommandList>
-            <CommandEmpty>No registered recipient found.</CommandEmpty>
+            <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem key={option.value} value={`${option.label} ${option.description}`} onSelect={() => toggle(option.value)} className="cursor-pointer">

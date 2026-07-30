@@ -133,12 +133,15 @@ export default function LegacyLoanImportPage() {
               <label className="text-xs font-semibold text-muted-foreground inline-flex items-center gap-1.5">
                 <Calendar className="size-3.5" /> Month of Balance
               </label>
-              <Input 
-                type="month" 
-                value={period} 
-                onChange={(event) => setPeriod(event.target.value)} 
+              <Input
+                type="month"
+                value={period}
+                onChange={(event) => setPeriod(event.target.value)}
                 className="rounded-lg"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Payments will start from this month.
+              </p>
             </div>
             
             <Button 

@@ -1,5 +1,7 @@
 import * as React from "react"
 import { readStorage, writeStorage, STORAGE_KEYS } from "@/lib/storage"
+import { getAppearance } from "@/services/settings.service"
+import type { AppearanceSettings } from "@/types"
 
 interface SidebarContextValue {
   isCollapsed: boolean
@@ -11,8 +13,21 @@ interface SidebarContextValue {
 const SidebarContext = React.createContext<SidebarContextValue | undefined>(undefined)
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isCollapsed, setIsCollapsed] = React.useState(() => readStorage<boolean>(STORAGE_KEYS.sidebarCollapsed, false))
+  const [isCollapsed, setIsCollapsed] = React.useState(() =>
+    readStorage<boolean>(STORAGE_KEYS.sidebarCollapsed, getAppearance().sidebarStyle === "collapsed")
+  )
   const [isMobileOpen, setMobileOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    function handleAppearanceChange(event: Event) {
+      const value = (event as CustomEvent<AppearanceSettings>).detail
+      const collapsed = value.sidebarStyle === "collapsed"
+      setIsCollapsed(collapsed)
+      writeStorage(STORAGE_KEYS.sidebarCollapsed, collapsed)
+    }
+    window.addEventListener("gcgea:appearance-changed", handleAppearanceChange)
+    return () => window.removeEventListener("gcgea:appearance-changed", handleAppearanceChange)
+  }, [])
 
   const toggleCollapsed = React.useCallback(() => {
     setIsCollapsed((prev) => {

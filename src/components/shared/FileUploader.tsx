@@ -85,7 +85,7 @@ export function FileUploader({
   // (all Member Registration/Edit usages do). Other pages keep their original permissive behavior.
   const strict = Boolean(acceptExtensions && acceptExtensions.length)
   const mimeTypes = Array.isArray(accept) ? accept : accept ? accept.split(",").map((s) => s.trim()) : []
-  const effectiveOnRemove = onRemove ?? (onFileSelect ? () => onFileSelect(null) : undefined)
+  const hasRemoveHandler = Boolean(onRemove || onFileSelect)
 
   React.useEffect(() => {
     return () => {
@@ -146,6 +146,20 @@ export function FileUploader({
   function openBrowse() {
     if (disabled) return
     inputRef.current?.click()
+  }
+
+  function handleRemove() {
+    setLocalFile(null)
+    setLocalPreviewUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous)
+      return null
+    })
+    setLocalDimensions(null)
+    setValidationError(null)
+    if (inputRef.current) inputRef.current.value = ""
+
+    if (onRemove) onRemove()
+    else onFileSelect?.(null)
   }
 
   const acceptAttr = mimeTypes.length ? mimeTypes.join(",") : undefined
@@ -232,8 +246,8 @@ export function FileUploader({
                       <Button type="button" variant="outline" size="sm" onClick={openBrowse} disabled={disabled}>
                         <RefreshCw /> Replace Photo
                       </Button>
-                      {effectiveOnRemove && (
-                        <Button type="button" variant="destructive" size="sm" onClick={effectiveOnRemove} disabled={disabled}>
+                      {hasRemoveHandler && (
+                        <Button type="button" variant="destructive" size="sm" onClick={handleRemove} disabled={disabled}>
                           <Trash2 /> Remove Photo
                         </Button>
                       )}
@@ -330,8 +344,8 @@ export function FileUploader({
                   <Button type="button" variant="outline" size="sm" onClick={openBrowse} disabled={disabled}>
                     <RefreshCw /> Replace
                   </Button>
-                  {effectiveOnRemove && (
-                    <Button type="button" variant="destructive" size="sm" onClick={effectiveOnRemove} disabled={disabled}>
+                  {hasRemoveHandler && (
+                    <Button type="button" variant="destructive" size="sm" onClick={handleRemove} disabled={disabled}>
                       <Trash2 /> Remove
                     </Button>
                   )}

@@ -2,21 +2,29 @@ import * as React from "react"
 import { Link, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { 
-  ArrowLeft, 
-  ExternalLink, 
-  CheckCircle2, 
-  XCircle, 
-  RotateCcw, 
-  Banknote, 
-  CheckSquare, 
-  CalendarDays, 
-  Wallet, 
-  Landmark, 
-  PiggyBank, 
+import {
+  ArrowLeft,
+  ExternalLink,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
+  Banknote,
+  CheckSquare,
+  CalendarDays,
+  Wallet,
+  Landmark,
+  PiggyBank,
   Calculator,
-  Clock
+  Clock,
+  DollarSign,
+  ShieldCheck,
+  RotateCw,
+  Printer,
+  User,
+  Wallet2,
+  FileText,
 } from "lucide-react"
+import type { ColumnDef } from "@tanstack/react-table"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ApprovalTimeline } from "@/components/shared/ApprovalTimeline"
@@ -24,6 +32,10 @@ import { ReasonDialog } from "@/components/shared/ReasonDialog"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { AlertBanner } from "@/components/shared/AlertBanner"
+import { EligibilityChecklist, type EligibilityResult } from "@/components/shared/EligibilityChecklist"
+import { DataTable } from "@/components/shared/DataTable"
+import { DocumentCard } from "@/components/shared/DocumentCard"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
@@ -34,6 +46,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { getMember, approveMemberRegistration, rejectMemberRegistration } from "@/services/members.service"
 import {
   getLoan,
+  getLoanSchedule,
   reviewLoan,
   approveLoan,
   rejectLoan,
@@ -52,10 +65,11 @@ import {
 import { actOnApproval, getApprovalHistory } from "@/services/approvals.service"
 import { getAnnualBudgetById } from "@/services/annual-budgets.service"
 import { getDisbursement } from "@/services/disbursements.service"
-import { LOAN_STATUS_TONE, BENEFIT_STATUS_TONE, type StatusTone } from "@/constants/status"
-import { formatCurrency } from "@/utils/format"
+import { getSettings } from "@/services/settings.service"
+import { LOAN_STATUS_TONE, BENEFIT_STATUS_TONE, AMORTIZATION_STATUS_TONE, type StatusTone } from "@/constants/status"
+import { formatCurrency, formatDateShort, formatMonthYear } from "@/utils/format"
 import { cn } from "@/lib/utils"
-import type { ApprovalSubjectType } from "@/types"
+import type { AmortizationEntry, ApprovalSubjectType, LoanApplication, Member } from "@/types"
 
 export default function ApprovalDetailPage() {
   const params = useParams<{ subjectType: string; id: string }>()
@@ -67,6 +81,16 @@ export default function ApprovalDetailPage() {
   const { data: loan } = useQuery({ queryKey: ["loans", id], queryFn: () => getLoan(id), enabled: type === "loans" && Boolean(id) })
   const { data: benefit } = useQuery({ queryKey: ["benefits", id], queryFn: () => getBenefit(id), enabled: type === "benefits" && Boolean(id) })
   const { data: member } = useQuery({ queryKey: ["members", id], queryFn: () => getMember(id), enabled: type === "members" && Boolean(id) })
+  const { data: loanMember } = useQuery({
+    queryKey: ["members", loan?.memberId],
+    queryFn: () => getMember(loan!.memberId),
+    enabled: type === "loans" && Boolean(loan?.memberId),
+  })
+  const { data: loanSchedule = [], isLoading: isLoadingLoanSchedule } = useQuery({
+    queryKey: ["loans", id, "schedule"],
+    queryFn: () => getLoanSchedule(id),
+    enabled: type === "loans" && Boolean(id),
+  })
   const { data: annualBudget } = useQuery({ queryKey: ["annual-budgets", "id", id], queryFn: () => getAnnualBudgetById(id), enabled: type === "annual-budgets" && Boolean(id) })
   const { data: disbursement } = useQuery({ queryKey: ["disbursements", id], queryFn: () => getDisbursement(id), enabled: type === "disbursements" && Boolean(id) })
   const { data: history = [], isLoading: isLoadingHistory } = useQuery({
@@ -152,25 +176,49 @@ export default function ApprovalDetailPage() {
     const canReview = loan.status === "Under Review" && hasPermission("loans.review")
     const canApprove = loan.status === "For Approval" && hasPermission("loans.approve")
     const canRelease = loan.status === "Approved" && hasPermission("loans.release")
-    const canReject = ["Under Review", "For Approval"].includes(loan.status) && hasPermission("loans.reject")
-    const canReturn = ["Under Review", "For Approval"].includes(loan.status) && (hasPermission("loans.review") || hasPermission("loans.approve"))
+    // Reject/Return are only valid at the loan's *current* stage — the backend authorizes
+    // both against that stage's own permission (loans.review while Under Review, loans.approve
+    // while For Approval), not a separate loans.reject permission. Matching that here means a
+    // Loan Officer stops seeing these once the loan moves past their stage to Approving Officer.
+    const canReject = canReview || canApprove
+    const canReturn = canReview || canApprove
+    // Print/Save as PDF only makes sense once the Approving Officer has acted — before that
+    // the application isn't final and there's nothing official to hand out yet.
+    const hasReachedApproval = ["Approved", "Released", "Active", "Fully Paid", "Overdue", "Restructured"].includes(loan.status)
 
     return (
       <div className="space-y-6 pb-12">
-        <PageHeader
-          title={loan.applicationNumber}
-          description={`${loan.memberName} · ${loan.loanTypeName} · ${formatCurrency(loan.requestedAmount)}`}
-          actions={<ActionBar
-            status={loan.status}
-            tone={LOAN_STATUS_TONE[loan.status]}
-            canReview={canReview} canApprove={canApprove} canRelease={canRelease} canReject={canReject} canReturn={canReturn}
-            reviewPending={reviewMutation.isPending} approvePending={approveMutation.isPending}
-            onReview={() => reviewMutation.mutate()} onApprove={() => approveMutation.mutate()}
-            onRelease={() => setReleaseOpen(true)} onReturn={() => setReturnOpen(true)} onReject={() => setRejectOpen(true)}
-            reviewPermission="loans.review" approvePermission="loans.approve" releasePermission="loans.release" rejectPermission="loans.reject"
-          />}
-        />
-        <DetailBody historyLoading={isLoadingHistory} history={history} detailPath={`/loans/${loan.id}`} />
+        <div className="print:hidden space-y-6">
+          <PageHeader
+            title={loan.applicationNumber}
+            description={`${loan.memberName} · ${loan.loanTypeName} · ${formatCurrency(loan.requestedAmount)}`}
+            actions={
+              <div className="flex flex-wrap items-center gap-2.5">
+                <ActionBar
+                  status={loan.status}
+                  tone={LOAN_STATUS_TONE[loan.status]}
+                  canReview={canReview} canApprove={canApprove} canRelease={canRelease} canReject={canReject} canReturn={canReturn}
+                  reviewPending={reviewMutation.isPending} approvePending={approveMutation.isPending}
+                  onReview={() => reviewMutation.mutate()} onApprove={() => approveMutation.mutate()}
+                  onRelease={() => setReleaseOpen(true)} onReturn={() => setReturnOpen(true)} onReject={() => setRejectOpen(true)}
+                  reviewPermission="loans.review" approvePermission="loans.approve" releasePermission="loans.release" rejectPermission="loans.reject"
+                />
+                {hasReachedApproval && (
+                  <Button variant="outline" size="sm" onClick={() => window.print()} className="rounded-xl h-9 text-xs gap-1.5">
+                    <Printer className="size-3.5" /> Print / Save as PDF
+                  </Button>
+                )}
+              </div>
+            }
+          />
+          <ApprovalRecordLinks detailPath={`/loans/${loan.id}`} />
+          <LoanMemberProfileCard member={loanMember} />
+          <LoanApplicationDetails loan={loan} />
+          <LoanDocumentsCard documents={loan.documents ?? []} />
+          <LoanAmortizationScheduleCard schedule={loanSchedule} isLoading={isLoadingLoanSchedule} />
+          <DetailBody historyLoading={isLoadingHistory} history={history} detailPath={`/loans/${loan.id}`} showLinks={false} />
+        </div>
+        {hasReachedApproval && <LoanApprovalPrintSheet loan={loan} />}
         <ReasonDialog open={rejectOpen} onOpenChange={setRejectOpen} title="Reject Loan Application" reasonLabel="Rejection Reason" confirmLabel="Reject Loan" destructive isLoading={rejectMutation.isPending} onConfirm={(reason) => rejectMutation.mutate(reason)} />
         <ReasonDialog open={returnOpen} onOpenChange={setReturnOpen} title="Return for Revision" reasonLabel="Return Remarks" confirmLabel="Return Loan" isLoading={returnMutation.isPending} onConfirm={(reason) => returnMutation.mutate(reason)} />
         <LoanReleaseDialog open={releaseOpen} onOpenChange={setReleaseOpen} defaultAmount={loan.approvedAmount ?? loan.netProceeds} isLoading={releaseLoanMutation.isPending} onConfirm={(input) => releaseLoanMutation.mutate(input)} />
@@ -184,8 +232,10 @@ export default function ApprovalDetailPage() {
     const canReview = benefit.status === "Under Review" && hasPermission("benefits.review")
     const canApprove = benefit.status === "For Approval" && hasPermission("benefits.approve")
     const canRelease = benefit.status === "Approved" && hasPermission("benefits.release")
-    const canReject = ["Under Review", "For Approval"].includes(benefit.status) && hasPermission("benefits.reject")
-    const canReturn = ["Under Review", "For Approval"].includes(benefit.status) && (hasPermission("benefits.review") || hasPermission("benefits.approve"))
+    // Same fix as the loans branch above — reject/return follow the current stage's own
+    // permission, not a separate benefits.reject permission.
+    const canReject = canReview || canApprove
+    const canReturn = canReview || canApprove
 
     return (
       <div className="space-y-6 pb-12">
@@ -414,6 +464,337 @@ function BudgetText({ label, value, isAlert = false }: { label: string; value: s
   )
 }
 
+const SETTLEMENT_METHOD_LABEL: Record<string, string> = {
+  full_payment_required: "Full Payment Required Before Release",
+  deducted: "Deducted From New Loan Proceeds",
+}
+
+/** Applicant snapshot — surfaced inline (especially net pay) since income is what most loan products' eligibility brackets are computed against. */
+function LoanMemberProfileCard({ member }: { member?: Member }) {
+  if (!member) return null
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+      <div className="border-b border-border/50 bg-muted/20 p-5 flex items-center gap-2.5">
+        <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+          <User className="size-4" />
+        </span>
+        <div>
+          <h2 className="text-base font-bold text-foreground tracking-tight">Member Profile</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">The applicant this loan belongs to.</p>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-5">
+        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+          <BudgetMetric label="Net Pay / Salary" value={member.netPay != null ? formatCurrency(member.netPay) : "Not on file"} icon={Wallet2} />
+          <BudgetMetric label="Membership Status" value={member.membershipStatus} icon={ShieldCheck} />
+          <BudgetMetric label="Employment Status" value={member.employmentStatus || "—"} icon={User} />
+          <BudgetMetric label="Retiree Status" value={member.retireeStatus} icon={User} />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <BudgetText label="Full Name" value={member.fullName} />
+          <BudgetText label="Member Number" value={member.memberNumber} />
+          <BudgetText label="Office / Branch" value={member.officeName} />
+          <BudgetText label="Position" value={member.position || "—"} />
+          <BudgetText label="Membership Type" value={member.membershipType} />
+          <BudgetText label="Cellphone Number" value={member.cellphoneNumber || "—"} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/** Uploaded requirement documents for this application, so an approver can review what was actually submitted without leaving the page. */
+function LoanDocumentsCard({ documents }: { documents: LoanApplication["documents"] }) {
+  const items = documents ?? []
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+      <div className="border-b border-border/50 bg-muted/20 p-5 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+            <FileText className="size-4" />
+          </span>
+          <div>
+            <h2 className="text-base font-bold text-foreground tracking-tight">Submitted Documents</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Requirement files attached to this application.</p>
+          </div>
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-full">
+          {items.length} file{items.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      <div className="p-5">
+        {items.length === 0 ? (
+          <EmptyState icon={FileText} title="No documents uploaded" description="No requirement files have been attached to this application yet." />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {items.map((doc) => (
+              <DocumentCard
+                key={doc.id}
+                title={doc.requirementLabel}
+                fileName={doc.fileName}
+                fileUrl={doc.fileUrl}
+                uploadedAt={formatDateShort(doc.uploadedAt)}
+                uploadedBy={doc.uploadedBy}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+const amortizationColumns: ColumnDef<AmortizationEntry, unknown>[] = [
+  { accessorKey: "installmentNumber", header: "#" },
+  { accessorKey: "dueDate", header: "Due Month", cell: ({ row }) => formatMonthYear(row.original.dueDate) },
+  { accessorKey: "beginningBalance", header: "Beginning Balance", cell: ({ row }) => formatCurrency(row.original.beginningBalance) },
+  { accessorKey: "principal", header: "Principal", cell: ({ row }) => formatCurrency(row.original.principal) },
+  { accessorKey: "interest", header: "Interest", cell: ({ row }) => formatCurrency(row.original.interest) },
+  { accessorKey: "penalty", header: "Penalty", cell: ({ row }) => formatCurrency(row.original.penalty) },
+  { accessorKey: "amountDue", header: "Amount Due", cell: ({ row }) => formatCurrency(row.original.amountDue) },
+  { accessorKey: "amountPaid", header: "Amount Paid", cell: ({ row }) => formatCurrency(row.original.amountPaid) },
+  { accessorKey: "remainingBalance", header: "Remaining Balance", cell: ({ row }) => formatCurrency(row.original.remainingBalance) },
+  {
+    accessorKey: "status",
+    header: "Status",
+    cell: ({ row }) => <StatusBadge label={row.original.status} tone={AMORTIZATION_STATUS_TONE[row.original.status]} />,
+  },
+]
+
+/** Full repayment schedule, shown inline so an approver can see exactly what they're committing the association to before acting. */
+function LoanAmortizationScheduleCard({ schedule, isLoading }: { schedule: AmortizationEntry[]; isLoading: boolean }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+      <div className="border-b border-border/50 bg-muted/20 p-5 flex items-center gap-2.5">
+        <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+          <CalendarDays className="size-4" />
+        </span>
+        <div>
+          <h2 className="text-base font-bold text-foreground tracking-tight">Amortization Schedule</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Full month-by-month repayment breakdown.</p>
+        </div>
+      </div>
+      <DataTable
+        columns={amortizationColumns}
+        data={schedule}
+        isLoading={isLoading}
+        emptyTitle="No amortization schedule"
+        emptyDescription="The amortization schedule has not been generated for this loan yet."
+        maxHeight="max-h-[28rem]"
+      />
+    </section>
+  )
+}
+
+/** Full application details shown inline on the approval screen, so an approver doesn't have to leave to the source record just to see what they're deciding on. */
+function LoanApplicationDetails({ loan }: { loan: LoanApplication }) {
+  const eligibilityAllPassed = loan.eligibility.every((item) => item.passed)
+  const eligibilityResult: EligibilityResult = loan.eligibilityOverridden
+    ? "Eligible with Warning"
+    : eligibilityAllPassed
+      ? "Eligible"
+      : "Not Eligible"
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+      <div className="border-b border-border/50 bg-muted/20 p-5 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-foreground tracking-tight">Loan Application Details</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Review the full application before reviewing, approving, or rejecting it.</p>
+        </div>
+        {loan.applicationType === "reloan" && (
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/20">
+            Reloan #{loan.reloanSequence ?? 1}
+          </Badge>
+        )}
+      </div>
+
+      <div className="space-y-6 p-5">
+        {loan.eligibilityOverridden && (
+          <AlertBanner
+            tone="warning"
+            title="Submitted under an eligibility override."
+            description={loan.eligibilityOverrideReason || "One or more eligibility checks failed but an authorized override was applied."}
+          />
+        )}
+        {loan.rejectionReason && <AlertBanner tone="danger" title="This application was previously rejected." description={loan.rejectionReason} />}
+        {loan.cancellationReason && <AlertBanner tone="warning" title="This application was cancelled." description={loan.cancellationReason} />}
+
+        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+          <BudgetMetric label="Requested Amount" value={formatCurrency(loan.requestedAmount)} icon={DollarSign} />
+          <BudgetMetric label="Term" value={`${loan.termMonths} month(s)`} icon={CalendarDays} />
+          <BudgetMetric label="Interest Rate" value={`${loan.interestRate}% / month`} icon={Calculator} />
+          <BudgetMetric label="Monthly Amortization" value={formatCurrency(loan.monthlyAmortization)} icon={Wallet} />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <BudgetText label="Member" value={`${loan.memberName} (${loan.memberNumber}) · ${loan.officeName}`} />
+          <BudgetText label="Assigned Officer" value={loan.assignedOfficer || "Not assigned"} />
+          <BudgetText label="Loan Type" value={loan.loanTypeName || "Not specified"} />
+          <BudgetText label="Payment Method" value={loan.paymentMethod} />
+          <BudgetText label="Purpose" value={loan.purpose || "Not specified"} />
+          <BudgetText label="Application Date" value={formatDateShort(loan.applicationDate)} />
+        </div>
+
+        {loan.applicationType === "reloan" && (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.03] p-4 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+              <RotateCw className="size-3.5" /> Reloan Lineage
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <BudgetText label="Previous Loan Reference" value={loan.previousLoanReference ?? "—"} />
+              {(loan.previousObligationAmount ?? 0) > 0 && (
+                <BudgetText
+                  label="Previous Obligation"
+                  value={`${formatCurrency(loan.previousObligationAmount ?? 0)} — ${loan.previousObligationSettlementMethod ? SETTLEMENT_METHOD_LABEL[loan.previousObligationSettlementMethod] : "Not specified"}`}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        <Separator className="bg-border/50" />
+
+        <div className="rounded-2xl border border-border/60 bg-muted/15 p-5 space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+            <Calculator className="size-3.5 text-primary" /> Computation Summary
+          </h4>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <BudgetMetric label="Principal" value={formatCurrency(loan.principal)} icon={Landmark} />
+            <BudgetMetric label="Total Interest" value={formatCurrency(loan.totalInterest)} icon={Calculator} />
+            <BudgetMetric label="Processing Fee" value={formatCurrency(loan.processingFee)} icon={Banknote} />
+            <BudgetMetric label="Net Proceeds" value={formatCurrency(loan.netProceeds)} icon={PiggyBank} />
+            <BudgetMetric label="Total Amount Payable" value={formatCurrency(loan.totalAmountPayable)} icon={Wallet} />
+          </div>
+        </div>
+
+        <Separator className="bg-border/50" />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border/40 pb-3">
+              <CheckSquare className="size-4 text-primary" /> Documentary Requirements
+            </h3>
+            <ul className="space-y-2.5">
+              {loan.requirements.map((req) => (
+                <li
+                  key={req.label}
+                  className={cn(
+                    "flex items-center justify-between p-3.5 rounded-xl border text-xs transition-all duration-200",
+                    req.completed ? "bg-emerald-500/[0.03] border-emerald-500/25 text-foreground" : "bg-muted/20 border-border/50 text-muted-foreground"
+                  )}
+                >
+                  <span className={req.completed ? "font-semibold text-foreground" : "text-muted-foreground"}>{req.label}</span>
+                  <span className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                    req.completed ? "bg-emerald-500 text-white dark:bg-emerald-500/20 dark:text-emerald-400" : "bg-muted-foreground/15 text-muted-foreground"
+                  )}>
+                    {req.completed ? "✓" : "—"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border/40 pb-3">
+              <ShieldCheck className="size-4 text-primary" /> Eligibility Checklist
+            </h3>
+            <EligibilityChecklist items={loan.eligibility} result={eligibilityResult} />
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * Official printout for an approved loan application — hidden on screen, shown only via
+ * `window.print()`. Header mirrors the org's configured Report Template (Settings > Reports)
+ * so it matches every other official document the system prints.
+ */
+function LoanApprovalPrintSheet({ loan }: { loan: LoanApplication }) {
+  const template = getSettings().reportTemplate
+  const approvedAmount = loan.approvedAmount ?? loan.requestedAmount
+
+  const rows: [string, string][] = [
+    ["Application Number", loan.applicationNumber],
+    ["Status", loan.status],
+    ["Application Date", formatDateShort(loan.applicationDate)],
+    ["Application Type", loan.applicationType === "reloan" ? `Reloan (#${loan.reloanSequence ?? 1})` : "New Loan"],
+    ["Member Name", loan.memberName],
+    ["Member Number", loan.memberNumber],
+    ["Office / Branch", loan.officeName],
+    ["Assigned Officer", loan.assignedOfficer || "—"],
+    ["Loan Type", loan.loanTypeName || "—"],
+    ["Term", `${loan.termMonths} month(s)`],
+    ["Interest Rate", `${loan.interestRate}% / month`],
+    ["Payment Method", loan.paymentMethod],
+    ["Purpose", loan.purpose || "—"],
+    ["Requested Amount", formatCurrency(loan.requestedAmount)],
+    ["Approved Amount", formatCurrency(approvedAmount)],
+    ["Principal", formatCurrency(loan.principal)],
+    ["Processing Fee", formatCurrency(loan.processingFee)],
+    ["Total Interest", formatCurrency(loan.totalInterest)],
+    ["Net Proceeds", formatCurrency(loan.netProceeds)],
+    ["Total Amount Payable", formatCurrency(loan.totalAmountPayable)],
+    ["Monthly Amortization", formatCurrency(loan.monthlyAmortization)],
+    ["First Due Date", formatDateShort(loan.firstDueDate)],
+    ["Maturity Date", formatDateShort(loan.maturityDate)],
+  ]
+
+  return (
+    <div className="hidden print:block text-black">
+      <div className="grid grid-cols-[80px_1fr_80px] items-center gap-4 text-center">
+        <img src={template.leftLogo} alt="" className="mx-auto size-16 object-contain" />
+        <div className="leading-tight">
+          <p className="text-xs">{template.countryLine}</p>
+          <p className="text-base font-bold">{template.organizationLine}</p>
+          <p className="text-base font-bold">{template.acronymLine}</p>
+          <p className="text-xs">{template.addressLine}</p>
+        </div>
+        <img src={template.rightLogo} alt="" className="mx-auto size-16 object-contain" />
+      </div>
+
+      <div className="mt-3 border-t-2 border-black pt-2 text-center">
+        <h2 className="text-sm font-bold uppercase tracking-wide">Approved Loan Application</h2>
+        <p className="text-xs">{loan.applicationNumber}</p>
+      </div>
+
+      <table className="mt-4 w-full border-collapse text-xs">
+        <tbody>
+          {rows.map(([label, value]) => (
+            <tr key={label}>
+              <td className="w-1/3 border border-black px-2 py-1.5 font-semibold">{label}</td>
+              <td className="border border-black px-2 py-1.5">{value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="mt-10 grid grid-cols-2 gap-8 text-xs">
+        <div className="text-center">
+          <div className="border-t border-black pt-1">{loan.assignedOfficer || "Loan Officer"}</div>
+          <p className="mt-0.5 text-[10px] text-gray-600">Loan Officer</p>
+        </div>
+        <div className="text-center">
+          <div className="border-t border-black pt-1">&nbsp;</div>
+          <p className="mt-0.5 text-[10px] text-gray-600">Approving Officer</p>
+        </div>
+      </div>
+
+      {template.showGeneratedDate && (
+        <p className="mt-6 text-[10px] text-gray-600">Generated on {formatDateShort(new Date().toISOString())}</p>
+      )}
+    </div>
+  )
+}
+
 interface ActionBarProps {
   status: string
   tone: StatusTone
@@ -511,7 +892,7 @@ function ApprovalRecordLinks({ detailPath }: { detailPath: string }) {
         render={<Link to="/my-approvals" />}
         className="h-9 gap-1.5 rounded-xl text-xs"
       >
-        <ArrowLeft className="size-3.5" /> Back to My Approvals
+        <ArrowLeft className="size-3.5" /> Back to Approval Inbox
       </Button>
 
       <Button

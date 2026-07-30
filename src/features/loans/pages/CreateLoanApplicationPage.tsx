@@ -48,7 +48,7 @@ import { getMember } from "@/services/members.service"
 import { listAllContributions } from "@/services/contributions.service"
 import { listAllDeductions } from "@/services/deductions.service"
 import { getLoanSettings } from "@/services/loan-settings.service"
-import { createLoanApplication, getLoan, listLoanTypes, getMemberLoans, updateLoanApplication, type CreateLoanApplicationInput } from "@/services/loans.service"
+import { createLoanApplication, getLoan, listLoanTypes, getMemberLoans, updateLoanApplication, uploadLoanDocument, type CreateLoanApplicationInput } from "@/services/loans.service"
 import { bracketForNetPay, computeLoan, type LoanComputationResult } from "@/utils/loan-math"
 import { evaluateLoanEligibility, resultFor, type DuesStanding, type PaidMonthlyDuesSummary } from "@/utils/eligibility"
 import { formatCurrency, formatDateShort } from "@/utils/format"
@@ -57,7 +57,7 @@ import { useDraft } from "@/hooks/useDraft"
 import { useAutosaveDraft } from "@/hooks/useAutosaveDraft"
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges"
 import { cn } from "@/lib/utils"
-import type { AmortizationEntry, EligibilityCheckItem, LoanApplication, LoanRequirementItem, LoanType, Member, PaymentMethod } from "@/types"
+import type { AmortizationEntry, EligibilityCheckItem, LoanApplication, LoanDocument, LoanRequirementItem, LoanType, Member, PaymentMethod } from "@/types"
 
 const STEPS = ["Select Member", "Loan Details", "Eligibility Check", "Loan Computation", "Requirements", "Review & Submit"]
 
@@ -171,7 +171,7 @@ export default function CreateLoanApplicationPage() {
   const isEdit = !!id
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
-  const { hasPermission } = useAuth()
+  const { user, hasPermission } = useAuth()
   const hasOverridePermission = hasPermission("loans.override_eligibility")
 
   const { data: existingLoan, isLoading: isLoadingLoan } = useQuery({
@@ -183,7 +183,17 @@ export default function CreateLoanApplicationPage() {
   const [step, setStep] = React.useState(1)
   const [memberId, setMemberId] = React.useState(() => searchParams.get("member") ?? "")
   const [applicationDate, setApplicationDate] = React.useState(() => new Date().toISOString().slice(0, 10))
-  const [assignedOfficer, setAssignedOfficer] = React.useState("")
+  const loggedInUserIsLoanOfficer = ["loan officer", "senior loan officer", "assigned loan officer"]
+    .includes(user?.roleName.trim().toLowerCase() ?? "")
+  const [assignedOfficer, setAssignedOfficer] = React.useState(() =>
+    !isEdit && loggedInUserIsLoanOfficer ? (user?.fullName ?? "") : ""
+  )
+
+  React.useEffect(() => {
+    if (!isEdit && loggedInUserIsLoanOfficer && !assignedOfficer && user?.fullName) {
+      setAssignedOfficer(user.fullName)
+    }
+  }, [assignedOfficer, isEdit, loggedInUserIsLoanOfficer, user?.fullName])
 
   React.useEffect(() => {
     const paramMemberId = searchParams.get("member")
@@ -203,23 +213,59 @@ export default function CreateLoanApplicationPage() {
   const [requirements, setRequirements] = React.useState<Record<string, boolean>>(() =>
     Object.fromEntries(REQUIREMENT_LABELS.map((label) => [label, false]))
   )
-  const [fileMeta, setFileMeta] = React.useState<Record<string, { fileName: string; fileSize: string; dateSelected: string }>>({})
+  const [requirementFiles, setRequirementFiles] = React.useState<Record<string, File>>({})
+
+  // Files already uploaded in a previous save of this draft — a requirement counts as
+  // satisfied if it has one of these OR a freshly-picked file this session (see
+  // hasFileFor below). Keyed by requirement label; a given label has at most one document.
+  const existingDocumentsByLabel = React.useMemo(() => {
+    const map = new Map<string, LoanDocument>()
+    for (const doc of existingLoan?.documents ?? []) map.set(doc.requirementLabel, doc)
+    return map
+  }, [existingLoan])
+
+  function hasFileFor(label: string): boolean {
+    return Boolean(requirementFiles[label]) || existingDocumentsByLabel.has(label)
+  }
 
   const [agree, setAgree] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [isAutosaving, setIsAutosaving] = React.useState(false)
   const [successDialog, setSuccessDialog] = React.useState<{ created: LoanApplication[] } | null>(null)
 
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
   const { data: loanTypes = [] } = useQuery({ queryKey: ["loan-types"], queryFn: listLoanTypes })
   const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
+  const appliedConfiguredTermsRef = React.useRef(new Set<string>())
+
+  React.useEffect(() => {
+    if (isEdit || loanTypes.length === 0) return
+
+    setEntries((current) => current.map((entry) => {
+      if (!entry.loanTypeId) return entry
+      const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
+      if (!loanType) return entry
+
+      const settingKey = `${entry.key}:${loanType.id}:${loanType.maxTermMonths}`
+      if (appliedConfiguredTermsRef.current.has(settingKey)) return entry
+      appliedConfiguredTermsRef.current.add(settingKey)
+
+      return { ...entry, termMonths: loanType.maxTermMonths }
+    }))
+  }, [isEdit, loanTypes])
+
   const canOverride = hasOverridePermission && (loanSettings?.allowEligibilityOverride ?? true)
+  const appliedDefaultPaymentMethodRef = React.useRef<string | null>(null)
+
   React.useEffect(() => {
     if (isEdit || !loanSettings?.defaultPaymentMethod) return
-    setEntries((current) => current.map((entry) =>
-      entry.loanTypeId || entry.requestedAmount || entry.purpose
-        ? entry
-        : { ...entry, paymentMethod: loanSettings.defaultPaymentMethod as PaymentMethod }
-    ))
+    if (appliedDefaultPaymentMethodRef.current === loanSettings.defaultPaymentMethod) return
+
+    appliedDefaultPaymentMethodRef.current = loanSettings.defaultPaymentMethod
+    setEntries((current) => current.map((entry) => ({
+      ...entry,
+      paymentMethod: loanSettings.defaultPaymentMethod as PaymentMethod,
+    })))
   }, [isEdit, loanSettings?.defaultPaymentMethod])
   const { data: liveContributions = [] } = useQuery({
     queryKey: ["contributions", "all"],
@@ -339,8 +385,17 @@ export default function CreateLoanApplicationPage() {
     return derivedByKey.get(key) ?? deriveEntry(entries.find((e) => e.key === key)!, member)
   }
 
+  const hydratedLoanIdRef = React.useRef<string | null>(null)
+
   React.useEffect(() => {
     if (!existingLoan) return
+    // Only hydrate local wizard state the first time a draft is opened.
+    // The query cache is rewritten with the server response on every
+    // autosave/manual save, which changes `existingLoan`'s reference on
+    // every save — re-running this on each of those would snap the step
+    // (and any in-flight edits) back to whatever was last persisted.
+    if (hydratedLoanIdRef.current === existingLoan.id) return
+    hydratedLoanIdRef.current = existingLoan.id
     setMemberId(existingLoan.memberId)
     setAssignedOfficer(existingLoan.assignedOfficer || "")
     setEntries([
@@ -352,8 +407,12 @@ export default function CreateLoanApplicationPage() {
         paymentMethod: existingLoan.paymentMethod ?? "Payroll Deduction",
       }),
     ])
+    // A requirement is only "Submitted" if a file is actually attached — reconcile against
+    // the loan's real uploaded documents rather than trusting the stored completed flag,
+    // since older drafts may have been ticked complete without ever attaching a file.
+    const uploadedLabels = new Set((existingLoan.documents ?? []).map((d) => d.requirementLabel))
     setRequirements(
-      Object.fromEntries(REQUIREMENT_LABELS.map((label) => [label, existingLoan.requirements.find((r) => r.label === label)?.completed ?? false]))
+      Object.fromEntries(REQUIREMENT_LABELS.map((label) => [label, uploadedLabels.has(label)]))
     )
     setStep(existingLoan.draftCurrentStep ?? 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -387,6 +446,7 @@ export default function CreateLoanApplicationPage() {
           termMonths: entry.termMonths,
           purpose: entry.purpose || undefined,
           paymentMethod: entry.paymentMethod,
+          assignedOfficer: assignedOfficer || undefined,
           requirements: requirementItems,
           asDraft: true,
           draftCurrentStep: step,
@@ -414,12 +474,26 @@ export default function CreateLoanApplicationPage() {
 
   const autosave = useAutosaveDraft(
     soloDraftSnapshot ?? { memberId, requirements: requirementItems, asDraft: true },
-    (snap) => (memberId && canUseDraft ? loanDraft.save(snap) : Promise.resolve(undefined)),
+    async (snap) => {
+      if (!memberId || !canUseDraft) return
+      // Background autosave shouldn't flip the "Save as Draft" button into its
+      // busy/disabled spinner state — that only reflects a real user click.
+      setIsAutosaving(true)
+      try {
+        await loanDraft.save(snap)
+      } catch {
+        // already surfaced via loanDraft's onError toast
+      } finally {
+        setIsAutosaving(false)
+      }
+    },
     {
       enabled: Boolean(memberId) && Boolean(loanDraft.draftId) && canUseDraft && (!isEdit || isDraftContext) && loanDraft.status !== "saving" && !isSubmitting,
       delayMs: 30000,
     }
   )
+
+  const draftButtonStatus = isAutosaving && loanDraft.status === "saving" ? "idle" : loanDraft.status
 
   const hasUnsavedChanges = Boolean(memberId) && !successDialog
   const { showPrompt: showUnsavedPrompt, promptLeave, resolvePrompt } = useUnsavedChanges(hasUnsavedChanges)
@@ -439,7 +513,9 @@ export default function CreateLoanApplicationPage() {
           ? {
               ...e,
               loanTypeId,
-              termMonths: e.termMonths ?? (loanType ? Math.min(12, loanType.maxTermMonths) : e.termMonths),
+              // The selected loan type is maintained from Loan Settings.
+              // Use its configured term instead of the old hardcoded 12 months.
+              termMonths: loanType?.maxTermMonths ?? e.termMonths,
               requestedAmount: incomeBracket?.loanableAmount ?? loanType?.maxAmount ?? e.requestedAmount,
             }
           : e
@@ -470,6 +546,7 @@ export default function CreateLoanApplicationPage() {
     }) && !!assignedOfficer.trim()
     if (s === 3) return entries.every((e) => !derivedFor(e.key).isBlocked)
     if (s === 4) return entries.every((e) => !!derivedFor(e.key).computation)
+    if (s === 5) return missingRequirements.length === 0
     return true
   }
 
@@ -478,8 +555,15 @@ export default function CreateLoanApplicationPage() {
       toast.error("Please complete the required fields before continuing.")
       return
     }
-    setStep((s) => Math.min(STEPS.length, s + 1))
-    if (memberId && loanDraft.draftId && canUseDraft) void autosave.triggerNow()
+    const nextStep = Math.min(STEPS.length, step + 1)
+    setStep(nextStep)
+    // Save the step we're navigating to, not the pre-navigation `step` closure
+    // value — otherwise the persisted draftCurrentStep lags behind the UI by
+    // one step, and the next server-response cache write snaps the wizard
+    // back a step.
+    if (memberId && loanDraft.draftId && canUseDraft && soloDraftSnapshot) {
+      void autosave.triggerNow({ ...soloDraftSnapshot, draftCurrentStep: nextStep })
+    }
   }
   function goBack() {
     setStep((s) => Math.max(1, s - 1))
@@ -503,9 +587,25 @@ export default function CreateLoanApplicationPage() {
       toast.error("Please confirm the information has been reviewed and is accurate.")
       return
     }
+    if (missingRequirements.length > 0) {
+      toast.error("Complete all required loan requirements before submitting. File uploads remain optional.")
+      return
+    }
 
     setIsSubmitting(true)
     try {
+      const uploadRequirementFiles = async (loan: LoanApplication) => {
+        const failed: string[] = []
+        for (const [label, file] of Object.entries(requirementFiles)) {
+          try {
+            await uploadLoanDocument(loan.id, label, file)
+          } catch {
+            failed.push(label)
+          }
+        }
+        return failed
+      }
+
       if (isEdit && id) {
         const entry = entries[0]
         const loan = await loanDraft.save({
@@ -515,6 +615,7 @@ export default function CreateLoanApplicationPage() {
           termMonths: entry.termMonths,
           purpose: entry.purpose || undefined,
           paymentMethod: entry.paymentMethod,
+          assignedOfficer: assignedOfficer || undefined,
           requirements: requirementItems,
           asDraft: false,
           draftCurrentStep: step,
@@ -522,7 +623,12 @@ export default function CreateLoanApplicationPage() {
           eligibilityOverrideReason: entry.overrideReason || undefined,
           boardResolutionReference: entry.boardResolutionReference || undefined,
         })
-        toast.success("Loan application submitted successfully.")
+        const failedUploads = await uploadRequirementFiles(loan)
+        if (failedUploads.length > 0) {
+          toast.warning(`Loan submitted, but these optional files could not be uploaded: ${failedUploads.join(", ")}.`)
+        } else {
+          toast.success("Loan application submitted successfully.")
+        }
         setSuccessDialog({ created: [loan] })
       } else {
         const created: LoanApplication[] = []
@@ -535,12 +641,17 @@ export default function CreateLoanApplicationPage() {
             termMonths: entry.termMonths,
             purpose: entry.purpose || undefined,
             paymentMethod: entry.paymentMethod,
+            assignedOfficer: assignedOfficer || undefined,
             requirements: requirementItems,
             asDraft: false,
             eligibilityOverridden: entry.overrideEnabled && entry.overrideConfirmed,
             eligibilityOverrideReason: entry.overrideReason || undefined,
             boardResolutionReference: entry.boardResolutionReference || undefined,
           })
+          const failedUploads = await uploadRequirementFiles(loan)
+          if (failedUploads.length > 0) {
+            toast.warning(`Loan created, but these optional files could not be uploaded: ${failedUploads.join(", ")}.`)
+          }
           created.push(loan)
         }
         toast.success(
@@ -558,10 +669,12 @@ export default function CreateLoanApplicationPage() {
   function resetWizardForNewApplication() {
     setStep(1)
     setMemberId("")
-    setAssignedOfficer("")
-    setEntries([makeLoanEntry()])
+    setAssignedOfficer(loggedInUserIsLoanOfficer ? (user?.fullName ?? "") : "")
+    setEntries([makeLoanEntry({
+      paymentMethod: (loanSettings?.defaultPaymentMethod as PaymentMethod | undefined) ?? "Payroll Deduction",
+    })])
     setRequirements(Object.fromEntries(REQUIREMENT_LABELS.map((label) => [label, false])))
-    setFileMeta({})
+    setRequirementFiles({})
     setAgree(false)
     setSuccessDialog(null)
   }
@@ -657,7 +770,11 @@ export default function CreateLoanApplicationPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Assigned Loan Officer <span className="text-destructive">*</span></Label>
-              <LoanOfficerCommandSelect value={assignedOfficer} onValueChange={setAssignedOfficer} />
+              {loggedInUserIsLoanOfficer ? (
+                <Input value={assignedOfficer} readOnly aria-readonly="true" className="h-10 bg-muted/40 text-sm font-medium" />
+              ) : (
+                <LoanOfficerCommandSelect value={assignedOfficer} onValueChange={setAssignedOfficer} />
+              )}
             </div>
           </div>
 
@@ -713,7 +830,23 @@ export default function CreateLoanApplicationPage() {
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Loan Term (Months) <span className="text-destructive">*</span></Label>
-                      <Input type="number" min={1} placeholder="e.g. 12" value={entry.termMonths ?? ""} onChange={(e) => updateEntry(entry.key, { termMonths: e.target.value ? Number(e.target.value) : undefined })} className="h-10 text-sm" />
+                      <Input
+                        type="number"
+                        min={1}
+                        max={derived.loanType?.maxTermMonths}
+                        placeholder={derived.loanType ? `1–${derived.loanType.maxTermMonths}` : "Select a loan type first"}
+                        value={entry.termMonths ?? ""}
+                        onChange={(event) => {
+                          const entered = event.target.value ? Number(event.target.value) : undefined
+                          const configuredMaximum = derived.loanType?.maxTermMonths
+                          updateEntry(entry.key, {
+                            termMonths: entered !== undefined && configuredMaximum
+                              ? Math.min(entered, configuredMaximum)
+                              : entered,
+                          })
+                        }}
+                        className="h-10 text-sm"
+                      />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payment Method</Label>
@@ -1045,44 +1178,65 @@ export default function CreateLoanApplicationPage() {
               <span className="text-sm font-semibold tracking-tight text-foreground">Step 5 · Requirements</span>
             </span>
           } 
-          description="Confirm which supporting documents have been submitted. Shared across every entry in this session."
+          description="Attach the supporting file for each requirement. Shared across every entry in this session."
         >
           <div className="grid grid-cols-1 gap-2">
-            {REQUIREMENT_LABELS.map((label) => (
-              <div 
-                key={label} 
-                className={cn(
-                  "flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5 transition-all duration-200",
-                  requirements[label]
-                    ? "bg-emerald-500/[0.02] border-emerald-500/25 shadow-sm"
-                    : "bg-card border-border/60 hover:border-border"
-                )}
-              >
-                <label className="flex items-center gap-2.5 text-sm text-foreground font-medium cursor-pointer">
-                  <Checkbox checked={requirements[label]} onCheckedChange={(v) => setRequirements((prev) => ({ ...prev, [label]: !!v }))} />
-                  {label}
-                </label>
-                <StatusBadge label={requirements[label] ? "Submitted" : "Missing"} tone={requirements[label] ? "success" : "warning"} />
-              </div>
-            ))}
+            {REQUIREMENT_LABELS.map((label) => {
+              const existingDoc = existingDocumentsByLabel.get(label)
+              const hasFile = hasFileFor(label)
+              return (
+                <div
+                  key={label}
+                  className={cn(
+                    "grid gap-3 rounded-xl border p-3.5 transition-all duration-200 sm:grid-cols-[minmax(0,1fr)_minmax(16rem,0.8fr)] sm:items-start",
+                    hasFile
+                      ? "bg-emerald-500/[0.02] border-emerald-500/25 shadow-sm"
+                      : "bg-card border-border/60 hover:border-border"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <span className="flex items-center gap-2.5 text-sm text-foreground font-medium">
+                      <Checkbox checked={hasFile} disabled />
+                      {label}
+                    </span>
+                    <StatusBadge label={hasFile ? "Submitted" : "Missing"} tone={hasFile ? "success" : "warning"} />
+                  </div>
+                  <FileUploader
+                    label="Supporting file (required)"
+                    description="PDF, image, Word document · Max 10 MB — a file must be attached to mark this requirement submitted"
+                    fileName={requirementFiles[label]?.name ?? existingDoc?.fileName}
+                    fileUrl={requirementFiles[label] ? undefined : existingDoc?.fileUrl}
+                    onFileSelect={(file) => {
+                      setRequirementFiles((current) => {
+                        const next = { ...current }
+                        if (file) next[label] = file
+                        else delete next[label]
+                        return next
+                      })
+                      setRequirements((current) => ({ ...current, [label]: Boolean(file) || existingDocumentsByLabel.has(label) }))
+                    }}
+                  />
+                </div>
+              )
+            })}
           </div>
-          <div className="mt-4">
+          <div className="mt-4 rounded-xl border border-border/60 bg-card p-4">
             <FileUploader
-              label="Other Supporting Documents (optional)"
-              description="Attach any additional files. Files are kept as local metadata only in this demo."
-              fileName={fileMeta.other?.fileName}
-              onFileSelect={(file) =>
-                setFileMeta((prev) => {
-                  const next = { ...prev }
-                  if (file) next.other = { fileName: file.name, fileSize: `${Math.max(1, Math.round(file.size / 1024))} KB`, dateSelected: new Date().toISOString() }
-                  else delete next.other
+              label="Other Supporting Documents / Other Requirements (optional)"
+              description="Upload an additional PDF, image, or Word document not covered by the checklist · Max 10 MB"
+              fileName={requirementFiles["Other Supporting Documents"]?.name}
+              onFileSelect={(file) => {
+                setRequirementFiles((current) => {
+                  const next = { ...current }
+                  if (file) next["Other Supporting Documents"] = file
+                  else delete next["Other Supporting Documents"]
                   return next
                 })
-              }
+              }}
             />
           </div>
           {missingRequirements.length > 0 && (
-            <AlertBanner tone="warning" className="mt-4 animate-in fade-in duration-200" title={`${missingRequirements.length} requirement(s) missing`} description="You may still proceed, but missing requirements will be flagged in the review step." />
+            <AlertBanner tone="danger" className="mt-4 animate-in fade-in duration-200" title={`${missingRequirements.length} required item(s) missing`} description="Attach the supporting file for each requirement before proceeding." />
           )}
         </FormSection>
       )}
@@ -1100,6 +1254,17 @@ export default function CreateLoanApplicationPage() {
           }
         >
           <div className="space-y-4">
+            {entries.some((entry) =>
+              derivedFor(entry.key).eligibilityItems.some(
+                (item) => item.label === "Required Member Profile Fields Complete" && !item.passed
+              )
+            ) && (
+              <AlertBanner
+                tone="danger"
+                title="Member profile is missing required information."
+                description="Complete the member's contact information, beneficiary record, and required member documents before submitting this loan application."
+              />
+            )}
             <ReviewBlock title="Member Overview">
               <ReviewRow label="Full Name" value={member.fullName} />
               <ReviewRow label="Member Number" value={member.memberNumber} />
@@ -1110,27 +1275,63 @@ export default function CreateLoanApplicationPage() {
             {entries.map((entry, idx) => {
               const derived = derivedFor(entry.key)
               return (
-                <div key={entry.key} className="space-y-4 rounded-xl border border-border/60 bg-muted/5 p-4">
+                <div key={entry.key} className="space-y-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.045] via-card to-card p-4 shadow-sm sm:p-5">
                   {entries.length > 1 && (
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Entry {idx + 1}</p>
                   )}
                   <ReviewBlock title="Loan Details">
+                    <ReviewRow label="Application Date" value={formatDateShort(applicationDate)} />
+                    <ReviewRow label="Assigned Loan Officer" value={assignedOfficer} />
                     <ReviewRow label="Loan Type" value={derived.loanType?.name ?? "—"} />
+                    <ReviewRow label="Loan Type Description" value={derived.loanType?.description || "No description"} />
                     <ReviewRow label="Requested Amount" value={formatCurrency(derived.effectiveAmount ?? 0)} />
                     <ReviewRow label="Term" value={`${entry.termMonths} months`} />
                     <ReviewRow label="Purpose" value={entry.purpose} />
                     <ReviewRow label="Payment Method" value={entry.paymentMethod} />
+                    <ReviewRow label="Interest Method" value={derived.loanType?.interestMethod ?? "Not configured"} />
+                    <ReviewRow label="Monthly Interest Rate" value={`${derived.loanType?.defaultInterestRate ?? 0}%`} />
+                    <ReviewRow label="Configured Maximum Term" value={`${derived.loanType?.maxTermMonths ?? 0} month(s)`} />
+                    <ReviewRow label="Allowed Amount Range" value={`${formatCurrency(derived.loanType?.minAmount ?? 0)} to ${formatCurrency(derived.loanType?.maxAmount ?? 0)}`} />
                   </ReviewBlock>
-                  <ReviewBlock title="Eligibility">
-                    <ReviewRow label="Result" value={derived.eligibilityResult} />
+                  <ReviewBlock title="Eligibility Result and Checks">
+                    <ReviewRow label="Overall Result" value={derived.eligibilityResult} />
+                    {derived.eligibilityItems.map((item) => (
+                      <ReviewRow key={item.label} label={`${item.passed ? "Passed" : item.severity === "warning" ? "Warning" : "Failed"} · ${item.label}`} value={item.detail} />
+                    ))}
+                    <ReviewRow label="Eligibility Override" value={entry.overrideEnabled && entry.overrideConfirmed ? "Applied" : "Not applied"} />
                     {entry.overrideEnabled && <ReviewRow label="Override Reason" value={entry.overrideReason} />}
+                    {entry.boardResolutionReference && <ReviewRow label="Board Resolution Reference" value={entry.boardResolutionReference} />}
                   </ReviewBlock>
                   {derived.computation && (
-                    <ReviewBlock title="Computation">
-                      <ReviewRow label="Monthly Amortization" value={formatCurrency(derived.computation.monthlyAmortization)} />
-                      <ReviewRow label="Total Amount Payable" value={formatCurrency(derived.computation.totalAmountPayable)} />
-                      <ReviewRow label="Net Proceeds" value={formatCurrency(derived.computation.netProceeds)} />
-                    </ReviewBlock>
+                    <>
+                      <ReviewBlock title="Loan Computation Breakdown">
+                        <ReviewRow label="Principal Amount" value={formatCurrency(derived.computation.principal)} />
+                        <ReviewRow label="Interest Method" value={derived.loanType?.interestMethod ?? "Not configured"} />
+                        <ReviewRow label="Monthly Interest Rate" value={`${derived.loanType?.defaultInterestRate ?? 0}%`} />
+                        <ReviewRow label="Total Interest" value={formatCurrency(derived.computation.totalInterest)} />
+                        <ReviewRow label="Processing Fee" value={formatCurrency(derived.computation.processingFee)} />
+                        <ReviewRow label="Service Charge" value={formatCurrency(derived.computation.serviceCharge)} />
+                        <ReviewRow label="Total Upfront Deductions" value={formatCurrency(derived.computation.processingFee + derived.computation.serviceCharge)} />
+                        <ReviewRow label="Monthly Amortization" value={formatCurrency(derived.computation.monthlyAmortization)} />
+                        <ReviewRow label="Total Amount Payable" value={formatCurrency(derived.computation.totalAmountPayable)} />
+                        <ReviewRow label="Net Proceeds" value={formatCurrency(derived.computation.netProceeds)} />
+                        <ReviewRow label="First Due Date" value={derived.computation.schedule[0] ? formatDateShort(derived.computation.schedule[0].dueDate) : "Not available"} />
+                        <ReviewRow label="Maturity Date" value={formatDateShort(derived.computation.maturityDate)} />
+                        <ReviewRow label="Number of Installments" value={`${derived.computation.schedule.length}`} />
+                      </ReviewBlock>
+                      <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+                        <p className="border-b border-border/60 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">Complete Amortization Schedule</p>
+                        <DataTable
+                          columns={AMORTIZATION_COLUMNS}
+                          data={derived.computation.schedule}
+                          getRowId={(row) => String(row.installmentNumber)}
+                          enableColumnVisibility={false}
+                          maxHeight="max-h-96"
+                          emptyTitle="No amortization schedule"
+                          emptyDescription="No computed installments are available."
+                        />
+                      </div>
+                    </>
                   )}
                   {entry.remarks && (
                     <ReviewBlock title="Staff Remarks">
@@ -1141,8 +1342,20 @@ export default function CreateLoanApplicationPage() {
               )
             })}
 
-            <ReviewBlock title="Requirements">
-              <ReviewRow label="Submitted" value={`${requirementItems.filter((r) => r.completed).length} / ${requirementItems.length}`} />
+            <ReviewBlock title="Requirements and Supporting Documents">
+              <ReviewRow label="Requirements Submitted" value={`${requirementItems.filter((requirement) => requirement.completed).length} / ${requirementItems.length}`} />
+              <ReviewRow label="Requirements Missing" value={`${missingRequirements.length}`} />
+              {requirementItems.map((requirement) => {
+                const fileLabel = requirementFiles[requirement.label]?.name ?? existingDocumentsByLabel.get(requirement.label)?.fileName
+                return (
+                  <ReviewRow
+                    key={requirement.label}
+                    label={requirement.label}
+                    value={`${requirement.completed ? "Submitted" : "Missing"}${fileLabel ? ` · File: ${fileLabel}` : " · No file attached"}`}
+                  />
+                )
+              })}
+              <ReviewRow label="Other Supporting Documents / Other Requirements" value={requirementFiles["Other Supporting Documents"]?.name ?? "No additional file attached"} />
             </ReviewBlock>
 
             {entries.some((e) => derivedFor(e.key).isBlocked) && (
@@ -1162,7 +1375,7 @@ export default function CreateLoanApplicationPage() {
         <Button variant="outline" onClick={() => promptLeave(() => navigate("/loans"))} className="h-9 text-xs">Cancel</Button>
         <div className="flex flex-wrap items-center gap-2">
           {step > 1 && <Button variant="outline" onClick={goBack} className="h-9 text-xs">Previous</Button>}
-          <SaveDraftButton status={loanDraft.status} lastSavedAt={loanDraft.lastSavedAt} onClick={saveDraft} disabled={!memberId || isSubmitting || !canUseDraft} />
+          <SaveDraftButton status={draftButtonStatus} lastSavedAt={loanDraft.lastSavedAt} onClick={saveDraft} disabled={!memberId || isSubmitting || !canUseDraft} />
           {step < STEPS.length ? (
             <Button onClick={goNext} disabled={!canProceedFromStep(step)} className="h-9 text-xs">Next</Button>
           ) : (
@@ -1245,18 +1458,58 @@ function ComputationStat({ label, value }: { label: string; value: string }) {
 
 function ReviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/10 p-5 shadow-sm">
-      <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{title}</p>
-      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</dl>
+    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+      <div className="flex items-center gap-2 border-b border-primary/15 bg-gradient-to-r from-primary/12 via-primary/5 to-transparent px-5 py-3.5">
+        <span className="size-2 rounded-full bg-primary shadow-[0_0_0_4px] shadow-primary/10" />
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-primary">{title}</p>
+      </div>
+      <dl className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:p-5">{children}</dl>
     </div>
   )
 }
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
+  const searchable = `${label} ${value}`.toLowerCase()
+  const isWarning = /\bwarning\b/.test(searchable)
+  const isNegative = !isWarning && /\b(failed|missing|not eligible|not available)\b/.test(searchable)
+  const isPositive = !isNegative && /\b(passed|submitted|eligible|applied)\b/.test(searchable)
+  const isFinancial = /\b(amount|principal|interest|fee|charge|deduction|amortization|proceeds|payable|range)\b/.test(label.toLowerCase())
+
   return (
-    <div className="flex flex-col gap-1.5 border-b border-border/20 pb-2.5 last:border-0 sm:border-b-0 sm:pb-0">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-bold text-foreground truncate">{value}</dd>
+    <div
+      className={cn(
+        "flex min-w-0 flex-col gap-1.5 rounded-xl border px-3.5 py-3 transition-colors",
+        isNegative
+          ? "border-destructive/20 bg-destructive/[0.055]"
+          : isWarning
+            ? "border-warning/25 bg-warning/[0.07]"
+          : isPositive
+            ? "border-success/20 bg-success/[0.055]"
+            : isFinancial
+              ? "border-primary/20 bg-primary/[0.045]"
+              : "border-border/55 bg-muted/15"
+      )}
+    >
+      <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          "flex items-start gap-1.5 break-words text-sm font-bold",
+          isNegative
+            ? "text-destructive"
+            : isWarning
+              ? "text-warning"
+            : isPositive
+              ? "text-success"
+              : isFinancial
+                ? "text-primary"
+                : "text-foreground"
+        )}
+      >
+        {isNegative && <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
+        {isWarning && <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
+        {isPositive && <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
+        <span className="min-w-0 break-words">{value}</span>
+      </dd>
     </div>
   )
 }

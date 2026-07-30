@@ -3,6 +3,7 @@ import type {
   ApprovalHistoryEntry,
   EligibilityCheckItem,
   LoanApplication,
+  LoanDocument,
   LoanApplicationType,
   LoanType,
   LoanTypeIncomeBracketInput,
@@ -126,6 +127,7 @@ export interface CreateLoanApplicationInput {
   termMonths?: number
   purpose?: string
   paymentMethod?: PaymentMethod
+  assignedOfficer?: string
   requirements: { label: string; completed: boolean }[]
   asDraft: boolean
   draftCurrentStep?: number
@@ -140,6 +142,16 @@ export interface CreateLoanApplicationInput {
 export async function createLoanApplication(input: CreateLoanApplicationInput): Promise<LoanApplication> {
   const { data } = await api.post<LoanApplication>("/loans", input)
   cachedLoans = [data, ...cachedLoans]
+  return data
+}
+
+export async function uploadLoanDocument(loanId: string, requirementLabel: string, file: File): Promise<LoanDocument> {
+  const form = new FormData()
+  form.append("requirementLabel", requirementLabel)
+  form.append("file", file)
+  const { data } = await api.post<LoanDocument>(`/loans/${loanId}/documents`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  })
   return data
 }
 

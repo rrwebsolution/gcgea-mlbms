@@ -1,8 +1,11 @@
+import * as React from "react"
 import { Link } from "react-router-dom"
 import { BrandLogo } from "@/components/shared/BrandLogo"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useGeneralSettings } from "@/hooks/useGeneralSettings"
+import { getAppearance } from "@/services/settings.service"
+import type { AppearanceSettings } from "@/types"
 
 interface SidebarBrandProps {
   collapsed?: boolean
@@ -12,6 +15,13 @@ interface SidebarBrandProps {
 /** Logo + organization identity shown in both the desktop and mobile sidebar headers. */
 export function SidebarBrand({ collapsed = false, onNavigate }: SidebarBrandProps) {
   const general = useGeneralSettings()
+  const [appearance, setAppearance] = React.useState(() => getAppearance())
+  React.useEffect(() => {
+    const handleAppearanceChange = (event: Event) => setAppearance((event as CustomEvent<AppearanceSettings>).detail)
+    window.addEventListener("gcgea:appearance-changed", handleAppearanceChange)
+    return () => window.removeEventListener("gcgea:appearance-changed", handleAppearanceChange)
+  }, [])
+  const logoClass = appearance.logoSize === "small" ? "size-6" : appearance.logoSize === "large" ? "size-10" : "size-8"
   const brand = (
     <Link
       to="/dashboard"
@@ -23,7 +33,7 @@ export function SidebarBrand({ collapsed = false, onNavigate }: SidebarBrandProp
     >
       {/* Elevated Logo Badge Container */}
       <div className="relative shrink-0 flex items-center justify-center rounded-xl bg-background/80 p-1.5 shadow-2xs ring-1 ring-border/10 transition-all duration-300 ease-out group-hover:scale-105 group-hover:ring-primary/30 group-hover:shadow-xs group-active:scale-95 backdrop-blur-sm">
-        <BrandLogo className={collapsed ? "size-7" : "size-8"} />
+        <BrandLogo className={collapsed ? "size-7" : logoClass} />
       </div>
 
       {!collapsed && (

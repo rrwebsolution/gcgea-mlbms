@@ -25,16 +25,24 @@ export function EligibilityChecklist({ items, result, columns = 1 }: Eligibility
         <StatusBadge label={result} tone={RESULT_TONE[result]} className="h-6 px-3 text-xs" />
       </div>
       <ul className={cn("grid gap-2", columns === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1")}>
-        {items.map((item) => (
+        {items.map((item) => {
+          const isWarning = !item.passed && item.severity === "warning"
+          return (
           <li
             key={item.label}
             className={cn(
               "flex items-start gap-2.5 rounded-lg border p-3 text-sm",
-              item.passed ? "border-success/25 bg-success/5" : "border-destructive/25 bg-destructive/5"
+              item.passed
+                ? "border-success/25 bg-success/5"
+                : isWarning
+                  ? "border-warning/30 bg-warning/10"
+                  : "border-destructive/25 bg-destructive/5"
             )}
           >
             {item.passed ? (
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+            ) : isWarning ? (
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
             ) : (
               <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
             )}
@@ -43,12 +51,13 @@ export function EligibilityChecklist({ items, result, columns = 1 }: Eligibility
               <span className="block text-xs text-muted-foreground">{item.detail}</span>
             </span>
           </li>
-        ))}
+          )
+        })}
       </ul>
       {result !== "Eligible" && (
         <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          <span>One or more conditions were not met. Review the failed items above before proceeding, or apply an eligibility override if you hold the required permission.</span>
+          <span>{result === "Not Eligible" ? "A required eligibility condition was not met. Resolve it before proceeding, or apply an authorized override." : "One or more advisory profile items are missing. These warnings do not block the loan application."}</span>
         </div>
       )}
     </div>

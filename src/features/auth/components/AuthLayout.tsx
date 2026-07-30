@@ -6,6 +6,7 @@ import { ThemeSelector } from "@/components/shared/ThemeSelector"
 import { IndeterminateBar } from "@/components/shared/loaders/IndeterminateBar"
 import { useGeneralSettings } from "@/hooks/useGeneralSettings"
 import { useOrganizationSettings } from "@/hooks/useOrganizationSettings"
+import { BrandLogo } from "@/components/shared/BrandLogo"
 
 interface AuthLayoutProps {
   title: string
@@ -82,11 +83,7 @@ export function AuthLayout({ title, description, children, variant = "plain", is
           <div className="relative group">
             {/* Glowing ambient ring behind logo */}
             <div className="absolute -inset-2 rounded-full bg-gradient-to-r from-primary/40 via-amber-500/30 to-yellow-500/40 opacity-30 blur-xl transition-all duration-1000 group-hover:opacity-50 group-hover:scale-110" />
-            <img 
-              src={ORGANIZATION.logoPath} 
-              alt={`${organization.acronym} logo`} 
-              className="relative size-28 drop-shadow-2xl transition-transform duration-500 group-hover:scale-105 lg:size-36 object-contain" 
-            />
+            <BrandLogo className="relative size-28 drop-shadow-2xl transition-transform duration-500 group-hover:scale-105 lg:size-36" />
           </div>
 
           <div className="space-y-2">

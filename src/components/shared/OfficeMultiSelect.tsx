@@ -20,10 +20,11 @@ export function OfficeMultiSelect({ values, onValuesChange, placeholder = "Selec
   const { data: allOffices = [] } = useQuery({ queryKey: ["offices", "all"], queryFn: listAllOffices })
   const offices = allOffices.filter((office) => office.status === "Active")
   const officeNames = offices.map((office) => office.name)
-  const allSelected = officeNames.length > 0 && officeNames.every((name) => values.includes(name))
+  const selectedOffices = React.useMemo(() => new Set(values), [values])
+  const allSelected = officeNames.length > 0 && officeNames.every((name) => selectedOffices.has(name))
 
   function toggle(name: string) {
-    onValuesChange(values.includes(name) ? values.filter((value) => value !== name) : [...values, name])
+    onValuesChange(selectedOffices.has(name) ? values.filter((value) => value !== name) : [...values, name])
   }
 
   return (
@@ -43,6 +44,34 @@ export function OfficeMultiSelect({ values, onValuesChange, placeholder = "Selec
             <Building2 className="mt-0.5 size-4 shrink-0" />
             {values.length === 0 ? (
               <span className="truncate">{placeholder}</span>
+            ) : allSelected ? (
+              <Badge variant="secondary" className="max-w-full gap-1">
+                <span className="truncate">All Offices</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Clear all offices"
+                  className="shrink-0 rounded-sm opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onValuesChange([])
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      onValuesChange([])
+                    }
+                  }}
+                >
+                  <X className="size-3" />
+                </span>
+              </Badge>
             ) : (
               <span className="flex max-h-20 min-w-0 flex-1 flex-wrap gap-1.5 overflow-y-auto pr-1">
                 {values.map((name) => (
@@ -97,7 +126,7 @@ export function OfficeMultiSelect({ values, onValuesChange, placeholder = "Selec
                 )}
                 {offices.map((office) => (
                   <CommandItem key={office.id} value={office.name} onSelect={() => toggle(office.name)}>
-                    <Check className={cn("size-4", values.includes(office.name) ? "opacity-100" : "opacity-0")} />
+                    <Check className={cn("size-4", selectedOffices.has(office.name) ? "opacity-100" : "opacity-0")} />
                     {office.name}
                   </CommandItem>
                 ))}

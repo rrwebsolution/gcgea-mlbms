@@ -100,7 +100,7 @@ export default function DeductionRecordsPage() {
                 className="max-w-xs"
               />
               <div className="relative">
-                <CalendarDays className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <CalendarDays className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground dark:text-white" />
                 <Input
                   type="month"
                   value={period}

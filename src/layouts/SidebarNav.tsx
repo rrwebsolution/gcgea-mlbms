@@ -1,11 +1,40 @@
 import * as React from "react"
 import { Link, useLocation } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query"
 import { ChevronDown } from "lucide-react"
 import { NAV_ITEMS, type NavItem } from "@/constants/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { listMyApprovals } from "@/services/approvals.service"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+
+/** Live count of items awaiting this user's action — same query the Approval Inbox page's
+ *  own "Pending My Action" stat uses, so the two stay in sync and share one network call. */
+function ApprovalInboxBadge({ variant }: { variant: "inline" | "dot" }) {
+  const { user } = useAuth()
+  const { data } = useQuery({
+    queryKey: ["my-approvals", user?.id, { tab: "pending", page: 1, perPage: 1 }],
+    queryFn: () => listMyApprovals({ tab: "pending", page: 1, perPage: 1 }),
+    refetchInterval: 60_000,
+  })
+  const count = data?.meta.totalRecords ?? 0
+  if (count === 0) return null
+
+  if (variant === "dot") {
+    return (
+      <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[0.6rem] font-bold text-destructive-foreground ring-2 ring-sidebar">
+        {count > 9 ? "9+" : count}
+      </span>
+    )
+  }
+
+  return (
+    <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[0.65rem] font-bold text-destructive-foreground">
+      {count > 99 ? "99+" : count}
+    </span>
+  )
+}
 
 function isItemVisible(
   item: NavItem,
@@ -31,7 +60,8 @@ function NavLink({
   isChild?: boolean 
 }) {
   const Icon = item.icon
-  
+  const showBadge = item.path === "/my-approvals"
+
   const link = (
     <Link
       to={item.path}
@@ -50,16 +80,17 @@ function NavLink({
       )}
     >
       {Icon && (
-        <Icon 
+        <Icon
           className={cn(
-            "shrink-0 transition-transform duration-200 group-hover/link:scale-110", 
-            isChild 
-              ? "size-4 opacity-80 group-hover/link:opacity-100" 
+            "shrink-0 transition-transform duration-200 group-hover/link:scale-110",
+            isChild
+              ? "size-4 opacity-80 group-hover/link:opacity-100"
               : "size-[18px]"
-          )} 
+          )}
         />
       )}
       {!collapsed && <span className="truncate">{item.label}</span>}
+      {showBadge && <ApprovalInboxBadge variant={collapsed ? "dot" : "inline"} />}
     </Link>
   )
 

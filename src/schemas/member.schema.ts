@@ -8,7 +8,7 @@ export const beneficiarySchema = z.object({
   relationship: z.string().min(1, "Relationship is required"),
   birthdate: z.string().min(1, "Birthdate is required"),
   contactNumber: z.string().optional().refine((v) => !v || phRegex.test(v.replace(/\s/g, "")), "Enter a valid Philippine mobile number"),
-  address: z.string().optional(),
+  address: z.string().trim().min(1, "Beneficiary address is required"),
   sharePercentage: z.number().min(0).max(100).optional(),
 })
 export type BeneficiaryFormValues = z.infer<typeof beneficiarySchema>
@@ -47,6 +47,46 @@ export const memberSchema = z.object({
   remarks: z.string().optional(),
 
   // Section 4: Beneficiaries
-  beneficiaries: z.array(beneficiarySchema),
+  beneficiaries: z.array(beneficiarySchema).min(1, "Add at least one qualified nuclear-family beneficiary"),
+}).superRefine((member, context) => {
+  const marriedRelationships = [
+    "Legal Spouse",
+    "Spouse",
+    "Legitimate Unmarried Child",
+    "Legally Adopted Unmarried Child",
+    "Unmarried Child",
+  ]
+  const unmarriedRelationships = [
+    "Living Father",
+    "Father",
+    "Living Mother",
+    "Mother",
+    "Single Brother",
+    "Single Sister",
+  ]
+  const allowed = member.civilStatus === "Married" ? marriedRelationships : unmarriedRelationships
+
+  member.beneficiaries.forEach((beneficiary, index) => {
+    if (!allowed.includes(beneficiary.relationship)) {
+      context.addIssue({
+        code: "custom",
+        path: ["beneficiaries", index, "relationship"],
+        message: member.civilStatus === "Married"
+          ? "Select a legal spouse or a legitimate/legally adopted unmarried child"
+          : "Select a living parent or a single brother/sister",
+      })
+    }
+  })
+
+  const siblingCount = member.beneficiaries.filter((beneficiary) =>
+    ["Single Brother", "Single Sister"].includes(beneficiary.relationship)
+  ).length
+  if (member.civilStatus !== "Married" && siblingCount > 3) {
+    context.addIssue({
+      code: "custom",
+      path: ["beneficiaries"],
+      message: "A maximum of three single brothers or sisters may be registered",
+    })
+  }
 })
 export type MemberFormValues = z.infer<typeof memberSchema>

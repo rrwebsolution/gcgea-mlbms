@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useSearchParams } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   Bell,
@@ -46,14 +47,16 @@ import { Switch } from "@/components/ui/switch"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  createMockBackup,
+  createBackup,
   deleteBackupEntry,
+  downloadBackup,
   downloadSettingsBackup,
   applyAppearanceTheme,
   getAppearance,
   getBackupHistory,
   getSettings,
   loadSystemSettings,
+  listBackups,
   resetAppearance,
   resetSettingsSection,
   restoreSettingsFromJson,
@@ -82,6 +85,11 @@ const REPORT_CATEGORIES: { key: ReportTemplateCategory; label: string }[] = [
   { key: "financial", label: "Financial Reports" },
 ]
 
+const MONTH_OPTIONS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+].map((month) => ({ value: month, label: month }))
+
 const DEFAULT_CAPTION_STYLE: ReportTextStyle = { fontFamily: "Arial", fontSize: 9, fontWeight: "normal", fontStyle: "italic", textDecoration: "none", textColor: "#475569", textAlignment: "center" }
 const DEFAULT_NOTE_STYLE: ReportTextStyle = { ...DEFAULT_CAPTION_STYLE, textAlignment: "left" }
 const REPORT_PRESETS: Record<ReportTemplatePreset, ReportExportDesign> = {
@@ -97,7 +105,7 @@ function reportPaperAspect(template: ReportExportDesign): number {
 
 const SECTIONS: { key: SectionKey; label: string; icon: typeof Settings2 }[] = [
   { key: "general", label: "General Settings", icon: Settings2 },
-  { key: "organization", label: "Organization Profile", icon: Building2 },
+  { key: "organization", label: "Association Profile", icon: Building2 },
   { key: "membership", label: "Membership Settings", icon: UserCheck },
   { key: "employmentStatuses", label: "Employment Statuses", icon: Briefcase },
   { key: "numbering", label: "Numbering Formats", icon: Hash },
@@ -170,6 +178,7 @@ function SectionShell({
 }
 
 export default function SettingsPage() {
+  const queryClient = useQueryClient()
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const requestedSection = searchParams.get("section")
@@ -482,6 +491,34 @@ export default function SettingsPage() {
     if (key === "membership" || key === "employmentStatuses" || key === "deductionTypes") return
     setIsSaving(true)
     try {
+      if (key === "benefit" && (!Number.isFinite(settings.benefit.defaultApprovalLimit) || settings.benefit.defaultApprovalLimit < 0)) {
+        throw new Error("Global approval threshold must be zero or greater.")
+      }
+      if (key === "benefit") {
+        const mortuaryAmounts = [
+          settings.benefit.nuclearFamilyParentAmount,
+          settings.benefit.nuclearFamilyFirstSiblingAmount,
+          settings.benefit.nuclearFamilySecondSiblingAmount,
+          settings.benefit.nuclearFamilyThirdSiblingAmount,
+        ]
+        if (mortuaryAmounts.some((amount) => !Number.isFinite(amount) || amount < 0)) {
+          throw new Error("Nuclear family mortuary amounts must be zero or greater.")
+        }
+      }
+      if (key === "security") {
+        const { minimumPasswordLength, sessionTimeoutMinutes, maximumLoginAttempts, lockoutDurationMinutes } = settings.security
+        if (!Number.isInteger(minimumPasswordLength) || minimumPasswordLength < 8 || minimumPasswordLength > 128) throw new Error("Minimum password length must be between 8 and 128.")
+        if (!Number.isInteger(sessionTimeoutMinutes) || sessionTimeoutMinutes < 5 || sessionTimeoutMinutes > 1440) throw new Error("Session timeout must be between 5 and 1,440 minutes.")
+        if (!Number.isInteger(maximumLoginAttempts) || maximumLoginAttempts < 1 || maximumLoginAttempts > 20) throw new Error("Maximum login attempts must be between 1 and 20.")
+        if (!Number.isInteger(lockoutDurationMinutes) || lockoutDurationMinutes < 1 || lockoutDurationMinutes > 1440) throw new Error("Lockout duration must be between 1 and 1,440 minutes.")
+      }
+      if (key === "backup" && (!Number.isInteger(settings.backup.retentionDays) || settings.backup.retentionDays < 1 || settings.backup.retentionDays > 3650)) {
+        throw new Error("Backup retention must be between 1 and 3,650 days.")
+      }
+      if (key === "appearance") {
+        if (!Number.isInteger(appearance.baseFontSize) || appearance.baseFontSize < 12 || appearance.baseFontSize > 20) throw new Error("Base font size must be between 12 and 20 pixels.")
+        if (!Number.isInteger(appearance.borderRadius) || appearance.borderRadius < 0 || appearance.borderRadius > 32) throw new Error("Border radius must be between 0 and 32 pixels.")
+      }
       if (key === "appearance") {
         await saveAppearance(appearance)
         applyAppearance(appearance)
@@ -496,6 +533,7 @@ export default function SettingsPage() {
           saveSettingsSection(key, settings.benefit),
           benefitComputationRef.current?.save(),
         ])
+        await queryClient.invalidateQueries({ queryKey: ["system-settings"] })
       } else if (key === "organization") {
         const syncedReportTemplate = {
           ...settings.reportTemplate,
@@ -547,13 +585,23 @@ export default function SettingsPage() {
     if (!user) return
     setIsCreatingBackup(true)
     try {
-      await createMockBackup(user.fullName, "Manual")
-      setBackupHistory(getBackupHistory())
-      toast.success("Settings snapshot recorded.")
+      await saveSettingsSection("backup", settings.backup)
+      await createBackup()
+      setBackupHistory(await listBackups())
+      toast.success("Full database backup created.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to create the backup.")
     } finally {
       setIsCreatingBackup(false)
     }
   }
+
+  React.useEffect(() => {
+    if (active !== "backup") return
+    void listBackups()
+      .then(setBackupHistory)
+      .catch((error) => toast.error(error instanceof Error ? error.message : "Unable to load backup history."))
+  }, [active])
 
   async function handleDeleteBackup() {
     if (!deleteBackupId) return
@@ -660,7 +708,7 @@ export default function SettingsPage() {
           )}
 
           {active === "organization" && (
-            <SectionShell title="Organization Profile" description="Details used on printed forms, receipts, and letterheads." onSave={() => handleSave("organization")} onReset={() => setResetConfirm("organization")} isSaving={isSaving}>
+            <SectionShell title="Association Profile" description="Details used on printed forms, receipts, and letterheads." onSave={() => handleSave("organization")} onReset={() => setResetConfirm("organization")} isSaving={isSaving}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Organization Name"><Input value={settings.organization.organizationName} onChange={(e) => patch("organization", { organizationName: e.target.value })} className="h-10 text-sm" /></Field>
                 <Field label="Acronym"><Input value={settings.organization.acronym} onChange={(e) => patch("organization", { acronym: e.target.value })} className="h-10 text-sm" /></Field>
@@ -920,8 +968,35 @@ export default function SettingsPage() {
                 className="mb-4"
               />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Global Approval Threshold (₱)"><Input type="number" value={settings.benefit.defaultApprovalLimit} onChange={(e) => patch("benefit", { defaultApprovalLimit: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Benefit Year Reset Month"><Input value={settings.benefit.benefitYearResetMonth} onChange={(e) => patch("benefit", { benefitYearResetMonth: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Global Approval Threshold (₱)"><Input type="number" min={0} step="0.01" value={settings.benefit.defaultApprovalLimit} onChange={(e) => patch("benefit", { defaultApprovalLimit: e.target.value === "" ? Number.NaN : Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Benefit Year Reset Month">
+                  <CommandSelect
+                    value={settings.benefit.benefitYearResetMonth}
+                    onValueChange={(v) => patch("benefit", { benefitYearResetMonth: v })}
+                    options={MONTH_OPTIONS}
+                    hideSearch
+                  />
+                </Field>
+              </div>
+              <div className="mt-5 rounded-xl border border-border/70 bg-muted/15 p-4">
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-foreground">Nuclear Family Mortuary Amounts</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Defaults follow the provided policy schedule and can be updated when a new resolution is approved.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label="Living Parent Amount (₱)">
+                    <Input type="number" min={0} step="0.01" value={settings.benefit.nuclearFamilyParentAmount} onChange={(e) => patch("benefit", { nuclearFamilyParentAmount: e.target.value === "" ? Number.NaN : Number(e.target.value) })} />
+                  </Field>
+                  <Field label="First Sibling Amount (₱)">
+                    <Input type="number" min={0} step="0.01" value={settings.benefit.nuclearFamilyFirstSiblingAmount} onChange={(e) => patch("benefit", { nuclearFamilyFirstSiblingAmount: e.target.value === "" ? Number.NaN : Number(e.target.value) })} />
+                  </Field>
+                  <Field label="Second Sibling Amount (₱)">
+                    <Input type="number" min={0} step="0.01" value={settings.benefit.nuclearFamilySecondSiblingAmount} onChange={(e) => patch("benefit", { nuclearFamilySecondSiblingAmount: e.target.value === "" ? Number.NaN : Number(e.target.value) })} />
+                  </Field>
+                  <Field label="Third/Last Sibling Amount (₱)">
+                    <Input type="number" min={0} step="0.01" value={settings.benefit.nuclearFamilyThirdSiblingAmount} onChange={(e) => patch("benefit", { nuclearFamilyThirdSiblingAmount: e.target.value === "" ? Number.NaN : Number(e.target.value) })} />
+                  </Field>
+                </div>
               </div>
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="Require Approval" checked={settings.benefit.requireApproval} onCheckedChange={(v) => patch("benefit", { requireApproval: v })} />
@@ -942,9 +1017,9 @@ export default function SettingsPage() {
             <SectionShell title="Notification Settings" description="Choose which real system events appear in the topbar notification bell." onSave={() => handleSave("notification")} onReset={() => setResetConfirm("notification")} isSaving={isSaving}>
               <AlertBanner tone="info" title="Notification Bell Content" description="These switches filter the authenticated user's database notifications. Disabling In-App Notifications hides all records from the bell without deleting notification history." className="mb-4" />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <ToggleField label="In-App Notifications" checked={settings.notification.inAppNotifications} onCheckedChange={(v) => patch("notification", { inAppNotifications: v })} />
-                <ToggleField label="Email Notifications" checked={settings.notification.emailNotifications} onCheckedChange={(v) => patch("notification", { emailNotifications: v })} />
-                <ToggleField label="SMS Notifications" checked={settings.notification.smsNotifications} onCheckedChange={(v) => patch("notification", { smsNotifications: v })} />
+                <ToggleField label="In-App Notifications" description="Create and display enabled alerts in the notification bell." checked={settings.notification.inAppNotifications} onCheckedChange={(v) => patch("notification", { inAppNotifications: v })} />
+                <ToggleField label="Email Notifications" description="Email enabled workflow alerts to users with a registered email address." checked={settings.notification.emailNotifications} onCheckedChange={(v) => patch("notification", { emailNotifications: v })} />
+                <ToggleField label="SMS Notifications" description="Reserved for an SMS gateway integration; no SMS provider is configured yet." checked={settings.notification.smsNotifications} onCheckedChange={(v) => patch("notification", { smsNotifications: v })} disabled />
                 <ToggleField label="Loan Approval Alerts" checked={settings.notification.loanApprovalAlerts} onCheckedChange={(v) => patch("notification", { loanApprovalAlerts: v })} />
                 <ToggleField label="Loan Due Date Alerts" checked={settings.notification.loanDueDateAlerts} onCheckedChange={(v) => patch("notification", { loanDueDateAlerts: v })} />
                 <ToggleField label="Overdue Loan Alerts" checked={settings.notification.overdueLoanAlerts} onCheckedChange={(v) => patch("notification", { overdueLoanAlerts: v })} />
@@ -958,12 +1033,12 @@ export default function SettingsPage() {
 
           {active === "security" && (
             <SectionShell title="Security Settings" description="Credential and session security standards." onSave={() => handleSave("security")} onReset={() => setResetConfirm("security")} isSaving={isSaving}>
-              <AlertBanner tone="info" title="Frontend-only enforcement" description="Actual enforcement of these policies will require backend integration in a future phase." className="mb-4" />
+              <AlertBanner tone="info" title="Server-enforced security policy" description="Password complexity, login lockout, inactivity timeout, first-login password changes, and audit logging are enforced by the backend after saving." className="mb-4" />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Minimum Password Length"><Input type="number" value={settings.security.minimumPasswordLength} onChange={(e) => patch("security", { minimumPasswordLength: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Session Timeout (Minutes)"><Input type="number" value={settings.security.sessionTimeoutMinutes} onChange={(e) => patch("security", { sessionTimeoutMinutes: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Maximum Login Attempts"><Input type="number" value={settings.security.maximumLoginAttempts} onChange={(e) => patch("security", { maximumLoginAttempts: Number(e.target.value) })} className="h-10 text-sm" /></Field>
-                <Field label="Lockout Duration (Minutes)"><Input type="number" value={settings.security.lockoutDurationMinutes} onChange={(e) => patch("security", { lockoutDurationMinutes: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Minimum Password Length"><Input type="number" min={8} max={128} value={settings.security.minimumPasswordLength} onChange={(e) => patch("security", { minimumPasswordLength: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Session Timeout (Minutes)"><Input type="number" min={5} max={1440} value={settings.security.sessionTimeoutMinutes} onChange={(e) => patch("security", { sessionTimeoutMinutes: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Maximum Login Attempts"><Input type="number" min={1} max={20} value={settings.security.maximumLoginAttempts} onChange={(e) => patch("security", { maximumLoginAttempts: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                <Field label="Lockout Duration (Minutes)"><Input type="number" min={1} max={1440} value={settings.security.lockoutDurationMinutes} onChange={(e) => patch("security", { lockoutDurationMinutes: Number(e.target.value) })} className="h-10 text-sm" /></Field>
               </div>
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ToggleField label="Require Uppercase Letter" checked={settings.security.requireUppercase} onCheckedChange={(v) => patch("security", { requireUppercase: v })} />
@@ -972,8 +1047,8 @@ export default function SettingsPage() {
                 <ToggleField label="Require Special Character" checked={settings.security.requireSpecialCharacter} onCheckedChange={(v) => patch("security", { requireSpecialCharacter: v })} />
                 <ToggleField label="Require Password Change on First Login" checked={settings.security.requirePasswordChangeOnFirstLogin} onCheckedChange={(v) => patch("security", { requirePasswordChangeOnFirstLogin: v })} />
                 <ToggleField label="Enable Two-Factor Authentication" description="Unavailable until an authentication provider is configured." checked={settings.security.enableTwoFactorAuth} onCheckedChange={(v) => patch("security", { enableTwoFactorAuth: v })} disabled />
-                <ToggleField label="Audit Sensitive Actions" checked={settings.security.auditSensitiveActions} onCheckedChange={(v) => patch("security", { auditSensitiveActions: v })} />
-                <ToggleField label="Confirm Financial Transactions" checked={settings.security.confirmFinancialTransactions} onCheckedChange={(v) => patch("security", { confirmFinancialTransactions: v })} />
+                <ToggleField label="Audit Sensitive Actions" description="Write workflow, posting, import, and financial mutations to the audit log." checked={settings.security.auditSensitiveActions} onCheckedChange={(v) => patch("security", { auditSensitiveActions: v })} />
+                <ToggleField label="Confirm Financial Transactions" description="Mandatory safeguard: consequential financial actions always require confirmation." checked={settings.security.confirmFinancialTransactions} onCheckedChange={(v) => patch("security", { confirmFinancialTransactions: v })} disabled />
               </div>
             </SectionShell>
           )}
@@ -983,9 +1058,9 @@ export default function SettingsPage() {
               <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-card/95 p-5 shadow-sm">
                 <div className="mb-4 border-b border-border/30 pb-3">
                   <h2 className="font-heading text-base font-bold tracking-tight text-foreground">Backup Settings</h2>
-                  <p className="text-xs font-medium text-muted-foreground mt-0.5">Export and restore server-backed System Settings snapshots.</p>
+                  <p className="text-xs font-medium text-muted-foreground mt-0.5">Create and retain recoverable PostgreSQL database backups.</p>
                 </div>
-                <AlertBanner tone="info" title="Settings backup" description="This exports System Settings and appearance. It is not a full database or attachment backup." className="mb-4 animate-in fade-in duration-200" />
+                <AlertBanner tone="info" title="Server backup" description="Manual and scheduled backups contain the full PostgreSQL database. Enable Include Attachments to package uploaded member documents and profile images in the archive." className="mb-4 animate-in fade-in duration-200" />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Backup Frequency">
                     <CommandSelect
@@ -996,7 +1071,7 @@ export default function SettingsPage() {
                       hideSearch
                     />
                   </Field>
-                  <Field label="Retention (Days)"><Input type="number" value={settings.backup.retentionDays} onChange={(e) => patch("backup", { retentionDays: Number(e.target.value) })} className="h-10 text-sm" /></Field>
+                  <Field label="Retention (Days)"><Input type="number" min={1} max={3650} value={settings.backup.retentionDays} onChange={(e) => patch("backup", { retentionDays: Number(e.target.value) })} className="h-10 text-sm" /></Field>
                 </div>
                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ToggleField label="Automatic Backup" checked={settings.backup.automaticBackup} onCheckedChange={(v) => patch("backup", { automaticBackup: v })} />
@@ -1004,7 +1079,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="mt-5 flex flex-wrap gap-2 pt-2 border-t border-border/30">
                   <Button onClick={handleCreateBackup} disabled={isCreatingBackup} className="h-9 text-xs gap-1.5 shadow-sm">
-                    {isCreatingBackup ? <Loader2 className="animate-spin size-3.5" /> : <DatabaseBackup className="size-3.5" />} Record Settings Snapshot
+                    {isCreatingBackup ? <Loader2 className="animate-spin size-3.5" /> : <DatabaseBackup className="size-3.5" />} Create Full Backup
                   </Button>
                   <Button variant="outline" onClick={downloadSettingsBackup} className="h-9 text-xs gap-1.5">
                     <Download className="size-3.5" /> Download Settings Backup
@@ -1040,12 +1115,11 @@ export default function SettingsPage() {
                         <TableCell className="py-3">{formatDateTime(b.date)}</TableCell>
                         <TableCell className="py-3">{b.type}</TableCell>
                         <TableCell className="py-3">{b.size}</TableCell>
-                        <TableCell className="py-3"><StatusBadge label={b.status} tone={b.status === "Completed" ? "success" : "danger"} /></TableCell>
+                        <TableCell className="py-3"><StatusBadge label={b.status} tone={b.status === "Completed" ? "success" : b.status === "Processing" ? "warning" : "danger"} /></TableCell>
                         <TableCell className="py-3">{b.createdBy}</TableCell>
                         <TableCell className="py-3">
                           <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon-sm" className="size-7 rounded-full" onClick={downloadSettingsBackup} aria-label="Download backup"><Download className="size-3.5" /></Button>
-                            <Button variant="ghost" size="icon-sm" className="size-7 rounded-full" onClick={() => toast.info("Restoring is simulated in this demo.")} aria-label="Restore backup"><RotateCcw className="size-3.5" /></Button>
+                            <Button variant="ghost" size="icon-sm" className="size-7 rounded-full" disabled={b.status !== "Completed"} onClick={() => void downloadBackup(b.id, b.name)} aria-label="Download backup"><Download className="size-3.5" /></Button>
                             <Button variant="ghost" size="icon-sm" className="size-7 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteBackupId(b.id)} aria-label="Delete backup"><Trash2 className="size-3.5" /></Button>
                           </div>
                         </TableCell>
@@ -1500,11 +1574,18 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="mb-5 rounded-xl border border-border bg-muted/10 p-4">
-                <div className="mb-3">
-                  <Label className="text-sm font-semibold">Sidebar Footer Logos</Label>
-                  <p className="mt-1 text-xs text-muted-foreground">Customize the two logos and labels displayed above the Logout button.</p>
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <Label className="text-sm font-semibold">Sidebar Footer Logos</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">Show or hide the two logos displayed above the Logout button. Hidden by default.</p>
+                  </div>
+                  <Switch
+                    checked={appearance.showSidebarFooterLogos}
+                    onCheckedChange={(checked) => setAppearance((current) => ({ ...current, showSidebarFooterLogos: checked }))}
+                    aria-label="Show sidebar footer logos"
+                  />
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className={`grid gap-4 sm:grid-cols-2 ${appearance.showSidebarFooterLogos ? "" : "opacity-50"}`}>
                   {([
                     {
                       side: "left" as const,
@@ -1578,21 +1659,35 @@ export default function SettingsPage() {
                   <p className="mt-1 text-xs text-muted-foreground">Automatically follows the active light or dark theme.</p>
                 </div>
                 <ColorField label="Background Color" value={appearance.backgroundColor} onChange={(v) => setAppearance((prev) => ({ ...prev, backgroundColor: v }))} />
-                <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 sm:col-span-2">
+                <div className="space-y-4 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 sm:col-span-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Theme-aware Progress Colors</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div>
-                      <p className="mb-1 text-[10px] font-semibold text-muted-foreground">Light: Blue</p>
-                      <div className="h-2.5 rounded-full" style={{ background: appearance.primaryColor }} />
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                    <p className="mb-3 text-xs font-bold text-foreground">Light Mode</p>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <ColorField label="Start Color" value={appearance.progressColorStart} onChange={(value) => setAppearance((current) => ({ ...current, progressColorStart: value }))} />
+                      <ColorField label="Middle Color" value={appearance.progressColorMiddle} onChange={(value) => setAppearance((current) => ({ ...current, progressColorMiddle: value }))} />
+                      <ColorField label="End Color" value={appearance.progressColorEnd} onChange={(value) => setAppearance((current) => ({ ...current, progressColorEnd: value }))} />
                     </div>
-                    <div>
-                      <p className="mb-1 text-[10px] font-semibold text-muted-foreground">Dark: White → Blue → White</p>
-                      <div className="h-2.5 rounded-full" style={{ background: `linear-gradient(90deg, #FFFFFF, ${appearance.primaryColor}, #FFFFFF)` }} />
-                    </div>
+                    <div
+                      className="mt-3 h-3 rounded-full border border-border/50"
+                      style={{ background: `linear-gradient(90deg, ${appearance.progressColorStart}, ${appearance.progressColorMiddle}, ${appearance.progressColorEnd})` }}
+                    />
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Blue automatically follows the configured Primary Color.</p>
+                  <div className="rounded-xl border border-border/60 bg-slate-950 p-3">
+                    <p className="mb-3 text-xs font-bold text-white">Dark Mode</p>
+                    <div className="grid gap-4 sm:grid-cols-3 [&_label]:text-slate-300 [&_input[type=text]]:bg-slate-900 [&_input[type=text]]:text-white">
+                      <ColorField label="Start Color" value={appearance.progressDarkColorStart} onChange={(value) => setAppearance((current) => ({ ...current, progressDarkColorStart: value }))} />
+                      <ColorField label="Middle Color" value={appearance.progressDarkColorMiddle} onChange={(value) => setAppearance((current) => ({ ...current, progressDarkColorMiddle: value }))} />
+                      <ColorField label="End Color" value={appearance.progressDarkColorEnd} onChange={(value) => setAppearance((current) => ({ ...current, progressDarkColorEnd: value }))} />
+                    </div>
+                    <div
+                      className="mt-3 h-3 rounded-full border border-white/20"
+                      style={{ background: `linear-gradient(90deg, ${appearance.progressDarkColorStart}, ${appearance.progressDarkColorMiddle}, ${appearance.progressDarkColorEnd})` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">The loading bar automatically uses the matching gradient when the active theme changes.</p>
                 </div>
-                <Field label="Border Radius (px)"><Input type="number" value={appearance.borderRadius} onChange={(e) => setAppearance((prev) => ({ ...prev, borderRadius: Number(e.target.value) }))} className="h-10 text-sm" /></Field>
+                <Field label="Border Radius (px)"><Input type="number" min={0} max={32} value={appearance.borderRadius} onChange={(e) => setAppearance((prev) => ({ ...prev, borderRadius: Number(e.target.value) }))} className="h-10 text-sm" /></Field>
                 <Field label="Sidebar Style">
                   <CommandSelect
                     className="w-full h-10 text-sm bg-background border-border/80 hover:bg-accent/40 transition-all"
@@ -1608,6 +1703,18 @@ export default function SettingsPage() {
                     value={appearance.logoSize}
                     onValueChange={(v) => setAppearance((prev) => ({ ...prev, logoSize: v as AppearanceSettings["logoSize"] }))}
                     options={[{ value: "small", label: "Small" }, { value: "medium", label: "Medium" }, { value: "large", label: "Large" }]}
+                    hideSearch
+                  />
+                </Field>
+                <Field label="Login Background">
+                  <CommandSelect
+                    className="h-10 w-full text-sm"
+                    value={appearance.loginBackground}
+                    onValueChange={(v) => setAppearance((prev) => ({ ...prev, loginBackground: v as AppearanceSettings["loginBackground"] }))}
+                    options={[
+                      { value: "default", label: "Branded City Background" },
+                      { value: "solid", label: "Solid Background" },
+                    ]}
                     hideSearch
                   />
                 </Field>

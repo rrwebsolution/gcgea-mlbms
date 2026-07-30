@@ -50,12 +50,45 @@ function mergeReportTemplate(value?: Partial<SystemSettings["reportTemplate"]>):
 let settings: SystemSettings = {
   ...DEFAULT_SYSTEM_SETTINGS,
   ...storedSettings,
+  benefit: {
+    ...DEFAULT_SYSTEM_SETTINGS.benefit,
+    ...storedSettings.benefit,
+  },
   reportTemplate: mergeReportTemplate(storedSettings.reportTemplate),
 }
-let appearance: AppearanceSettings = {
+// Replace the previous built-in blue/white gradients with the new solid
+// theme defaults while preserving any genuinely customized color set.
+function migrateDefaultProgressColors(value: AppearanceSettings): AppearanceSettings {
+  const next = { ...value }
+  if (
+    (
+      next.progressColorStart.toUpperCase() === "#2563EB"
+      && next.progressColorMiddle.toUpperCase() === "#1E3A8A"
+      && next.progressColorEnd.toUpperCase() === "#2563EB"
+    )
+    || (
+      next.progressColorStart.toUpperCase() === "#FFFFFF"
+      && next.progressColorMiddle.toUpperCase() === "#1E3A8A"
+      && next.progressColorEnd.toUpperCase() === "#FFFFFF"
+    )
+  ) {
+    next.progressColorStart = "#1E3A8A"
+    next.progressColorMiddle = "#1E3A8A"
+    next.progressColorEnd = "#1E3A8A"
+  }
+  if (
+    next.progressDarkColorStart.toUpperCase() === "#FFFFFF"
+    && next.progressDarkColorMiddle.toUpperCase() === "#1E3A8A"
+    && next.progressDarkColorEnd.toUpperCase() === "#FFFFFF"
+  ) {
+    next.progressDarkColorMiddle = "#FFFFFF"
+  }
+  return next
+}
+let appearance: AppearanceSettings = migrateDefaultProgressColors({
   ...DEFAULT_APPEARANCE_SETTINGS,
   ...readStorage<Partial<AppearanceSettings>>(STORAGE_KEYS.appearanceSettings, DEFAULT_APPEARANCE_SETTINGS),
-}
+})
 const settingsChannel = typeof BroadcastChannel !== "undefined"
   ? new BroadcastChannel("gcgea:settings-values")
   : null
@@ -77,21 +110,13 @@ if (settingsChannel) {
 // Migrate installations that still carry the previous default font.
 if (appearance.fontFamily === "geist") appearance.fontFamily = "century-gothic"
 
-const SEED_BACKUP_HISTORY: BackupHistoryEntry[] = [
-  { id: "bk-01", name: "gcgea-mlbms-backup-2026-07-15.json", date: "2026-07-15T02:00:00", type: "Automatic", size: "1.8 MB", status: "Completed", createdBy: "System" },
-  { id: "bk-02", name: "gcgea-mlbms-backup-2026-07-08.json", date: "2026-07-08T02:00:00", type: "Automatic", size: "1.7 MB", status: "Completed", createdBy: "System" },
-  { id: "bk-03", name: "gcgea-mlbms-backup-manual-2026-06-30.json", date: "2026-06-30T15:22:00", type: "Manual", size: "1.7 MB", status: "Completed", createdBy: "Maria Corazon D. Santos" },
-]
-let backupHistory: BackupHistoryEntry[] = readStorage<BackupHistoryEntry[]>(STORAGE_KEYS.backupHistory, SEED_BACKUP_HISTORY)
+let backupHistory: BackupHistoryEntry[] = []
 
 function persistSettings() {
   writeStorage(STORAGE_KEYS.systemSettings, settings)
 }
 function persistAppearance() {
   writeStorage(STORAGE_KEYS.appearanceSettings, appearance)
-}
-function persistBackupHistory() {
-  writeStorage(STORAGE_KEYS.backupHistory, backupHistory)
 }
 
 function readableTextColor(background: string): "#ffffff" | "#111827" {
@@ -123,19 +148,32 @@ export function applyAppearanceTheme(value: AppearanceSettings): void {
   }
   root.style.setProperty("--primary", value.primaryColor)
   root.style.setProperty("--primary-foreground", readableTextColor(value.primaryColor))
+  root.style.setProperty("--secondary", value.secondaryColor)
+  root.style.setProperty("--secondary-foreground", readableTextColor(value.secondaryColor))
   root.style.setProperty("--gold", value.accentColor)
   root.style.setProperty("--gold-foreground", readableTextColor(value.accentColor))
+  root.style.setProperty("--app-background", value.backgroundColor)
   // Sidebar colors are intentionally owned by the light/dark CSS theme so
   // navigation always follows the active theme instead of a fixed inline color.
   const isDark = root.classList.contains("dark")
-  root.style.setProperty("--progress-start", isDark ? "#FFFFFF" : value.primaryColor)
-  root.style.setProperty("--progress-middle", value.primaryColor)
-  root.style.setProperty("--progress-end", isDark ? "#FFFFFF" : value.primaryColor)
-  root.style.setProperty("--font-sans", fontFamilies[value.fontFamily])
+  root.style.setProperty("--progress-start", isDark ? value.progressDarkColorStart : value.progressColorStart)
+  root.style.setProperty("--progress-middle", isDark ? value.progressDarkColorMiddle : value.progressColorMiddle)
+  root.style.setProperty("--progress-end", isDark ? value.progressDarkColorEnd : value.progressColorEnd)
+  const selectedFontFamily = fontFamilies[value.fontFamily]
+  root.style.setProperty("--font-sans", selectedFontFamily)
+  root.style.setProperty("--font-heading", selectedFontFamily)
+  // Tailwind expands the base `font-sans` apply at build time, so changing only
+  // the custom property does not update the font inherited by the whole page.
+  root.style.fontFamily = selectedFontFamily
+  document.body.style.fontFamily = selectedFontFamily
   root.style.fontSize = `${Math.min(20, Math.max(12, value.baseFontSize))}px`
   document.body.style.fontWeight = String(value.fontWeight)
   document.body.style.fontStyle = value.fontStyle
   root.style.setProperty("--radius", `${value.borderRadius}px`)
+  root.dataset.compact = value.compactMode ? "true" : "false"
+  root.dataset.sidebarStyle = value.sidebarStyle
+  root.dataset.logoSize = value.logoSize
+  root.dataset.loginBackground = value.loginBackground
   window.dispatchEvent(new CustomEvent("gcgea:appearance-changed", { detail: value }))
 }
 
@@ -147,6 +185,13 @@ export function getAppearance(): AppearanceSettings {
   return appearance
 }
 
+export async function loadAppearance(): Promise<AppearanceSettings> {
+  const { data } = await api.get<Partial<AppearanceSettings>>("/appearance-settings")
+  appearance = migrateDefaultProgressColors({ ...DEFAULT_APPEARANCE_SETTINGS, ...appearance, ...data })
+  persistAppearance()
+  return appearance
+}
+
 export function getBackupHistory(): BackupHistoryEntry[] {
   return backupHistory
 }
@@ -155,6 +200,10 @@ export function getBackupHistory(): BackupHistoryEntry[] {
 // must fall back to defaults for those keys, not wipe out the whole section.
 function mergeServerSection<K extends keyof SystemSettings>(key: K, serverValue?: Partial<SystemSettings[K]>): SystemSettings[K] {
   return serverValue ? { ...DEFAULT_SYSTEM_SETTINGS[key], ...settings[key], ...serverValue } : settings[key]
+}
+
+function validAmount(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback
 }
 
 export async function loadSystemSettings(): Promise<{ settings: SystemSettings; appearance: AppearanceSettings }> {
@@ -170,6 +219,7 @@ export async function loadSystemSettings(): Promise<{ settings: SystemSettings; 
     }
   }
 
+  const mergedBenefit = mergeServerSection("benefit", serverSections.benefit)
   settings = {
     ...DEFAULT_SYSTEM_SETTINGS,
     ...settings,
@@ -178,13 +228,19 @@ export async function loadSystemSettings(): Promise<{ settings: SystemSettings; 
     numbering: mergeServerSection("numbering", serverSections.numbering),
     loan: mergeServerSection("loan", serverSections.loan),
     contribution: mergeServerSection("contribution", serverSections.contribution),
-    benefit: mergeServerSection("benefit", serverSections.benefit),
+    benefit: {
+      ...mergedBenefit,
+      nuclearFamilyParentAmount: validAmount(mergedBenefit.nuclearFamilyParentAmount, DEFAULT_SYSTEM_SETTINGS.benefit.nuclearFamilyParentAmount),
+      nuclearFamilyFirstSiblingAmount: validAmount(mergedBenefit.nuclearFamilyFirstSiblingAmount, DEFAULT_SYSTEM_SETTINGS.benefit.nuclearFamilyFirstSiblingAmount),
+      nuclearFamilySecondSiblingAmount: validAmount(mergedBenefit.nuclearFamilySecondSiblingAmount, DEFAULT_SYSTEM_SETTINGS.benefit.nuclearFamilySecondSiblingAmount),
+      nuclearFamilyThirdSiblingAmount: validAmount(mergedBenefit.nuclearFamilyThirdSiblingAmount, DEFAULT_SYSTEM_SETTINGS.benefit.nuclearFamilyThirdSiblingAmount),
+    },
     notification: mergeServerSection("notification", serverSections.notification),
     security: mergeServerSection("security", serverSections.security),
     backup: mergeServerSection("backup", serverSections.backup),
     reportTemplate: mergeReportTemplate(serverSections.reportTemplate ?? settings.reportTemplate),
   } as SystemSettings
-  appearance = { ...DEFAULT_APPEARANCE_SETTINGS, ...appearance, ...serverAppearance }
+  appearance = migrateDefaultProgressColors({ ...DEFAULT_APPEARANCE_SETTINGS, ...appearance, ...serverAppearance })
   persistSettings()
   persistAppearance()
   return { settings, appearance }
@@ -252,23 +308,29 @@ export async function restoreSettingsFromJson(json: string): Promise<void> {
   await simulateDelay(null, 400)
 }
 
-export async function createMockBackup(createdBy: string, type: "Manual" | "Automatic" = "Manual"): Promise<BackupHistoryEntry> {
-  const entry: BackupHistoryEntry = {
-    id: `bk-${Date.now()}`,
-    name: `gcgea-mlbms-backup-${type === "Manual" ? "manual-" : ""}${new Date().toISOString().slice(0, 10)}.json`,
-    date: new Date().toISOString(),
-    type,
-    size: `${(1.6 + Math.random() * 0.6).toFixed(1)} MB`,
-    status: "Completed",
-    createdBy,
-  }
-  backupHistory = [entry, ...backupHistory]
-  persistBackupHistory()
-  return simulateDelay(entry, 900)
+export async function listBackups(): Promise<BackupHistoryEntry[]> {
+  const { data } = await api.get<BackupHistoryEntry[]>("/system-backups")
+  backupHistory = data
+  return data
+}
+
+export async function createBackup(): Promise<BackupHistoryEntry> {
+  const { data } = await api.post<BackupHistoryEntry>("/system-backups")
+  backupHistory = [data, ...backupHistory]
+  return data
+}
+
+export async function downloadBackup(id: string, name: string): Promise<void> {
+  const response = await api.get(`/system-backups/${id}/download`, { responseType: "blob" })
+  const url = URL.createObjectURL(response.data)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 export async function deleteBackupEntry(id: string): Promise<void> {
+  await api.delete(`/system-backups/${id}`)
   backupHistory = backupHistory.filter((b) => b.id !== id)
-  persistBackupHistory()
-  await simulateDelay(null, 300)
 }

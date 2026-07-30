@@ -72,6 +72,7 @@ import MemberLoanLedgerReportPage from "@/features/loans/pages/reports/MemberLoa
 
 import LoanPaymentsPage from "@/features/loan-payments/pages/LoanPaymentsPage"
 import CreateLoanPaymentPage from "@/features/loan-payments/pages/CreateLoanPaymentPage"
+import DirectPaymentsPage from "@/features/treasury/pages/DirectPaymentsPage"
 
 import PayrollImportWizardPage from "@/features/payroll/pages/PayrollImportWizardPage"
 import PayrollHistoryPage from "@/features/payroll/pages/PayrollHistoryPage"
@@ -230,6 +231,9 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission="loan_payments.create" />}>
             <Route path="/loan-payments/new" element={<CreateLoanPaymentPage />} />
+          </Route>
+          <Route element={<ProtectedRoute anyOf={["contributions.create", "loan_payments.create"]} />}>
+            <Route path="/financial/direct-payments" element={<DirectPaymentsPage />} />
           </Route>
 
           <Route element={<ProtectedRoute permission="payroll.history.view" />}>

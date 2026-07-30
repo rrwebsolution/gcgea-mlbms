@@ -24,8 +24,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { ErrorState } from "@/components/shared/ErrorState"
+import { SearchInput } from "@/components/shared/SearchInput"
 import { IndeterminateBar } from "@/components/shared/loaders/IndeterminateBar"
 import { cn } from "@/lib/utils"
 import { usePageRefresh } from "@/contexts/PageRefreshContext"
@@ -79,6 +81,9 @@ export function DataTable<TData>({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const rootRef = React.useRef<HTMLDivElement>(null)
   const [externalToolbar, setExternalToolbar] = React.useState<HTMLElement | null>(null)
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = React.useState(false)
+  const [internalSearch, setInternalSearch] = React.useState("")
+  const [internalStatus, setInternalStatus] = React.useState("all")
 
   React.useLayoutEffect(() => {
     if (toolbar) {
@@ -104,6 +109,27 @@ export function DataTable<TData>({
   const rowSelection = isSelectionControlled ? controlledRowSelection! : internalRowSelection
   const onRowSelectionChange = isSelectionControlled ? controlledOnRowSelectionChange! : setInternalRowSelection
 
+  const usesAutomaticFilters = !toolbar && !externalToolbar
+  const availableStatuses = React.useMemo(() => Array.from(new Set(
+    data.flatMap((row) => {
+      if (typeof row !== "object" || row === null || !("status" in row)) return []
+      const status = (row as Record<string, unknown>).status
+      return typeof status === "string" && status ? [status] : []
+    })
+  )).sort(), [data])
+  const filteredData = React.useMemo(() => {
+    if (!usesAutomaticFilters) return data
+    const search = internalSearch.trim().toLowerCase()
+    return data.filter((row) => {
+      const record = typeof row === "object" && row !== null ? row as Record<string, unknown> : {}
+      const matchesSearch = !search || Object.values(record).some((value) =>
+        value != null && typeof value !== "object" && String(value).toLowerCase().includes(search)
+      )
+      const matchesStatus = internalStatus === "all" || record.status === internalStatus
+      return matchesSearch && matchesStatus
+    })
+  }, [data, internalSearch, internalStatus, usesAutomaticFilters])
+
   const selectionColumn: ColumnDef<TData, unknown> = React.useMemo(
     () => ({
       id: "select",
@@ -112,7 +138,7 @@ export function DataTable<TData>({
             checked={table.getIsAllPageRowsSelected()}
             indeterminate={table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected()}
             onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-            aria-label="Select all draft rows"
+            aria-label="Select all rows"
           />
         ) : null,
       cell: ({ row }) => (
@@ -134,8 +160,24 @@ export function DataTable<TData>({
 
   const tableColumns = enableRowSelection ? [selectionColumn, ...columns] : columns
 
+  React.useLayoutEffect(() => {
+    const container = rootRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]')
+    const tableElement = container?.querySelector<HTMLElement>('[data-slot="table"]')
+    if (!container || !tableElement) return
+
+    const updateOverflow = () => {
+      setHasHorizontalOverflow(container.scrollWidth > container.clientWidth + 1)
+    }
+
+    updateOverflow()
+    const resizeObserver = new ResizeObserver(updateOverflow)
+    resizeObserver.observe(container)
+    resizeObserver.observe(tableElement)
+    return () => resizeObserver.disconnect()
+  }, [data.length, tableColumns.length])
+
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns: tableColumns,
     state: { sorting, rowSelection, columnVisibility },
     onSortingChange,
@@ -148,9 +190,35 @@ export function DataTable<TData>({
     enableRowSelection,
   })
 
-  const showToolbar = Boolean(toolbar) || (enableColumnVisibility && !externalToolbar)
+  const hasHiddenColumns = Object.values(columnVisibility).some((isVisible) => isVisible === false)
+  const showColumnVisibility = enableColumnVisibility && (hasHorizontalOverflow || hasHiddenColumns)
+  const automaticToolbar = usesAutomaticFilters ? (
+    <>
+      <SearchInput
+        value={internalSearch}
+        onChange={setInternalSearch}
+        placeholder="Search records…"
+        className="w-full sm:max-w-xs"
+      />
+      {availableStatuses.length > 0 && (
+        <Select value={internalStatus} onValueChange={(value) => setInternalStatus(value ?? "all")}>
+          <SelectTrigger className="w-full sm:w-44" aria-label="Filter by status">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="start">
+            <SelectItem value="all">All Statuses</SelectItem>
+            {availableStatuses.map((status) => (
+              <SelectItem key={status} value={status}>{status}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </>
+  ) : null
+  const activeToolbar = toolbar ?? automaticToolbar
+  const showToolbar = Boolean(activeToolbar) || (showColumnVisibility && !externalToolbar)
 
-  const columnVisibilityMenu = enableColumnVisibility ? (
+  const columnVisibilityMenu = showColumnVisibility ? (
     <DropdownMenu>
       <DropdownMenuTrigger 
         render={
@@ -187,7 +255,7 @@ export function DataTable<TData>({
       {externalToolbar && columnVisibilityMenu && createPortal(columnVisibilityMenu, externalToolbar)}
       {showToolbar && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/15 px-5 py-3 transition-all duration-200">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{toolbar}</div>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{activeToolbar}</div>
           {columnVisibilityMenu}
         </div>
       )}

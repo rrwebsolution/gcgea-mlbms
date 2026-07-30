@@ -1,4 +1,7 @@
+import * as React from "react"
 import { useTheme } from "@/contexts/ThemeContext"
+import { getAppearance } from "@/services/settings.service"
+import type { AppearanceSettings } from "@/types"
 
 interface AppBackgroundProps {
   /** "vivid" is the full-strength login treatment. "subtle" dims the glows/skyline so it doesn't compete with dense dashboard content. */
@@ -15,11 +18,18 @@ interface AppBackgroundProps {
  */
 export function AppBackground({ intensity = "vivid", position = "absolute" }: AppBackgroundProps) {
   const { resolvedTheme } = useTheme()
+  const [appearance, setAppearance] = React.useState(() => getAppearance())
+  React.useEffect(() => {
+    const handleAppearanceChange = (event: Event) => setAppearance((event as CustomEvent<AppearanceSettings>).detail)
+    window.addEventListener("gcgea:appearance-changed", handleAppearanceChange)
+    return () => window.removeEventListener("gcgea:appearance-changed", handleAppearanceChange)
+  }, [])
   const isDark = resolvedTheme === "dark"
   const isSubtle = intensity === "subtle"
+  const solidLoginBackground = !isSubtle && appearance.loginBackground === "solid"
   const scale = isSubtle ? 0.9 : 1
 
-  const baseBg = isDark ? "#0a0f1d" : "#F8FAFC"
+  const baseBg = isDark ? "#0a0f1d" : appearance.backgroundColor
   const cityFadeColor = isDark ? "#0a0f1d" : "#F8FAFC"
   const cityFrontColor = isDark ? "#0a1224" : "#E2E8F0"
   const dotColor = isDark ? "text-white" : "text-slate-900"
@@ -30,6 +40,8 @@ export function AppBackground({ intensity = "vivid", position = "absolute" }: Ap
       style={{ backgroundColor: baseBg }}
       aria-hidden="true"
     >
+      {!solidLoginBackground && (
+      <>
       {/* Deep Ambient Aurora Glows */}
       <div
         className="absolute -top-[40%] -right-[20%] h-[95%] w-[80%] rounded-full blur-[120px]"
@@ -187,6 +199,8 @@ export function AppBackground({ intensity = "vivid", position = "absolute" }: Ap
             : `absolute inset-0 bg-gradient-to-t ${isSubtle ? "from-white/15" : "from-white/50"} via-transparent to-white/5`
         }
       />
+      </>
+      )}
     </div>
   )
 }

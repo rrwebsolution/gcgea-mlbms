@@ -526,7 +526,7 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
       <div className="space-y-3 border-t bg-muted/10 px-5 py-4 text-xs leading-relaxed text-muted-foreground">
         <p className="italic">
           (One Pabaon contribution month means one calendar month for which the prescribed ₱200.00 Cash Pabaon
-          deduction has been fully posted through payroll.)
+          contribution has been fully posted through payroll deduction or a duly receipted direct payment.)
         </p>
         <p>
           Benefits shall apply only to claims whose qualifying event occurs after the effectivity of this

@@ -111,6 +111,8 @@ export interface CreateBenefitApplicationInput {
   requirements: { label: string; completed: boolean }[]
   asDraft: boolean
   draftCurrentStep?: number
+  overrideEligibility?: boolean
+  overrideReason?: string
 }
 
 export async function createBenefitApplication(input: CreateBenefitApplicationInput): Promise<BenefitApplication> {

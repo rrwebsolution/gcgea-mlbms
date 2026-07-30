@@ -21,6 +21,7 @@ import { PermissionButton } from "@/components/shared/PermissionButton"
 import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { DataTable } from "@/components/shared/DataTable"
+import { SearchInput } from "@/components/shared/SearchInput"
 import { DocumentCard } from "@/components/shared/DocumentCard"
 import { DocumentGallery, type DocumentGalleryItem } from "@/components/shared/DocumentGallery"
 import { ImagePreviewDialog } from "@/components/shared/ImagePreviewDialog"
@@ -32,6 +33,7 @@ import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReloanButton } from "@/features/loans/components/ReloanButton"
 import { getMember, profileCompleteness } from "@/services/members.service"
 import { listAllContributions, voidContribution } from "@/services/contributions.service"
@@ -56,6 +58,8 @@ export default function MemberProfilePage() {
   const [photoPreviewOpen, setPhotoPreviewOpen] = React.useState(false)
   const [voidTarget, setVoidTarget] = React.useState<Contribution | null>(null)
   const [isVoiding, setIsVoiding] = React.useState(false)
+  const [tableSearches, setTableSearches] = React.useState<Record<string, string>>({})
+  const [tableStatuses, setTableStatuses] = React.useState<Record<string, string>>({})
 
   useBreadcrumbExtra(member?.fullName)
 
@@ -117,9 +121,33 @@ export default function MemberProfilePage() {
           }))
       : []),
   ].sort((a, b) => b.period.localeCompare(a.period))
+  const filterRows = <TRow extends object>(key: string, rows: TRow[]) => {
+    const search = (tableSearches[key] ?? "").trim().toLowerCase()
+    const status = tableStatuses[key] ?? "all"
+    return rows.filter((row) => {
+      const values = Object.values(row)
+      const matchesSearch = !search || values.some((value) =>
+        value != null && typeof value !== "object" && String(value).toLowerCase().includes(search)
+      )
+      const rowStatus = "status" in row ? String(row.status) : ""
+      return matchesSearch && (status === "all" || rowStatus === status)
+    })
+  }
+  const setTableSearch = (key: string, value: string) =>
+    setTableSearches((current) => ({ ...current, [key]: value }))
+  const setTableStatus = (key: string, value: string | null) =>
+    setTableStatuses((current) => ({ ...current, [key]: value ?? "all" }))
+  const contributionRows = filterRows("contributions", contributionTabRows)
+  const loanRows = filterRows("loans", loans)
+  const paymentRows = filterRows("payments", payments)
+  const benefitRows = filterRows("benefits", benefits)
 
   const outstandingBalance = loans.reduce((sum, l) => sum + l.outstandingBalance, 0)
   const totalContributions = contributions.filter((c) => c.status === "Posted").reduce((sum, c) => sum + c.amount, 0)
+  const contributedMonthCount = new Set(
+    contributionTabRows.filter((row) => row.status === "Posted").map((row) => row.period)
+  ).size
+  const voidedContributionCount = contributionTabRows.filter((row) => row.status === "Voided").length
   const totalBenefits = benefits.filter((b) => b.status === "Released" || b.status === "Completed").reduce((sum, b) => sum + (b.approvedAmount ?? 0), 0)
   const completeness = profileCompleteness(member)
   const contributionColumns: ColumnDef<(typeof contributionTabRows)[number], unknown>[] = [
@@ -255,7 +283,11 @@ export default function MemberProfilePage() {
         {/* Structured summary metrics widget panels */}
         <div className="mt-5 grid grid-cols-1 gap-4 border-t border-border/60 pt-5 sm:grid-cols-3">
           <SummaryStat label="Outstanding Loan Balance" value={formatCurrency(outstandingBalance)} tone={outstandingBalance > 0 ? "danger" : undefined} />
-          <SummaryStat label="Total Contributions" value={formatCurrency(totalContributions)} />
+          <SummaryStat
+            label="Total Contributions"
+            value={formatCurrency(totalContributions)}
+            description={`${contributedMonthCount} contributed month(s) · ${voidedContributionCount} voided record(s) excluded`}
+          />
           <SummaryStat label="Total Benefits Received" value={formatCurrency(totalBenefits)} />
         </div>
 
@@ -268,7 +300,7 @@ export default function MemberProfilePage() {
             className="h-8 gap-1.5 text-xs active:scale-97 transition-all"
             render={<Link to={`/contributions/new?member=${member.id}`} />}
           >
-            <Wallet className="size-3.5 text-muted-foreground" /> Record Contribution
+            <Wallet className="size-3.5 text-white" strokeWidth={2.25} aria-hidden="true" /> Record Contribution
           </PermissionButton>
           <PermissionButton 
             permission="loans.create" 
@@ -277,7 +309,7 @@ export default function MemberProfilePage() {
             className="h-8 gap-1.5 text-xs active:scale-97 transition-all"
             render={<Link to={`/loans/new?member=${member.id}`} />}
           >
-            <Landmark className="size-3.5 text-muted-foreground" /> Create Loan
+            <Landmark className="size-3.5 text-white" strokeWidth={2.25} aria-hidden="true" /> Create Loan
           </PermissionButton>
           <PermissionButton 
             permission="loan_payments.create" 
@@ -286,7 +318,7 @@ export default function MemberProfilePage() {
             className="h-8 gap-1.5 text-xs active:scale-97 transition-all"
             render={<Link to={`/loan-payments/new?member=${member.id}`} />}
           >
-            <Banknote className="size-3.5 text-muted-foreground" /> Record Payment
+            <Banknote className="size-3.5 text-white" strokeWidth={2.25} aria-hidden="true" /> Record Payment
           </PermissionButton>
           <PermissionButton 
             permission="benefits.create" 
@@ -295,7 +327,7 @@ export default function MemberProfilePage() {
             className="h-8 gap-1.5 text-xs active:scale-97 transition-all"
             render={<Link to={`/benefits/new?member=${member.id}`} />}
           >
-            <Plus className="size-3.5 text-muted-foreground" /> Create Benefit Request
+            <Plus className="size-3.5 text-white" strokeWidth={2.25} aria-hidden="true" /> Create Benefit Request
           </PermissionButton>
         </div>
       </div>
@@ -383,8 +415,18 @@ export default function MemberProfilePage() {
         <TabsContent value="contributions" className="mt-4">
           <DataTable
             columns={contributionColumns}
-            data={contributionTabRows}
+            data={contributionRows}
             getRowId={(row) => row.id}
+            enableColumnVisibility={false}
+            toolbar={
+              <MemberTableToolbar
+                search={tableSearches.contributions ?? ""}
+                onSearchChange={(value) => setTableSearch("contributions", value)}
+                status={tableStatuses.contributions ?? "all"}
+                onStatusChange={(value) => setTableStatus("contributions", value)}
+                statuses={Array.from(new Set(contributionTabRows.map((row) => row.status)))}
+              />
+            }
             emptyTitle="No contributions on record"
             emptyDescription="This member has no contribution or Cash Pabaon records yet."
             maxHeight="max-h-[32rem]"
@@ -429,6 +471,8 @@ export default function MemberProfilePage() {
             : []
 
           const records = [...deductionRecords, ...contributionRecords].sort((a, b) => b.period.localeCompare(a.period))
+          const tableKey = `deduction-${deductionType.id}`
+          const filteredRecords = filterRows(tableKey, records)
           const totalPosted = records.filter((record) => record.status === "Posted").reduce((sum, record) => sum + record.amount, 0)
           const deductionColumns: ColumnDef<(typeof records)[number], unknown>[] = [
             { accessorKey: "referenceNumber", header: "Reference #", cell: ({ row }) => <span className="font-semibold">{row.original.referenceNumber}</span> },
@@ -448,8 +492,18 @@ export default function MemberProfilePage() {
             <TabsContent key={deductionType.id} value={`deduction-${deductionType.id}`} className="mt-4">
               <DataTable
                 columns={deductionColumns}
-                data={records}
+                data={filteredRecords}
                 getRowId={(row) => row.id}
+                enableColumnVisibility={false}
+                toolbar={
+                  <MemberTableToolbar
+                    search={tableSearches[tableKey] ?? ""}
+                    onSearchChange={(value) => setTableSearch(tableKey, value)}
+                    status={tableStatuses[tableKey] ?? "all"}
+                    onStatusChange={(value) => setTableStatus(tableKey, value)}
+                    statuses={Array.from(new Set(records.map((row) => row.status)))}
+                  />
+                }
                 emptyTitle={`No ${deductionType.name} deductions on record`}
                 emptyDescription={`This member has no ${deductionType.name} transactions yet.`}
                 maxHeight="max-h-[32rem]"
@@ -462,8 +516,18 @@ export default function MemberProfilePage() {
         <TabsContent value="loans" className="mt-4">
           <DataTable
             columns={loanColumns}
-            data={loans}
+            data={loanRows}
             getRowId={(row) => row.id}
+            enableColumnVisibility={false}
+            toolbar={
+              <MemberTableToolbar
+                search={tableSearches.loans ?? ""}
+                onSearchChange={(value) => setTableSearch("loans", value)}
+                status={tableStatuses.loans ?? "all"}
+                onStatusChange={(value) => setTableStatus("loans", value)}
+                statuses={Array.from(new Set(loans.map((row) => row.status)))}
+              />
+            }
             emptyTitle="No loan applications on record"
             emptyDescription="This member has no loan applications yet."
             maxHeight="max-h-[32rem]"
@@ -473,9 +537,19 @@ export default function MemberProfilePage() {
         <TabsContent value="payments" className="mt-4">
           <DataTable
             columns={paymentColumns}
-            data={payments}
+            data={paymentRows}
             isLoading={isLoadingPayments}
             getRowId={(row) => row.id}
+            enableColumnVisibility={false}
+            toolbar={
+              <MemberTableToolbar
+                search={tableSearches.payments ?? ""}
+                onSearchChange={(value) => setTableSearch("payments", value)}
+                status={tableStatuses.payments ?? "all"}
+                onStatusChange={(value) => setTableStatus("payments", value)}
+                statuses={Array.from(new Set(payments.map((row) => row.status)))}
+              />
+            }
             emptyTitle="No loan payments on record"
             emptyDescription="This member has no posted loan payments yet."
             maxHeight="max-h-[32rem]"
@@ -485,8 +559,18 @@ export default function MemberProfilePage() {
         <TabsContent value="benefits" className="mt-4">
           <DataTable
             columns={benefitColumns}
-            data={benefits}
+            data={benefitRows}
             getRowId={(row) => row.id}
+            enableColumnVisibility={false}
+            toolbar={
+              <MemberTableToolbar
+                search={tableSearches.benefits ?? ""}
+                onSearchChange={(value) => setTableSearch("benefits", value)}
+                status={tableStatuses.benefits ?? "all"}
+                onStatusChange={(value) => setTableStatus("benefits", value)}
+                statuses={Array.from(new Set(benefits.map((row) => row.status)))}
+              />
+            }
             emptyTitle="No benefit applications on record"
             emptyDescription="This member has no benefit applications yet."
             maxHeight="max-h-[32rem]"
@@ -550,11 +634,61 @@ export default function MemberProfilePage() {
   )
 }
 
+function MemberTableToolbar({
+  search,
+  onSearchChange,
+  status,
+  onStatusChange,
+  statuses,
+}: {
+  search: string
+  onSearchChange: (value: string) => void
+  status: string
+  onStatusChange: (value: string | null) => void
+  statuses: string[]
+}) {
+  return (
+    <>
+      <SearchInput
+        value={search}
+        onChange={onSearchChange}
+        placeholder="Search records…"
+        className="w-full sm:max-w-xs"
+      />
+      <Select value={status} onValueChange={onStatusChange}>
+        <SelectTrigger className="w-full sm:w-44" aria-label="Filter by status">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="start">
+          <SelectItem value="all">All Statuses</SelectItem>
+          {statuses.map((item) => (
+            <SelectItem key={item} value={item}>{item}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </>
+  )
+}
+
 function ContributionAllocationDataTable({ contributions }: { contributions: Contribution[] }) {
+  const [search, setSearch] = React.useState("")
+  const [status, setStatus] = React.useState("all")
   const rows = React.useMemo(
     () => contributions.filter((contribution) => contribution.contributionType === "Monthly Dues"),
     [contributions]
   )
+  const filteredRows = React.useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return rows.filter((contribution) => {
+      const matchesSearch = !query || [
+        contribution.contributionPeriod,
+        contribution.paymentDate,
+        contribution.encodedBy,
+        contribution.remarks,
+      ].some((value) => value?.toLowerCase().includes(query))
+      return matchesSearch && (status === "all" || contribution.status === status)
+    })
+  }, [rows, search, status])
   const funds = React.useMemo(
     () => Array.from(new Map(
       rows.flatMap((contribution) => contribution.fundAllocations ?? [])
@@ -591,8 +725,17 @@ function ContributionAllocationDataTable({ contributions }: { contributions: Con
   return (
     <DataTable
       columns={columns}
-      data={rows}
+      data={filteredRows}
       getRowId={(row) => row.id}
+      toolbar={
+        <MemberTableToolbar
+          search={search}
+          onSearchChange={setSearch}
+          status={status}
+          onStatusChange={(value) => setStatus(value ?? "all")}
+          statuses={Array.from(new Set(rows.map((row) => row.status)))}
+        />
+      }
       emptyTitle="No Monthly Dues allocations on record"
       emptyDescription="Posted Monthly Dues and their configured fund allocations will appear here."
       maxHeight="max-h-[32rem]"
@@ -624,11 +767,12 @@ function ContributionAllocationDataTable({ contributions }: { contributions: Con
   )
 }
 
-function SummaryStat({ label, value, tone }: { label: string; value: string; tone?: "danger" }) {
+function SummaryStat({ label, value, tone, description }: { label: string; value: string; tone?: "danger"; description?: string }) {
   return (
     <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3 shadow-inner">
       <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">{label}</p>
       <p className={`font-heading text-lg font-bold tracking-tight mt-1 ${tone === "danger" ? "text-destructive" : "text-foreground"}`}>{value}</p>
+      {description && <p className="mt-1 text-[11px] font-medium text-muted-foreground">{description}</p>}
     </div>
   )
 }
