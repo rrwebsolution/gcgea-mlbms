@@ -4,6 +4,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://gcgea-mlbms-backend-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/sanctum/:path*",
+      "destination": "https://gcgea-mlbms-backend-production.up.railway.app/sanctum/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
