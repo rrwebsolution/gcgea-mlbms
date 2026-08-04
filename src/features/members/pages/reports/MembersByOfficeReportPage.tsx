@@ -4,13 +4,14 @@ import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis
 import { ArrowLeft, Building2, RotateCcw, Users } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllActiveMembers } from "@/services/members.service"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const PIE_COLORS = ["var(--color-primary)", "var(--color-success)", "var(--color-gold)", "var(--color-info)", "var(--color-warning)", "var(--color-destructive)"]
 
@@ -30,7 +31,7 @@ interface OfficeRow {
 
 export default function MembersByOfficeReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
   const [viewingOffice, setViewingOffice] = React.useState<OfficeRow | null>(null)
 
   const rows = React.useMemo<OfficeRow[]>(() => {
@@ -68,7 +69,7 @@ export default function MembersByOfficeReportPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   const columns: ColumnDef<OfficeRow, unknown>[] = [
@@ -125,7 +126,7 @@ export default function MembersByOfficeReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
         </div>
       </div>
@@ -177,7 +178,7 @@ export default function MembersByOfficeReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No members match your filters"

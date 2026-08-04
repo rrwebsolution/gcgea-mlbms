@@ -55,6 +55,11 @@ export async function listAnnualBudgets(params: AnnualBudgetListParams = {}): Pr
   return getPaginated<AnnualBudget>("/annual-budgets", params)
 }
 
+export async function listAllAnnualBudgets(): Promise<AnnualBudget[]> {
+  const { data } = await api.get<AnnualBudget[]>("/annual-budgets/all")
+  return data
+}
+
 export async function saveAnnualBudget(year: number, input: SaveAnnualBudgetInput): Promise<AnnualBudget> {
   const { data } = await api.put<AnnualBudget>(`/annual-budgets/${year}`, input)
   return data

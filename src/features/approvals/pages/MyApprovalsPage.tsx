@@ -15,8 +15,9 @@ import { Input } from "@/components/ui/input"
 import { listMyApprovals } from "@/services/approvals.service"
 import { formatDateTime } from "@/utils/format"
 import { approvalActionLabel } from "@/utils/approval-action-label"
+import { paginate } from "@/utils/paginate"
 import type { StatusTone } from "@/constants/status"
-import type { MyApprovalItem, MyApprovalTab, PaginatedResponse } from "@/types"
+import type { MyApprovalItem, MyApprovalTab } from "@/types"
 import { useAuth } from "@/contexts/AuthContext"
 
 const TABS: { value: MyApprovalTab; label: string }[] = [
@@ -28,9 +29,12 @@ const TABS: { value: MyApprovalTab; label: string }[] = [
   { value: "released", label: "Released" },
 ]
 
-// The backend doesn't support date-range filtering — pull a generous batch and filter/paginate
-// locally instead. Fine at this association's real scale; would need backend support to grow.
-const DATE_FILTER_FETCH_SIZE = 500
+// The backend doesn't support search or date-range filtering server-side for this endpoint
+// (the historical tabs' resolvedBucketFor() logic is computed in PHP over a bounded batch,
+// not a plain WHERE clause — see ApprovalWorkflowService::myApprovals()) — pull a generous
+// batch per tab once and search/filter/paginate entirely client-side instead. Fine at this
+// association's real scale; would need backend support to grow past it.
+const FETCH_SIZE = 1000
 
 function statusTone(status: string): StatusTone {
   if (status === "approved" || status === "released") return "success"
@@ -38,17 +42,6 @@ function statusTone(status: string): StatusTone {
   if (status === "returned") return "warning"
   if (status === "pending") return "info"
   return "neutral"
-}
-
-function paginateLocally(items: MyApprovalItem[], page: number, perPage: number): PaginatedResponse<MyApprovalItem> {
-  const totalRecords = items.length
-  const totalPages = Math.max(1, Math.ceil(totalRecords / perPage))
-  const currentPage = Math.min(Math.max(1, page), totalPages)
-  const start = (currentPage - 1) * perPage
-  return {
-    data: items.slice(start, start + perPage),
-    meta: { currentPage, perPage, totalRecords, totalPages },
-  }
 }
 
 export default function MyApprovalsPage() {
@@ -62,31 +55,43 @@ export default function MyApprovalsPage() {
 
   const hasDateFilter = Boolean(dateFrom || dateTo)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["my-approvals", user?.id, { tab, page, perPage, search, dateFrom, dateTo }],
-    queryFn: async () => {
-      if (!hasDateFilter) {
-        return listMyApprovals({ tab, page, perPage, search: search || undefined })
-      }
-      const batch = await listMyApprovals({ tab, page: 1, perPage: DATE_FILTER_FETCH_SIZE, search: search || undefined })
-      const filtered = batch.data.filter((item) => {
-        const dateStr = item.submittedAt ?? item.actedAt
-        if (!dateStr) return false
-        const date = dateStr.slice(0, 10)
-        if (dateFrom && date < dateFrom) return false
-        if (dateTo && date > dateTo) return false
-        return true
-      })
-      return paginateLocally(filtered, page, perPage)
-    },
+  // Fetches this tab's full batch once and searches/filters/paginates entirely client-side.
+  const { data: allApprovals = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["my-approvals", user?.id, "all", tab],
+    queryFn: () => listMyApprovals({ tab, page: 1, perPage: FETCH_SIZE }).then((r) => r.data),
   })
 
+  const filteredApprovals = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allApprovals.filter((item) => {
+      const matchesSearch = !q
+        || (item.reference ?? "").toLowerCase().includes(q)
+        || item.title.toLowerCase().includes(q)
+        || (item.memberName ?? "").toLowerCase().includes(q)
+        || (item.currentStageLabel ?? "").toLowerCase().includes(q)
+      if (!matchesSearch) return false
+      if (!hasDateFilter) return true
+      const dateStr = item.submittedAt ?? item.actedAt
+      if (!dateStr) return false
+      const date = dateStr.slice(0, 10)
+      if (dateFrom && date < dateFrom) return false
+      if (dateTo && date > dateTo) return false
+      return true
+    })
+  }, [allApprovals, search, hasDateFilter, dateFrom, dateTo])
+
+  const { data, meta } = paginate(filteredApprovals, page, perPage)
+
+  // Kept as its own minimal server request (not folded into the client-side conversion
+  // above) — it only needs a count, so a perPage:1 request stays cheaper than fetching up
+  // to 1000 pending rows client-side just to read .length when the user isn't even on the
+  // Pending tab.
   const { data: pendingData } = useQuery({
     queryKey: ["my-approvals", user?.id, { tab: "pending", page: 1, perPage: 1 }],
     queryFn: () => listMyApprovals({ tab: "pending", page: 1, perPage: 1 }),
     enabled: tab !== "pending",
   })
-  const pendingCount = tab === "pending" ? (data?.meta.totalRecords ?? 0) : (pendingData?.meta.totalRecords ?? 0)
+  const pendingCount = tab === "pending" ? filteredApprovals.length : (pendingData?.meta.totalRecords ?? 0)
 
   function handleTabChange(value: unknown) {
     setTab(value as MyApprovalTab)
@@ -190,7 +195,7 @@ export default function MyApprovalsPage() {
         </div>
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={data}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
@@ -203,7 +208,7 @@ export default function MyApprovalsPage() {
                 : `No ${tab} items yet.`
           }
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
     </div>
   )

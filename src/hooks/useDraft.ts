@@ -2,11 +2,16 @@ import * as React from "react"
 
 export type DraftSaveStatus = "idle" | "saving" | "saved" | "error"
 
+interface SaveOptions {
+  /** Skip the app-wide "data changed" refetch broadcast for this save — for background autosave of an in-progress draft, which shouldn't cause every open screen to visibly reload. */
+  silent?: boolean
+}
+
 interface UseDraftOptions<TPayload, TResult> {
   /** Existing draft id, if resuming one (e.g. from a `:id` route param). */
   draftId?: string
-  create: (payload: TPayload) => Promise<TResult>
-  update: (id: string, payload: TPayload) => Promise<TResult>
+  create: (payload: TPayload, options?: SaveOptions) => Promise<TResult>
+  update: (id: string, payload: TPayload, options?: SaveOptions) => Promise<TResult>
   getId: (result: TResult) => string
   onSaved?: (result: TResult) => void
   onError?: (error: unknown) => void
@@ -36,7 +41,7 @@ export function useDraft<TPayload, TResult>({
   }, [initialDraftId])
 
   const save = React.useCallback(
-    async (payload: TPayload): Promise<TResult> => {
+    async (payload: TPayload, options?: SaveOptions): Promise<TResult> => {
       // Guards against overlapping autosave + manual-save calls creating two drafts.
       if (savingRef.current) {
         savingRef.current = false
@@ -44,7 +49,7 @@ export function useDraft<TPayload, TResult>({
       savingRef.current = true
       setStatus("saving")
       try {
-        const result = draftId ? await update(draftId, payload) : await create(payload)
+        const result = draftId ? await update(draftId, payload, options) : await create(payload, options)
         setDraftId(getId(result))
         setStatus("saved")
         setLastSavedAt(new Date())

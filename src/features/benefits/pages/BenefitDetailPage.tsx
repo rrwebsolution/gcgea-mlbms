@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/shared/EmptyState"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getBenefit, getBenefitApprovalHistory } from "@/services/benefits.service"
 import { BENEFIT_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
@@ -22,6 +23,15 @@ export default function BenefitDetailPage() {
 
   if (isLoading) return <ProfileSkeleton cards={2} />
   if (!benefit) return <EmptyState icon={HeartHandshake} title="Benefit application not found" description="This benefit application may have been removed." />
+
+  // Benefits are a one-time lump-sum release (not installment-based like loans), so this is a
+  // single-row ledger — but it still needs its own "how much is left" view: a Treasurer can
+  // release less than the approved amount (see Approvals → Release Benefit / Treasury → Payments),
+  // leaving a balance that isn't tracked or paid automatically anywhere else.
+  const claimedAmount = benefit.approvedAmount ?? benefit.requestedAmount
+  const paidAmount = benefit.actualReleasedAmount ?? 0
+  const balanceAmount = benefit.status === "Released" ? Math.max(0, claimedAmount - paidAmount) : claimedAmount
+  const paymentStatus = benefit.status !== "Released" ? "Not Yet Released" : balanceAmount > 0 ? "Partially Released" : "Fully Released"
 
   return (
     <div className="space-y-5">
@@ -39,6 +49,7 @@ export default function BenefitDetailPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <SummaryStat label="Requested Amount" value={formatCurrency(benefit.requestedAmount)} />
         <SummaryStat label="Approved Amount" value={benefit.approvedAmount != null ? formatCurrency(benefit.approvedAmount) : "—"} />
+        <SummaryStat label="Released Amount" value={benefit.actualReleasedAmount != null ? formatCurrency(benefit.actualReleasedAmount) : "—"} />
         <SummaryStat label="Release Date" value={formatDateShort(benefit.releaseDate)} />
         <SummaryStat label="Release Reference" value={benefit.releaseReferenceNumber || "—"} />
       </div>
@@ -46,6 +57,7 @@ export default function BenefitDetailPage() {
       <Tabs defaultValue="summary">
         <TabsList className="flex-wrap">
           <TabsTrigger value="summary">Application Summary</TabsTrigger>
+          <TabsTrigger value="payment">Payment Status</TabsTrigger>
           <TabsTrigger value="requirements">Requirements</TabsTrigger>
           <TabsTrigger value="approvals">Approval History</TabsTrigger>
         </TabsList>
@@ -67,6 +79,38 @@ export default function BenefitDetailPage() {
               <h3 className="mb-1 text-sm font-semibold text-destructive">Rejection Reason</h3>
               <p className="text-sm text-foreground">{benefit.rejectionReason}</p>
             </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="payment" className="mt-4">
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Claimed</TableHead>
+                  <TableHead>Paid</TableHead>
+                  <TableHead>Balance</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Release Date</TableHead>
+                  <TableHead>Release Reference</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell className="font-semibold">{formatCurrency(claimedAmount)}</TableCell>
+                  <TableCell className="font-semibold text-success">{formatCurrency(paidAmount)}</TableCell>
+                  <TableCell className={balanceAmount > 0 ? "font-semibold text-destructive" : "font-semibold"}>{formatCurrency(balanceAmount)}</TableCell>
+                  <TableCell><StatusBadge label={paymentStatus} tone={paymentStatus === "Fully Released" ? "success" : paymentStatus === "Partially Released" ? "warning" : "info"} /></TableCell>
+                  <TableCell>{benefit.releaseDate ? formatDateShort(benefit.releaseDate) : "—"}</TableCell>
+                  <TableCell>{benefit.releaseReferenceNumber || "—"}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+          {paymentStatus === "Partially Released" && (
+            <p className="mt-3 text-xs text-destructive">
+              {formatCurrency(balanceAmount)} of the approved amount was not released. This benefit's approval is already complete, so there is currently no way to release the remaining balance for this application — releasing again is not supported once a benefit is Released. If this wasn't intentional, contact your system administrator.
+            </p>
           )}
         </TabsContent>
 

@@ -29,6 +29,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isInitializing, setIsInitializing] = React.useState(true)
   const [isLoggingIn, setIsLoggingIn] = React.useState(false)
   const [sessionExpired, setSessionExpired] = React.useState(false)
+  // Set by login()/logout() if either runs before the deferred restore below
+  // applies — guards against a fast login being clobbered by a stale restore.
+  const authOverriddenRef = React.useRef(false)
 
   React.useEffect(() => {
     // Without a minimum display time the startup/session-restore AppLoader
@@ -48,7 +51,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const elapsed = performance.now() - start
       setTimeout(() => {
         if (cancelled) return
-        setUser(resolved)
+        // A login/logout that happened while this was in flight is more
+        // recent truth than the session snapshot taken at boot — keep it.
+        if (!authOverriddenRef.current) setUser(resolved)
         setIsInitializing(false)
       }, Math.max(0, MIN_LOADER_MS - elapsed))
     })
@@ -70,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoggingIn(true)
     try {
       const authUser = await authService.login(credentials)
+      authOverriddenRef.current = true
       // Cached API responses belong to the previous account. Keeping them
       // across an account switch can hide the new user's approval queue or,
       // worse, briefly show data the new role should not inherit.
@@ -85,12 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = React.useCallback(async () => {
     await authService.logout()
+    authOverriddenRef.current = true
     queryClient.clear()
     setUser(null)
     setSessionExpired(false)
   }, [queryClient])
 
   const dismissSessionExpired = React.useCallback(() => {
+    authOverriddenRef.current = true
     queryClient.clear()
     setSessionExpired(false)
     setUser(null)

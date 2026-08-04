@@ -16,7 +16,7 @@ function ApprovalInboxBadge({ variant }: { variant: "inline" | "dot" }) {
   const { data } = useQuery({
     queryKey: ["my-approvals", user?.id, { tab: "pending", page: 1, perPage: 1 }],
     queryFn: () => listMyApprovals({ tab: "pending", page: 1, perPage: 1 }),
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
   })
   const count = data?.meta.totalRecords ?? 0
   if (count === 0) return null

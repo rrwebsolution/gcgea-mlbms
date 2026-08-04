@@ -1,38 +1,66 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Eye, Plus } from "lucide-react"
+import { Eye, Plus, Undo2 } from "lucide-react"
+import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { DataTable } from "@/components/shared/DataTable"
 import { Pagination } from "@/components/shared/Pagination"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { PermissionButton } from "@/components/shared/PermissionButton"
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { listLoanImportBatches } from "@/services/loan-import-history.service"
+import { listAllLoanImportBatches, undoLoanImportBatch } from "@/services/loan-import-history.service"
 import { formatDateTime } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import type { LoanImportBatchSummary } from "@/types"
 
 export default function LoanImportHistoryPage() {
+  const queryClient = useQueryClient()
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
   const [period, setPeriod] = React.useState("")
   const [search, setSearch] = React.useState("")
   const [dateFrom, setDateFrom] = React.useState("")
   const [dateTo, setDateTo] = React.useState("")
+  const [undoTarget, setUndoTarget] = React.useState<LoanImportBatchSummary | null>(null)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["loan-import-history", { page, perPage, period, search, dateFrom, dateTo }],
-    queryFn: () =>
-      listLoanImportBatches({
-        page,
-        perPage,
-        period: period || undefined,
-        search: search || undefined,
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined,
-      }),
+  // Fetches the full list once and pages/searches/filters entirely client-side, mirroring
+  // LoanImportHistoryController::index()'s rules so results match what the equivalent
+  // server query used to return.
+  const { data: allBatches = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["loan-import-history", "all"],
+    queryFn: listAllLoanImportBatches,
+  })
+
+  const filteredBatches = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allBatches.filter((b) => {
+      const matchesSearch = !q || (b.originalFilename ?? "").toLowerCase().includes(q)
+      const matchesPeriod = !period || b.balancePeriod === period
+      const matchesFrom = !dateFrom || (b.committedAt != null && b.committedAt.slice(0, 10) >= dateFrom)
+      const matchesTo = !dateTo || (b.committedAt != null && b.committedAt.slice(0, 10) <= dateTo)
+      return matchesSearch && matchesPeriod && matchesFrom && matchesTo
+    })
+  }, [allBatches, search, period, dateFrom, dateTo])
+
+  const { data, meta } = paginate(filteredBatches, page, perPage)
+  const latestBatchToken = allBatches.reduce<LoanImportBatchSummary | null>(
+    (latest, batch) => !latest || (batch.committedAt ?? "") > (latest.committedAt ?? "") ? batch : latest,
+    null,
+  )?.token
+
+  const undoMutation = useMutation({
+    mutationFn: (token: string) => undoLoanImportBatch(token),
+    onSuccess: () => {
+      toast.success("Loan import undone. Loans created by this batch were removed.")
+      queryClient.invalidateQueries({ queryKey: ["loan-import-history"] })
+      queryClient.invalidateQueries({ queryKey: ["loans"] })
+      setUndoTarget(null)
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Unable to undo this loan import."),
   })
 
   const hasFilters = Boolean(period || search || dateFrom || dateTo)
@@ -67,9 +95,16 @@ export default function LoanImportHistoryPage() {
       enableHiding: false,
       enableSorting: false,
       cell: ({ row }) => (
-        <Button variant="ghost" size="icon-sm" className="size-8" aria-label="View batch" render={<Link to={`/loans/import-history/${row.original.token}`} />}>
-          <Eye className="size-4 text-muted-foreground/80" />
-        </Button>
+        <div className="flex gap-1.5">
+          <Button variant="ghost" size="icon-sm" className="size-8" aria-label="View batch" render={<Link to={`/loans/import-history/${row.original.token}`} />}>
+            <Eye className="size-4 text-muted-foreground/80" />
+          </Button>
+          {row.original.token === latestBatchToken && (
+            <PermissionButton permission="loan_payments.import" variant="ghost" size="icon-sm" className="size-8" aria-label="Undo import" onClick={() => setUndoTarget(row.original)}>
+              <Undo2 className="size-4 text-destructive/80" />
+            </PermissionButton>
+          )}
+        </div>
       ),
     },
   ]
@@ -89,7 +124,7 @@ export default function LoanImportHistoryPage() {
       <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={data}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
@@ -112,8 +147,20 @@ export default function LoanImportHistoryPage() {
             </>
           }
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
+
+      <ConfirmDialog
+        open={!!undoTarget}
+        onOpenChange={(open) => !open && setUndoTarget(null)}
+        title="Undo this loan import?"
+        description={undoTarget ? `This deletes the imported loans and their import-created payment history from \"${undoTarget.originalFilename}\". This cannot be undone.` : undefined}
+        confirmLabel="Yes, Undo Import"
+        confirmingLabel="Undoing..."
+        destructive
+        isLoading={undoMutation.isPending}
+        onConfirm={() => undoTarget && undoMutation.mutate(undoTarget.token)}
+      />
     </div>
   )
 }

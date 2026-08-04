@@ -38,14 +38,17 @@ export function LoanStatusChart({ data, isLoading }: LoanStatusChartProps) {
         <Tooltip
           cursor={{ fill: "var(--color-muted)" }}
           formatter={(value) => [value, "Applications"]}
+          labelStyle={{ color: "var(--color-foreground)", fontWeight: 600 }}
+          itemStyle={{ color: "var(--color-foreground)" }}
           contentStyle={{
             borderRadius: 8,
             border: "1px solid var(--color-border)",
             background: "var(--color-popover)",
+            color: "var(--color-popover-foreground)",
             fontSize: 12,
           }}
         />
-        <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={18} label={{ position: "right", fill: "var(--color-muted-foreground)", fontSize: 11 }}>
+        <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={18} label={{ position: "right", fill: "var(--color-foreground)", fontSize: 11, fontWeight: 600 }}>
           {sorted.map((entry) => (
             <Cell key={entry.status} fill={TONE_COLOR[LOAN_STATUS_TONE[entry.status] ?? "neutral"]} />
           ))}

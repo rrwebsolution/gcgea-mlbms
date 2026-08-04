@@ -538,9 +538,9 @@ export default function ReloanWizardPage() {
           {step > 1 && <Button variant="outline" onClick={goBack}>Previous</Button>}
           {reloanId && <SaveDraftButton status={reloanDraft.status} lastSavedAt={reloanDraft.lastSavedAt} onClick={saveDraft} disabled={isSubmitting} />}
           {step < STEPS.length ? (
-            <Button onClick={goNext} disabled={!canProceedFromStep(step)}>Next</Button>
+            <Button variant="success" onClick={goNext} disabled={!canProceedFromStep(step)}>Next</Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={isSubmitting || isBlocked || !agree} aria-busy={isSubmitting}>
+            <Button variant="success" onClick={handleSubmit} disabled={isSubmitting || isBlocked || !agree} aria-busy={isSubmitting}>
               {isSubmitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <RotateCw aria-hidden="true" />}
               {isSubmitting ? "Submitting…" : "Submit Reloan"}
             </Button>

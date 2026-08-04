@@ -24,6 +24,7 @@ import { formatCurrency } from "@/utils/format"
 import { paginate } from "@/utils/paginate"
 import { downloadCsv } from "@/utils/csv"
 import type { Contribution, PaymentMethod } from "@/types"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
 const PIE_COLORS = ["var(--color-primary)", "var(--color-success)", "var(--color-gold)", "var(--color-info)"]
@@ -50,7 +51,7 @@ const EMPTY_FILTERS: Filters = { dateFrom: "", dateTo: "", period: "", office: "
 
 export default function ContributionReportsPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
 
@@ -116,7 +117,7 @@ export default function ContributionReportsPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
     setPage(1)
   }
 
@@ -199,7 +200,7 @@ export default function ContributionReportsPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="contributions.print" size="sm" variant="outline" disabled={!applied} onClick={() => window.print()}>
             <Printer /> Print

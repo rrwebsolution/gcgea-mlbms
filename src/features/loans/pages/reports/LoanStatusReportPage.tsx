@@ -1,24 +1,26 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { ArrowLeft, Banknote, Download, Hash, RotateCcw, Wallet } from "lucide-react"
+import { ArrowLeft, Banknote, Download, Eye, Hash, RotateCcw, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import type { ColumnDef } from "@tanstack/react-table"
-import { getAllLoans, getLoanTypesSync } from "@/services/loans.service"
+import { listAllLoans, listLoanTypes } from "@/services/loans.service"
 import { LOAN_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
 import type { LoanApplication, LoanStatus } from "@/types"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const ALL_STATUSES: LoanStatus[] = [
   "Draft",
@@ -55,23 +57,39 @@ interface LoanStatusReportPageProps {
   statuses?: LoanStatus[]
   title: string
   description: string
+  /** Adds a "View Statement" row action linking to the printable Statement of Loan — only meaningful once a loan has release data. */
+  showStatementAction?: boolean
 }
 
-export default function LoanStatusReportPage({ status, statuses, title, description }: LoanStatusReportPageProps) {
+export default function LoanStatusReportPage({ status, statuses, title, description, showStatementAction }: LoanStatusReportPageProps) {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
 
-  const loanTypes = React.useMemo(() => getLoanTypesSync(), [])
+  const { data: allLoans = [], isLoading, isError } = useQuery({
+    queryKey: ["loans", "all"],
+    queryFn: listAllLoans,
+  })
+  const { data: loanTypes = [] } = useQuery({
+    queryKey: ["loan-types"],
+    queryFn: listLoanTypes,
+  })
   const hasFixedStatuses = Boolean(status || statuses?.length)
 
   const rows = React.useMemo<LoanApplication[]>(() => {
     if (!applied) return []
-    return getAllLoans()
+    return allLoans
       .filter((l) => {
         if (statuses) {
           if (!statuses.includes(l.status)) return false
         } else if (status) {
-          if (l.status !== status) return false
+          // Approved and Released are workflow milestones. Loans retain those
+          // milestones after their current status advances to Active/Overdue/
+          // Fully Paid, so use their persisted approval/release fields too.
+          if (status === "Approved") {
+            if (!(l.status === "Approved" || (l.approvedAmount ?? 0) > 0)) return false
+          } else if (status === "Released") {
+            if (!(l.status === "Released" || Boolean(l.releaseDate))) return false
+          } else if (l.status !== status) return false
         } else if (applied.status && l.status !== applied.status) {
           return false
         }
@@ -82,7 +100,7 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
         return true
       })
       .sort((a, b) => b.applicationDate.localeCompare(a.applicationDate))
-  }, [applied, status, statuses])
+  }, [allLoans, applied, status, statuses])
 
   const officeChartData = React.useMemo<OfficeCount[]>(() => {
     const map = new Map<string, number>()
@@ -105,7 +123,7 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   function handleExportCsv() {
@@ -148,6 +166,17 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
     { accessorKey: "outstandingBalance", header: "Outstanding", cell: ({ row }) => formatCurrency(row.original.outstandingBalance) },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={LOAN_STATUS_TONE[row.original.status]} /> },
     { accessorKey: "applicationDate", header: "Application Date", cell: ({ row }) => formatDateShort(row.original.applicationDate) },
+    ...(showStatementAction
+      ? [{
+          id: "actions",
+          header: "Actions",
+          cell: ({ row }: { row: { original: LoanApplication } }) => (
+            <Button variant="ghost" size="sm" render={<Link to={`/loans/${row.original.id}/statement`} />}>
+              <Eye /> View Statement
+            </Button>
+          ),
+        } satisfies ColumnDef<LoanApplication, unknown>]
+      : []),
   ]
 
   return (
@@ -196,7 +225,7 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="loans.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -233,9 +262,11 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
+              isLoading={isLoading}
+              isError={isError}
               emptyTitle="No loans match your filters"
               emptyDescription="Try widening the date range or clearing some filters."
             />

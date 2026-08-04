@@ -1,23 +1,25 @@
 import * as React from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Save } from "lucide-react"
+import { Loader2, Pencil, Save, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
 import { MemberSelectionStep } from "@/components/shared/MemberSelectionStep"
 import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { AlertBanner } from "@/components/shared/AlertBanner"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { getMember } from "@/services/members.service"
-import { listAllLoans } from "@/services/loans.service"
+import { listAllLoans, getLoanSchedule } from "@/services/loans.service"
+import { listAllContributions } from "@/services/contributions.service"
 import { createLoanPayment } from "@/services/loan-payments.service"
 import { getLoanSettings } from "@/services/loan-settings.service"
-import { formatCurrency } from "@/utils/format"
+import { formatCurrency, formatMonthYear } from "@/utils/format"
 import type { PaymentMethod } from "@/types"
 
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
@@ -45,17 +47,54 @@ export default function CreateLoanPaymentPage() {
   const [penalty, setPenalty] = React.useState<number>(0)
   const [paymentMethod, setPaymentMethod] = React.useState<PaymentMethod>("Payroll Deduction")
   const [officialReceiptNumber, setOfficialReceiptNumber] = React.useState("")
+  const [orMode, setOrMode] = React.useState<"auto" | "manual">("auto")
   const [payrollReference, setPayrollReference] = React.useState("")
   const [remarks, setRemarks] = React.useState("")
   const [isSaving, setIsSaving] = React.useState(false)
+  const [includeShortfall, setIncludeShortfall] = React.useState(true)
 
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
   const { data: loans = [] } = useQuery({ queryKey: ["loans", "all"], queryFn: listAllLoans })
   const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
+  const { data: allContributions = [] } = useQuery({ queryKey: ["contributions", "all"], queryFn: listAllContributions })
   const activeLoans = loans.filter((loan) => loan.memberId === memberId && ["Released", "Active", "Overdue", "Restructured"].includes(loan.status) && loan.outstandingBalance > 0)
   const selectedLoan = activeLoans.find((loan) => loan.id === loanId)
+  const { data: selectedLoanSchedule = [] } = useQuery({
+    queryKey: ["loans", loanId, "schedule"],
+    queryFn: () => getLoanSchedule(loanId),
+    enabled: !!loanId,
+  })
+  const partiallyPaidInstallment = selectedLoanSchedule.find((entry) => entry.status === "Partially Paid")
+  const shortfallAmount = partiallyPaidInstallment ? partiallyPaidInstallment.amountDue - partiallyPaidInstallment.amountPaid : 0
+
+  // Deep-link support for Loan Detail's "Record Payment" button (?member=&loan=) —
+  // pre-selects the specific loan once its member's active loans have loaded. The
+  // suggested amount itself is computed by the effect below, once the schedule
+  // (and therefore any shortfall) has also loaded.
+  React.useEffect(() => {
+    if (loanId) return
+    const paramLoanId = searchParams.get("loan")
+    if (!paramLoanId) return
+    const loan = activeLoans.find((item) => item.id === paramLoanId)
+    if (!loan) return
+    setLoanId(loan.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLoans, searchParams])
+
+  // Suggests this month's amortization plus any carried-over shortfall from a
+  // Partially Paid installment (when "include shortfall" is checked) — recomputed
+  // whenever the selected loan changes, the schedule/shortfall loads, or the
+  // bookkeeper toggles the checkbox. Does not fight the bookkeeper's own manual edits.
+  React.useEffect(() => {
+    if (!selectedLoan) return
+    const suggested = includeShortfall ? selectedLoan.monthlyAmortization + shortfallAmount : selectedLoan.monthlyAmortization
+    setAmountPaid(Math.min(suggested, selectedLoan.outstandingBalance))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLoan?.id, partiallyPaidInstallment?.installmentNumber, includeShortfall])
   const totalOutstanding = activeLoans.reduce((sum, loan) => sum + loan.outstandingBalance, 0)
-  const canSave = !!member && !!selectedLoan && !!amountPaid && amountPaid > 0 && amountPaid - penalty > 0 && amountPaid - penalty <= selectedLoan.outstandingBalance && !!paymentDate && !!officialReceiptNumber.trim()
+  const memberContributions = memberId ? allContributions.filter((c) => c.memberId === memberId && c.status === "Posted") : []
+  const totalContributions = memberContributions.reduce((sum, c) => sum + c.amount, 0)
+  const canSave = !!member && !!selectedLoan && !!amountPaid && amountPaid > 0 && amountPaid - penalty > 0 && amountPaid - penalty <= selectedLoan.outstandingBalance && !!paymentDate && (orMode === "auto" || !!officialReceiptNumber.trim())
 
   React.useEffect(() => {
     if (!selectedLoan || !loanSettings) return
@@ -75,13 +114,13 @@ export default function CreateLoanPaymentPage() {
     if (!canSave || !amountPaid) return
     setIsSaving(true)
     try {
-      const payment = await createLoanPayment({ memberId, loanApplicationId: loanId, paymentDate, amountPaid, penalty, paymentMethod, officialReceiptNumber: officialReceiptNumber.trim(), payrollReference: payrollReference.trim() || undefined, remarks: remarks.trim() || undefined })
+      const payment = await createLoanPayment({ memberId, loanApplicationId: loanId, paymentDate, amountPaid, penalty, paymentMethod, officialReceiptNumber: orMode === "manual" ? officialReceiptNumber.trim() : undefined, payrollReference: payrollReference.trim() || undefined, remarks: remarks.trim() || undefined })
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["loan-payments"] }),
         queryClient.invalidateQueries({ queryKey: ["loans"] }),
       ])
       toast.success(`Payment ${payment.paymentReferenceNumber} recorded successfully.`)
-      navigate("/loan-payments")
+      navigate(`/loans/${loanId}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to record the loan payment.")
     } finally {
@@ -93,19 +132,40 @@ export default function CreateLoanPaymentPage() {
     <div className="space-y-5 pb-16">
       <PageHeader title="Record Payment" description="Post a payment against a member's active loan account." />
       <FormSection title="Step 1 · Select Member">
-        <MemberSelectionStep selectedMemberId={memberId || undefined} member={member} onSelect={selectMember} totalContributions={0} outstandingLoanBalance={totalOutstanding} activeLoanCount={activeLoans.length} overdueLoanCount={activeLoans.filter((loan) => loan.status === "Overdue").length} />
+        <MemberSelectionStep selectedMemberId={memberId || undefined} member={member} onSelect={selectMember} totalContributions={totalContributions} outstandingLoanBalance={totalOutstanding} activeLoanCount={activeLoans.length} overdueLoanCount={activeLoans.filter((loan) => loan.status === "Overdue").length} />
       </FormSection>
 
       {member && (
         <FormSection title="Step 2 · Payment Details">
           {activeLoans.length === 0 && <AlertBanner tone="warning" title="No payable loan found" description="This member has no active loan with an outstanding balance." className="mb-4" />}
+          {partiallyPaidInstallment && (
+            <AlertBanner
+              tone="warning"
+              title={`Partially Paid — Installment #${partiallyPaidInstallment.installmentNumber} (${formatMonthYear(partiallyPaidInstallment.dueDate)})`}
+              description={
+                <div className="space-y-2">
+                  <p>This installment is still short by {formatCurrency(shortfallAmount)}.</p>
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                    <Checkbox checked={includeShortfall} onCheckedChange={(checked) => setIncludeShortfall(!!checked)} />
+                    Include this shortfall in the suggested Amount Paid (pay it now)
+                  </label>
+                  {!includeShortfall && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Unchecked — the {formatCurrency(shortfallAmount)} shortfall stays open and will be collected from whatever payment comes in next.
+                    </p>
+                  )}
+                </div>
+              }
+              className="mb-4"
+            />
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Loan Account <span className="text-destructive">*</span></Label>
               <CommandSelect
                 className="w-full"
                 value={loanId}
-                onValueChange={(value) => { setLoanId(value); const loan = activeLoans.find((item) => item.id === value); setAmountPaid(loan ? Math.min(loan.monthlyAmortization, loan.outstandingBalance) : undefined) }}
+                onValueChange={(value) => { setLoanId(value); setIncludeShortfall(true); if (!value) setAmountPaid(undefined) }}
                 disabled={!activeLoans.length}
                 placeholder="Select an active loan"
                 options={activeLoans.map((loan) => ({ value: loan.id, label: `${loan.applicationNumber} · ${loan.loanTypeName} · Balance ${formatCurrency(loan.outstandingBalance)}` }))}
@@ -132,7 +192,32 @@ export default function CreateLoanPaymentPage() {
                 hideSearch
               />
             </div>
-            <div className="space-y-1.5"><Label>Official Receipt Number <span className="text-destructive">*</span></Label><Input value={officialReceiptNumber} onChange={(event) => setOfficialReceiptNumber(event.target.value)} placeholder="e.g. OR-2026-000123" /></div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Official Receipt Number {orMode === "manual" && <span className="text-destructive">*</span>}</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setOrMode((mode) => (mode === "auto" ? "manual" : "auto"))
+                    setOfficialReceiptNumber("")
+                  }}
+                >
+                  {orMode === "auto" ? (
+                    <><Pencil className="size-3" /> Enter Manually</>
+                  ) : (
+                    <><Sparkles className="size-3" /> Auto-Generate</>
+                  )}
+                </Button>
+              </div>
+              {orMode === "auto" ? (
+                <Input disabled placeholder="Auto-generated on save" />
+              ) : (
+                <Input value={officialReceiptNumber} onChange={(event) => setOfficialReceiptNumber(event.target.value)} placeholder="e.g. OR-2026-000123" autoFocus />
+              )}
+            </div>
             <div className="space-y-1.5"><Label>Payroll Reference</Label><Input value={payrollReference} onChange={(event) => setPayrollReference(event.target.value)} placeholder="Optional" /></div>
             <div className="space-y-1.5 sm:col-span-2"><Label>Remarks</Label><Textarea rows={2} value={remarks} onChange={(event) => setRemarks(event.target.value)} /></div>
           </div>

@@ -2,6 +2,8 @@ import type { AuthUser, LoginHistoryEntry, PaginatedResponse, PaginationParams, 
 import { api, getPaginated } from "@/lib/api"
 import { getAllRolesSync } from "./roles.service"
 import { computeEffectivePermissionCodes } from "@/utils/effective-permissions"
+import { queryClient } from "@/lib/query-client"
+import { getLookups } from "@/services/lookups.service"
 
 // Best-effort synchronous cache of the last successful listAllUsers() fetch —
 // backs isUsernameTaken/isEmailTaken/isLastActiveSuperAdmin/getAllUsersSync()
@@ -27,8 +29,20 @@ export async function listUsers(params: UserListParams = {}): Promise<PaginatedR
 }
 
 export async function listAllUsers(): Promise<SystemUser[]> {
-  const { data } = await api.get<SystemUser[]>("/users/all")
+  const data = (await queryClient.fetchQuery({ queryKey: ["lookups"], queryFn: getLookups, staleTime: Infinity })).users
   cachedUsers = data
+  return data
+}
+
+/**
+ * Every user regardless of status — unlike listAllUsers() (Active only, shared with
+ * approver pickers via the lookups bundle), this is for the Users management page itself,
+ * which needs to list Inactive/Disabled accounts too so admins can find and reactivate them.
+ * Deliberately not folded into the lookups bundle or cachedUsers — this is a distinct,
+ * page-specific dataset, not the "active users for pickers" one those back.
+ */
+export async function listAllUsersIncludingInactive(): Promise<SystemUser[]> {
+  const { data } = await api.get<SystemUser[]>("/users/all", { params: { includeInactive: true } })
   return data
 }
 

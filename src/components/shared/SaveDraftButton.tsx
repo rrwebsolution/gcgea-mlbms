@@ -22,7 +22,7 @@ export function SaveDraftButton({ status, lastSavedAt, onClick, label = "Save as
 
   return (
     <div className={cn("flex flex-col items-start gap-1", className)}>
-      <Button type="button" variant="secondary" onClick={onClick} disabled={disabled || isSaving} aria-busy={isSaving}>
+      <Button type="button" variant="default" onClick={onClick} disabled={disabled || isSaving} aria-busy={isSaving}>
         {isSaving ? <Loader2 className="animate-spin" /> : status === "error" ? <AlertTriangle /> : <Save />}
         {isSaving ? "Saving draft…" : status === "error" ? "Failed to save draft" : label}
       </Button>

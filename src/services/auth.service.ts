@@ -11,11 +11,16 @@ export async function logout(): Promise<void> {
   await api.post("/auth/logout")
 }
 
-/** Resolves the authenticated user from the current session, or null if there isn't one. */
+/**
+ * Resolves the authenticated user from the current session, or null if there isn't one.
+ * The endpoint itself answers 200+false for "no session" (not a 401) — see
+ * AuthController::me() — so the catch here is only for genuine failures (session-timeout
+ * 401, network/server errors), not the normal logged-out case.
+ */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    const { data } = await api.get<AuthUser>("/auth/me")
-    return data
+    const { data } = await api.get<AuthUser | false>("/auth/me")
+    return data || null
   } catch {
     return null
   }

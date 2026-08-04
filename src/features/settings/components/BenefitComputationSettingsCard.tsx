@@ -100,10 +100,14 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
 ) {
   const queryClient = useQueryClient()
   const { data: benefitTypes = [] } = useQuery({ queryKey: ["benefit-types"], queryFn: listBenefitTypes })
-  const configuredTypes = CORE_BENEFITS.map((definition) => ({
-    ...definition,
-    type: benefitTypes.find((type) => type.name === definition.name),
-  }))
+  const configuredTypes = CORE_BENEFITS.map((definition) => {
+    const type = benefitTypes.find((benefitType) => benefitType.name === definition.name)
+    return {
+      ...definition,
+      type,
+      maximumAmount: type?.maximumAmount ?? definition.maximumAmount,
+    }
+  })
   const sourceTiers = configuredTypes.find((entry) => entry.type)?.type?.prorationTiers
   const [tiers, setTiers] = React.useState<BenefitTypeProrationTierInput[]>(DEFAULT_TIERS)
 
@@ -302,11 +306,11 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
           </Button>
         </div>
 
-        {[
-          { value: "retirement", title: "Retirement and Separation Benefits", maximum: 10_000 },
-          { value: "mortuary", title: "Mortuary Cash Assistance", maximum: 10_000 },
-          { value: "nuclear", title: "Mortuary Cash Assistance for Nuclear Family Member", maximum: 5_000 },
-        ].map((benefit) => (
+        {configuredTypes.map((entry) => ({
+          value: entry.name === "Retirement and Separation Benefit" ? "retirement" : entry.name === "Mortuary Cash Assistance" ? "mortuary" : "nuclear",
+          title: entry.name === "Retirement and Separation Benefit" ? "Retirement and Separation Benefits" : entry.name,
+          maximum: entry.maximumAmount,
+        })).map((benefit) => (
           <TabsContent key={benefit.value} value={benefit.value} className="mt-0">
             <AlertBanner
               className="mb-4"

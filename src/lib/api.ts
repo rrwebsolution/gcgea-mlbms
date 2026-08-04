@@ -2,6 +2,13 @@ import axios, { AxiosError, type AxiosAdapter, type AxiosResponse, type Internal
 import type { PaginatedResponse, PaginationParams } from "@/types"
 import { notifySystemDataChanged } from "@/lib/query-client"
 
+declare module "axios" {
+  interface AxiosRequestConfig {
+    /** Skip the app-wide "data changed, refetch every active query" broadcast for this write — for background autosave of an in-progress draft, which shouldn't cause every other open screen (or this one) to visibly reload. */
+    silent?: boolean
+  }
+}
+
 /**
  * Centralized Axios client for the Laravel Sanctum API. Cookie/session based
  * (not bearer tokens) — see `getCsrfCookie` below — so every request carries
@@ -27,6 +34,8 @@ export const api = axios.create({
  */
 const defaultAdapter = axios.getAdapter(api.defaults.adapter)
 const inFlightGets = new Map<string, Promise<AxiosResponse>>()
+const recentlyCompletedGets = new Map<string, { response: AxiosResponse; expiresAt: number }>()
+const GET_DEDUPE_GRACE_MS = 250
 
 function stableSerialize(value: unknown): string {
   if (value == null || typeof value !== "object") return JSON.stringify(value)
@@ -38,82 +47,47 @@ function stableSerialize(value: unknown): string {
 }
 
 const deduplicatingAdapter: AxiosAdapter = (config) => {
-  if (config.method?.toLowerCase() !== "get") return defaultAdapter(config)
+  if (config.method?.toLowerCase() !== "get") {
+    // A successful write may change any previously read representation. Never
+    // serve a grace-window response across a mutation boundary.
+    recentlyCompletedGets.clear()
+    return defaultAdapter(config)
+  }
 
-  const key = `${config.baseURL ?? ""}${config.url ?? ""}?${stableSerialize(config.params ?? {})}`
+  const key = `${config.baseURL ?? ""}${config.url ?? ""}?${stableSerialize(config.params ?? {})}|${config.responseType ?? "json"}`
   const existing = inFlightGets.get(key)
   if (existing) return existing
 
+  const completed = recentlyCompletedGets.get(key)
+  if (completed) {
+    if (completed.expiresAt > Date.now()) return Promise.resolve(completed.response)
+    recentlyCompletedGets.delete(key)
+  }
+
   const request = defaultAdapter(config)
   inFlightGets.set(key, request)
-  const cleanup = () => {
+  const cleanup = (response?: AxiosResponse) => {
     if (inFlightGets.get(key) === request) inFlightGets.delete(key)
+    if (response) {
+      recentlyCompletedGets.set(key, { response, expiresAt: Date.now() + GET_DEDUPE_GRACE_MS })
+      window.setTimeout(() => {
+        const cached = recentlyCompletedGets.get(key)
+        if (cached && cached.expiresAt <= Date.now()) recentlyCompletedGets.delete(key)
+      }, GET_DEDUPE_GRACE_MS)
+    }
   }
-  void request.then(cleanup, cleanup)
+  void request.then((response) => cleanup(response), () => cleanup())
   return request
 }
 
 api.defaults.adapter = deduplicatingAdapter
 
-const GLOBAL_SEARCH_PAGE_SIZE = 10_000
-
-/**
- * Fetches list endpoints normally, but makes text searches global. Some API
- * endpoints apply their search after slicing the requested page, which means a
- * match on another page is invisible. During a search we request the complete
- * filtered set first, then paginate those matches on the client.
- */
 export async function getPaginated<T>(url: string, params: PaginationParams = {}): Promise<PaginatedResponse<T>> {
-  const search = typeof params.search === "string" ? params.search.trim() : ""
-
-  if (!search) {
-    const { data } = await api.get<PaginatedResponse<T>>(url, { params })
-    return data
-  }
-
-  const requestedPage = Math.max(1, Number(params.page) || 1)
-  const requestedPerPage = Math.max(1, Number(params.perPage) || 10)
-  // Deliberately omit `search` here. This avoids endpoints that search only
-  // inside the requested page instead of across the complete filtered query.
-  const filterParams = { ...params }
-  delete filterParams.search
-  const { data: firstBatch } = await api.get<PaginatedResponse<T>>(url, {
-    params: { ...filterParams, page: 1, perPage: GLOBAL_SEARCH_PAGE_SIZE },
-  })
-
-  const remainingBatches = firstBatch.meta.totalPages > 1
-    ? await Promise.all(
-        Array.from({ length: firstBatch.meta.totalPages - 1 }, (_, index) =>
-          api.get<PaginatedResponse<T>>(url, {
-            params: { ...filterParams, page: index + 2, perPage: GLOBAL_SEARCH_PAGE_SIZE },
-          })
-        )
-      )
-    : []
-
-  const allRecords = [firstBatch.data, ...remainingBatches.map(({ data }) => data.data)].flat()
-  const normalizedSearch = search.toLocaleLowerCase().replace(/\s+/g, " ")
-  const compactSearch = normalizedSearch.replace(/[^\p{L}\p{N}]/gu, "")
-  const matches = allRecords.filter((record) => {
-    const searchableText = Object.values(record as Record<string, unknown>)
-      .filter((value) => typeof value === "string" || typeof value === "number")
-      .join(" ")
-      .toLocaleLowerCase()
-      .replace(/\s+/g, " ")
-    return searchableText.includes(normalizedSearch) || (
-      compactSearch.length > 0 && searchableText.replace(/[^\p{L}\p{N}]/gu, "").includes(compactSearch)
-    )
-  })
-
-  const totalRecords = matches.length
-  const totalPages = Math.max(1, Math.ceil(totalRecords / requestedPerPage))
-  const currentPage = Math.min(requestedPage, totalPages)
-  const start = (currentPage - 1) * requestedPerPage
-
-  return {
-    data: matches.slice(start, start + requestedPerPage),
-    meta: { currentPage, perPage: requestedPerPage, totalRecords, totalPages },
-  }
+  // Filtering and pagination are server-side. Never download the full table
+  // merely to search a paginated list—the Laravel endpoints apply their
+  // search filters before paginate(), so only the requested page is returned.
+  const { data } = await api.get<PaginatedResponse<T>>(url, { params })
+  return data
 }
 
 /** Root origin (no trailing `/api`) — Sanctum's CSRF-cookie route lives outside the `/api` prefix. */
@@ -162,7 +136,7 @@ function dataDomainForUrl(url?: string): string {
 api.interceptors.response.use(
   (response) => {
     const method = response.config.method?.toLowerCase()
-    if (method && ["post", "put", "patch", "delete"].includes(method)) {
+    if (method && ["post", "put", "patch", "delete"].includes(method) && !response.config.silent) {
       notifySystemDataChanged(dataDomainForUrl(response.config.url))
     }
     return response

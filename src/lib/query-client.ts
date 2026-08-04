@@ -38,6 +38,14 @@ function refreshAffectedData(domains: string[]): void {
     // they perform a clean request when the user returns to those pages.
     queryClient.removeQueries({ type: "inactive" })
     void queryClient.invalidateQueries({ type: "active", refetchType: "active" })
+
+    // ["lookups"] (roles/users/offices/loan-types/benefit-types/deduction-types/loan-settings,
+    // see services/lookups.service.ts) has no direct useQuery observer of its own — it's only
+    // reached through the imperative fetchQuery() calls inside listAllRoles()/getLoanSettings()/
+    // etc. — so the "active" filter above never catches it. Invalidate it unconditionally so
+    // edits to any of those 7 domains are picked up on next read instead of staying cached
+    // until a full reload.
+    void queryClient.invalidateQueries({ queryKey: ["lookups"] })
   }, 150)
 }
 

@@ -1,7 +1,7 @@
 import type { PaymentMethod } from "./common"
 
 export type ContributionStatus = "Posted" | "Voided"
-export type ContributionType = "Monthly Dues" | "Cash Pabaon" | "Savings"
+export type ContributionType = "Monthly Dues" | "Cash Pabaon"
 
 export interface ContributionFundAllocation {
   fundId: string
@@ -29,6 +29,7 @@ export interface Contribution {
   contributionPeriod: string
   contributionType: ContributionType
   amount: number
+  cashPabaonAmount?: number | null
   paymentDate: string
   paymentMethod: PaymentMethod
   officialReceiptNumber?: string

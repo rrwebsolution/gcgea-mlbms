@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { ChevronLeft, ChevronRight, Loader2, LogOut } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { ChevronLeft, ChevronRight, Database, Loader2, LogOut } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
@@ -9,8 +10,16 @@ import { SidebarBrand } from "@/layouts/SidebarBrand"
 import { useSidebar } from "@/contexts/SidebarContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { cn } from "@/lib/utils"
-import { getAppearance } from "@/services/settings.service"
+import { getAppearance, getStorageUsage } from "@/services/settings.service"
 import type { AppearanceSettings } from "@/types"
+
+function formatBytes(bytes: number): string {
+  const gb = bytes / 1024 ** 3
+  if (gb >= 1) return `${gb.toFixed(1)} GB`
+  const mb = bytes / 1024 ** 2
+  if (mb >= 1) return `${mb.toFixed(1)} MB`
+  return `${(bytes / 1024).toFixed(1)} KB`
+}
 
 export function Sidebar() {
   const { isCollapsed, toggleCollapsed } = useSidebar()
@@ -18,6 +27,7 @@ export function Sidebar() {
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = React.useState(false)
   const [footerBranding, setFooterBranding] = React.useState(() => getAppearance())
+  const { data: storageUsage } = useQuery({ queryKey: ["system-storage-usage"], queryFn: getStorageUsage })
 
   React.useEffect(() => {
     function handleAppearanceChange(event: Event) {
@@ -133,6 +143,35 @@ export function Sidebar() {
               ))}
             </div>
           )}
+
+          {/* Disk Usage */}
+          {!isCollapsed && storageUsage && (() => {
+            const percent = (storageUsage.usedBytes / storageUsage.totalBytes) * 100
+            const isDanger = percent >= 90
+            const isWarning = !isDanger && percent >= 75
+            return (
+            <div className="rounded-xl border border-sidebar-border/30 bg-sidebar-accent/15 p-2.5">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/60">
+                <Database className="size-3" aria-hidden="true" />
+                Disk Usage
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-sidebar-border/40">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width] duration-500",
+                    isDanger ? "bg-destructive" : isWarning ? "bg-warning" : "bg-primary"
+                  )}
+                  style={{
+                    width: `${storageUsage.usedBytes > 0 ? Math.max(2, Math.min(100, percent)) : 0}%`,
+                  }}
+                />
+              </div>
+              <p className={cn("mt-1.5 text-[10px] font-medium", isDanger ? "text-destructive" : "text-sidebar-foreground/60")}>
+                {formatBytes(storageUsage.usedBytes)} / {formatBytes(storageUsage.totalBytes)} used
+              </p>
+            </div>
+            )
+          })()}
 
           {/* Logout Action */}
           <div className="w-full">

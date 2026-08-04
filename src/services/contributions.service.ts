@@ -25,6 +25,24 @@ export async function listContributions(params: ListContributionsParams = {}): P
   return getPaginated<Contribution>("/contributions", params)
 }
 
+export interface ContributionSummary {
+  totalContributions: number
+  totalAmount: number
+  paidMembers: number
+  unpaidMembers: number
+  contributionsThisMonth: number
+}
+
+export async function getContributionSummary(): Promise<ContributionSummary> {
+  const { data } = await api.get<ContributionSummary>("/contributions/summary")
+  return data
+}
+
+export async function listContributionPeriods(): Promise<string[]> {
+  const { data } = await api.get<string[]>("/contributions/periods")
+  return data
+}
+
 // Best-effort synchronous cache — several pages compute duplicate-checks and
 // period lists synchronously during render/CSV-processing rather than through
 // a query. Populated by listAllContributions(); empty until the first call resolves.

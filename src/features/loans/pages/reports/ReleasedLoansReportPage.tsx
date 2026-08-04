@@ -6,6 +6,7 @@ export default function ReleasedLoansReportPage() {
       status="Released"
       title="Released Loans"
       description="Loan applications that have been released to members, filterable by office, loan type, and date."
+      showStatementAction
     />
   )
 }

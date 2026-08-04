@@ -6,7 +6,7 @@ import { ArrowLeft, Building2, Download, RotateCcw, UserRoundCheck } from "lucid
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,7 @@ import { getAllActiveMembers } from "@/services/members.service"
 import { calculateDurationLabel, formatDateShort } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
 import type { Member } from "@/types"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 interface Filters {
   office: string
@@ -24,7 +25,7 @@ const EMPTY_FILTERS: Filters = { office: "" }
 
 export default function RetiredMembersReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
 
   const rows = React.useMemo<Member[]>(() => {
     if (!applied) return []
@@ -50,7 +51,7 @@ export default function RetiredMembersReportPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   function handleExportCsv() {
@@ -86,7 +87,7 @@ export default function RetiredMembersReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="members.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -122,7 +123,7 @@ export default function RetiredMembersReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No retired members match your filters"

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Plus, Save, Workflow } from "lucide-react"
+import { Plus, Save, Send, Workflow } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { CardLoader } from "@/components/shared/loaders/CardLoader"
@@ -145,6 +145,16 @@ function DefinitionCard({ definition }: { definition: WorkflowDefinition }) {
             This workflow is disabled — new submissions are auto-approved immediately, bypassing every stage below.
           </p>
         )}
+        <div className="flex items-start gap-3 rounded-lg border border-dashed border-border/60 bg-muted/5 p-3">
+          <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
+            <Send className="size-3.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">{definition.submissionStage.label}</p>
+            <p className="text-xs text-muted-foreground">{definition.submissionStage.description}</p>
+          </div>
+          <p className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Start</p>
+        </div>
         {stages.map((stage, index) => (
           <fieldset key={stage.id} disabled={!canConfigure}>
             <WorkflowStageEditor

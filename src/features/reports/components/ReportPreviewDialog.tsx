@@ -14,6 +14,7 @@ import { getAllLoans } from "@/services/loans.service"
 import { getAllBenefits } from "@/services/benefits.service"
 import { getAllLoanPayments } from "@/services/loan-payments.service"
 import { formatCurrency, formatDateShort } from "@/utils/format"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 export type ReportCategory = "Member Reports" | "Contribution Reports" | "Loan Reports" | "Benefit Reports" | "Financial Reports"
 
@@ -83,9 +84,9 @@ export function ReportPreviewDialog({ open, onOpenChange, category, reportName }
       setOffice("")
       setFrom("")
       setTo("")
-      setResult(null)
+      setResult(category ? buildReport(category, "", "", "") : null)
     }
-  }, [open, reportName])
+  }, [open, reportName, category])
 
   function handleGenerate() {
     if (!category) return
@@ -96,7 +97,7 @@ export function ReportPreviewDialog({ open, onOpenChange, category, reportName }
     setOffice("")
     setFrom("")
     setTo("")
-    setResult(null)
+    setResult(category ? buildReport(category, "", "", "") : null)
   }
 
   return (
@@ -123,7 +124,7 @@ export function ReportPreviewDialog({ open, onOpenChange, category, reportName }
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}>
             <RotateCcw />
             Reset Filters

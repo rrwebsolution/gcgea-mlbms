@@ -32,7 +32,14 @@ import { IndeterminateBar } from "@/components/shared/loaders/IndeterminateBar"
 import { cn } from "@/lib/utils"
 import { usePageRefresh } from "@/contexts/PageRefreshContext"
 
-interface DataTableProps<TData> {
+declare module "@tanstack/react-table" {
+  interface ColumnMeta<TData, TValue> {
+    /** Pins this column to the given edge while the table scrolls horizontally. */
+    sticky?: "left" | "right"
+  }
+}
+
+export interface DataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[]
   data: TData[]
   isLoading?: boolean
@@ -160,22 +167,6 @@ export function DataTable<TData>({
 
   const tableColumns = enableRowSelection ? [selectionColumn, ...columns] : columns
 
-  React.useLayoutEffect(() => {
-    const container = rootRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]')
-    const tableElement = container?.querySelector<HTMLElement>('[data-slot="table"]')
-    if (!container || !tableElement) return
-
-    const updateOverflow = () => {
-      setHasHorizontalOverflow(container.scrollWidth > container.clientWidth + 1)
-    }
-
-    updateOverflow()
-    const resizeObserver = new ResizeObserver(updateOverflow)
-    resizeObserver.observe(container)
-    resizeObserver.observe(tableElement)
-    return () => resizeObserver.disconnect()
-  }, [data.length, tableColumns.length])
-
   const table = useReactTable({
     data: filteredData,
     columns: tableColumns,
@@ -189,6 +180,48 @@ export function DataTable<TData>({
     manualSorting: isSortingControlled,
     enableRowSelection,
   })
+
+  // Column widths are content-driven (no fixed `size`), so sticky columns can't use
+  // TanStack's built-in pinning offsets — those assume a fixed column size. Instead,
+  // measure each pinned header cell's rendered width and derive cumulative left/right
+  // offsets, same as any other content-driven "frozen column" implementation.
+  const headCellRefs = React.useRef<Map<string, HTMLTableCellElement>>(new Map())
+  const [stickyOffsets, setStickyOffsets] = React.useState<Record<string, number>>({})
+  const visibleLeafColumnIds = table.getVisibleLeafColumns().map((c) => c.id).join(",")
+
+  React.useLayoutEffect(() => {
+    const container = rootRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]')
+    const tableElement = container?.querySelector<HTMLElement>('[data-slot="table"]')
+    if (!container || !tableElement) return
+
+    const updateOverflow = () => {
+      setHasHorizontalOverflow(container.scrollWidth > container.clientWidth + 1)
+
+      const leaves = table.getVisibleLeafColumns()
+      const offsets: Record<string, number> = {}
+      let leftAcc = 0
+      for (const col of leaves) {
+        if (col.columnDef.meta?.sticky !== "left") continue
+        offsets[col.id] = leftAcc
+        leftAcc += headCellRefs.current.get(col.id)?.offsetWidth ?? 0
+      }
+      let rightAcc = 0
+      for (let i = leaves.length - 1; i >= 0; i--) {
+        const col = leaves[i]
+        if (col.columnDef.meta?.sticky !== "right") continue
+        offsets[col.id] = rightAcc
+        rightAcc += headCellRefs.current.get(col.id)?.offsetWidth ?? 0
+      }
+      setStickyOffsets(offsets)
+    }
+
+    updateOverflow()
+    const resizeObserver = new ResizeObserver(updateOverflow)
+    resizeObserver.observe(container)
+    resizeObserver.observe(tableElement)
+    return () => resizeObserver.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.length, tableColumns.length, visibleLeafColumnIds])
 
   const hasHiddenColumns = Object.values(columnVisibility).some((isVisible) => isVisible === false)
   const showColumnVisibility = enableColumnVisibility && (hasHorizontalOverflow || hasHiddenColumns)
@@ -274,8 +307,22 @@ export function DataTable<TData>({
               {headerGroup.headers.map((header) => {
                 const canSort = header.column.getCanSort()
                 const sortDir = header.column.getIsSorted()
+                const sticky = header.column.columnDef.meta?.sticky
                 return (
-                  <TableHead key={header.id} className="h-10 px-4 text-left align-middle font-medium text-muted-foreground first:pl-5 last:pr-5 animate-none">
+                  <TableHead
+                    key={header.id}
+                    ref={(el) => {
+                      if (el) headCellRefs.current.set(header.column.id, el)
+                      else headCellRefs.current.delete(header.column.id)
+                    }}
+                    style={sticky ? { position: "sticky", [sticky]: stickyOffsets[header.column.id] ?? 0, zIndex: 20 } : undefined}
+                    className={cn(
+                      "h-10 px-4 text-left align-middle font-medium text-muted-foreground first:pl-5 last:pr-5 animate-none",
+                      sticky && "bg-background",
+                      sticky === "left" && "shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+                      sticky === "right" && "shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
+                    )}
+                  >
                     {header.isPlaceholder ? null : canSort ? (
                       <button
                         type="button"
@@ -341,11 +388,23 @@ export function DataTable<TData>({
                 data-state={row.getIsSelected() ? "selected" : undefined}
                 className="transition-all border-b border-border/40 last:border-0 data-[state=selected]:bg-primary/[0.03] hover:data-[state=selected]:bg-primary/[0.06] hover:bg-muted/30 duration-150"
               >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} className="py-3.5 px-4 text-xs md:text-sm font-normal text-foreground/90 first:pl-5 last:pr-5">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
+                {row.getVisibleCells().map((cell) => {
+                  const sticky = cell.column.columnDef.meta?.sticky
+                  return (
+                    <TableCell
+                      key={cell.id}
+                      style={sticky ? { position: "sticky", [sticky]: stickyOffsets[cell.column.id] ?? 0, zIndex: 1 } : undefined}
+                      className={cn(
+                        "py-3.5 px-4 text-xs md:text-sm font-normal text-foreground/90 first:pl-5 last:pr-5",
+                        sticky && "bg-background",
+                        sticky === "left" && "shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+                        sticky === "right" && "shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
+                      )}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  )
+                })}
               </TableRow>
             ))
           )}

@@ -10,9 +10,10 @@ import { StatusBadge } from "@/components/shared/StatusBadge"
 import { StatCard } from "@/components/shared/StatCard"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Input } from "@/components/ui/input"
-import { listDeductions } from "@/services/deductions.service"
+import { listAllDeductions } from "@/services/deductions.service"
 import { listDeductionTypes } from "@/services/deduction-types.service"
 import { formatCurrency, formatDateShort } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import type { Deduction } from "@/types"
 
 export default function DeductionRecordsPage() {
@@ -23,23 +24,32 @@ export default function DeductionRecordsPage() {
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["deduction-records", { search, period, status, deductionTypeCode, page, perPage }],
-    queryFn: () => listDeductions({
-      search,
-      period: period || undefined,
-      status: status || undefined,
-      deductionTypeCode: deductionTypeCode || undefined,
-      page,
-      perPage,
-    }),
+  // Fetches the full list once and pages/searches/filters entirely client-side, mirroring
+  // DeductionController::index()'s rules so results match what the equivalent server query
+  // used to return.
+  const { data: allDeductions = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["deductions", "all"],
+    queryFn: listAllDeductions,
   })
   const { data: deductionTypes = [] } = useQuery({
     queryKey: ["deduction-types"],
     queryFn: listDeductionTypes,
   })
 
-  const rows = data?.data ?? []
+  const filteredDeductions = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allDeductions.filter((d) => {
+      const matchesSearch = !q
+        || (d.referenceNumber ?? "").toLowerCase().includes(q)
+        || (d.memberName ?? "").toLowerCase().includes(q)
+      const matchesPeriod = !period || d.period === period
+      const matchesStatus = !status || d.status === status
+      const matchesType = !deductionTypeCode || d.deductionTypeCode === deductionTypeCode
+      return matchesSearch && matchesPeriod && matchesStatus && matchesType
+    })
+  }, [allDeductions, search, period, status, deductionTypeCode])
+
+  const { data: rows, meta } = paginate(filteredDeductions, page, perPage)
   const postedRows = rows.filter((row) => row.status === "Posted")
   const memberCount = new Set(postedRows.map((row) => row.memberId)).size
   const totalAmount = postedRows.reduce((sum, row) => sum + row.amount, 0)
@@ -134,9 +144,9 @@ export default function DeductionRecordsPage() {
             </>
           }
         />
-        {data?.meta && (
+        {!isLoading && !isError && (
           <Pagination
-            meta={data.meta}
+            meta={meta}
             onPageChange={setPage}
             onPerPageChange={(value) => { setPerPage(value); setPage(1) }}
           />

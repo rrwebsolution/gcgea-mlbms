@@ -6,13 +6,14 @@ import { ArrowLeft, Download, RotateCcw, Users } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllActiveMembers } from "@/services/members.service"
 import { downloadCsv } from "@/utils/csv"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const PIE_COLORS = ["var(--color-primary)", "var(--color-gold)"]
 
@@ -31,7 +32,7 @@ interface OfficeSexRow {
 
 export default function MembersBySexReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
 
   const members = React.useMemo(() => {
     if (!applied) return []
@@ -71,7 +72,7 @@ export default function MembersBySexReportPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   function handleExportCsv() {
@@ -106,7 +107,7 @@ export default function MembersBySexReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="members.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -143,7 +144,7 @@ export default function MembersBySexReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={officeRows}
               emptyTitle="No members match your filters"

@@ -10,9 +10,10 @@ import { Pagination } from "@/components/shared/Pagination"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ExportButtons } from "@/components/shared/ExportButtons"
 import { PermissionButton } from "@/components/shared/PermissionButton"
-import { listLoanPayments } from "@/services/loan-payments.service"
+import { listAllLoanPayments } from "@/services/loan-payments.service"
 import { PAYMENT_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import type { LoanPayment } from "@/types"
 
 export default function LoanPaymentsPage() {
@@ -20,10 +21,25 @@ export default function LoanPaymentsPage() {
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["loan-payments", { search, page, perPage }],
-    queryFn: () => listLoanPayments({ search, page, perPage }),
+  // Fetches the full list once and pages/searches entirely client-side, mirroring
+  // LoanPaymentController::index()'s search rule so results match what the equivalent
+  // server query used to return.
+  const { data: allPayments = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["loan-payments", "all"],
+    queryFn: listAllLoanPayments,
   })
+
+  const filteredPayments = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return allPayments
+    return allPayments.filter((p) =>
+      (p.paymentReferenceNumber ?? "").toLowerCase().includes(q)
+      || (p.memberName ?? "").toLowerCase().includes(q)
+      || (p.loanApplicationNumber ?? "").toLowerCase().includes(q)
+    )
+  }, [allPayments, search])
+
+  const { data: pagedPayments, meta } = paginate(filteredPayments, page, perPage)
 
   const columns: ColumnDef<LoanPayment, unknown>[] = [
     { accessorKey: "paymentReferenceNumber", header: "Payment Reference #", cell: ({ row }) => <span className="font-medium text-foreground">{row.original.paymentReferenceNumber}</span> },
@@ -52,14 +68,14 @@ export default function LoanPaymentsPage() {
         </div>
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={pagedPayments}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
           emptyTitle="No loan payments found"
           emptyDescription="Try adjusting your search."
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
     </div>
   )

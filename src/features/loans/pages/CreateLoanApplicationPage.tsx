@@ -480,7 +480,7 @@ export default function CreateLoanApplicationPage() {
       // busy/disabled spinner state — that only reflects a real user click.
       setIsAutosaving(true)
       try {
-        await loanDraft.save(snap)
+        await loanDraft.save(snap, { silent: true })
       } catch {
         // already surfaced via loanDraft's onError toast
       } finally {
@@ -1377,9 +1377,9 @@ export default function CreateLoanApplicationPage() {
           {step > 1 && <Button variant="outline" onClick={goBack} className="h-9 text-xs">Previous</Button>}
           <SaveDraftButton status={draftButtonStatus} lastSavedAt={loanDraft.lastSavedAt} onClick={saveDraft} disabled={!memberId || isSubmitting || !canUseDraft} />
           {step < STEPS.length ? (
-            <Button onClick={goNext} disabled={!canProceedFromStep(step)} className="h-9 text-xs">Next</Button>
+            <Button variant="success" onClick={goNext} disabled={!canProceedFromStep(step)} className="h-9 text-xs">Next</Button>
           ) : (
-            <Button onClick={() => handleSubmit(false)} disabled={isSubmitting || entries.some((e) => derivedFor(e.key).isBlocked) || !agree} aria-busy={isSubmitting} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
+            <Button variant="success" onClick={() => handleSubmit(false)} disabled={isSubmitting || entries.some((e) => derivedFor(e.key).isBlocked) || !agree} aria-busy={isSubmitting} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
               {isSubmitting ? <Loader2 className="animate-spin size-3.5" aria-hidden="true" /> : <FilePlus2 className="size-3.5" aria-hidden="true" />}
               {isSubmitting ? "Submitting…" : entries.length > 1 ? `Submit ${entries.length} Applications` : "Submit Application"}
             </Button>

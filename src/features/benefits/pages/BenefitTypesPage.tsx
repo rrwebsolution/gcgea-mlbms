@@ -14,6 +14,30 @@ import type { BenefitType } from "@/types"
 import { BenefitTypeFormDialog } from "@/features/benefits/components/BenefitTypeFormDialog"
 import type { BenefitTypeFormValues } from "@/schemas/benefit-type.schema"
 
+const CORE_BENEFIT_NAMES = new Set([
+  "Retirement and Separation Benefit",
+  "Mortuary Cash Assistance",
+  "Mortuary Cash Assistance for Nuclear Family Member",
+])
+
+function withSharedProration(type: BenefitType, values: BenefitTypeFormValues): BenefitTypeFormValues {
+  return {
+    name: type.name,
+    description: type.description,
+    defaultAmount: type.defaultAmount,
+    maximumAmount: type.maximumAmount,
+    prorationBasis: values.prorationBasis,
+    prorationTiers: values.prorationTiers,
+    fyAmounts: type.fyAmounts.map((amount) => ({ fiscalYear: amount.fiscalYear, baseAmount: amount.baseAmount })),
+    eligibilityRequirements: type.eligibilityRequirements,
+    requiredMembershipMonths: type.requiredMembershipMonths,
+    frequencyLimit: type.frequencyLimit,
+    requiredDocuments: type.requiredDocuments,
+    approvalRequired: type.approvalRequired,
+    status: type.status,
+  }
+}
+
 export default function BenefitTypesPage() {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = React.useState(false)
@@ -163,6 +187,14 @@ export default function BenefitTypesPage() {
         onSubmit={async (values) => {
           if (editingBenefitType) {
             await updateMutation.mutateAsync({ id: editingBenefitType.id, values })
+            if (CORE_BENEFIT_NAMES.has(editingBenefitType.name)) {
+              await Promise.all(
+                benefitTypes
+                  .filter((type) => type.id !== editingBenefitType.id && CORE_BENEFIT_NAMES.has(type.name))
+                  .map((type) => updateBenefitType(type.id, withSharedProration(type, values)))
+              )
+              await queryClient.refetchQueries({ queryKey: ["benefit-types"], type: "all" })
+            }
           } else {
             await createMutation.mutateAsync(values)
           }

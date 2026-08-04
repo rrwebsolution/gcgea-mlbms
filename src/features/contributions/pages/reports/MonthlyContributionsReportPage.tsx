@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
 import { DataTable } from "@/components/shared/DataTable"
+import { Pagination } from "@/components/shared/Pagination"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,6 +19,8 @@ import { getAllDeductions } from "@/services/deductions.service"
 import { getAllActiveMembers } from "@/services/members.service"
 import { formatCurrency } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
+import { paginate } from "@/utils/paginate"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 function monthTick(value: string) {
   try {
@@ -59,7 +62,9 @@ interface MonthlyContributionRow {
 
 export default function MonthlyContributionsReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
+  const [page, setPage] = React.useState(1)
+  const [perPage, setPerPage] = React.useState(25)
 
   const filteredContributions = React.useMemo(() => {
     if (!applied) return []
@@ -151,13 +156,17 @@ export default function MonthlyContributionsReportPage() {
     }
   }, [rows, monthlySummary])
 
+  const { data: pagedRows, meta } = React.useMemo(() => paginate(rows, page, perPage), [rows, page, perPage])
+
   function handleGenerate() {
+    setPage(1)
     setApplied(draft)
   }
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
+    setPage(1)
   }
 
   function handleExportCsv() {
@@ -172,7 +181,17 @@ export default function MonthlyContributionsReportPage() {
   const columns: ColumnDef<MonthlyContributionRow, unknown>[] = [
     { accessorKey: "sequence", header: "No." },
     { accessorKey: "period", header: "Period", cell: ({ row }) => monthTick(row.original.period) },
-    { accessorKey: "memberName", header: "Member Name" },
+    {
+      accessorKey: "memberName",
+      header: "Member Name",
+      // Deduction rows don't have their own detail page (they're payroll-import
+      // records, not a standalone entity) — only Contribution rows link out.
+      cell: ({ row }) => row.original.recordSource === "Contribution" ? (
+        <Link to={`/contributions/${row.original.id}`} className="font-medium text-foreground hover:text-primary hover:underline">
+          {row.original.memberName}
+        </Link>
+      ) : row.original.memberName,
+    },
     { accessorKey: "officeName", header: "Office" },
     { accessorKey: "recordSource", header: "Record Source" },
     { accessorKey: "recordType", header: "Contribution / Deduction Type" },
@@ -207,7 +226,7 @@ export default function MonthlyContributionsReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="contributions.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -248,10 +267,18 @@ export default function MonthlyContributionsReportPage() {
           <div className="rounded-xl border border-border bg-card shadow-sm">
             <DataTable
               columns={columns}
-              data={rows}
+              data={pagedRows}
               getRowId={(row) => row.id}
               emptyTitle="No contributions match your filters"
               emptyDescription="Try widening the date range or clearing the office filter."
+            />
+            <Pagination
+              meta={meta}
+              onPageChange={setPage}
+              onPerPageChange={(value) => {
+                setPerPage(value)
+                setPage(1)
+              }}
             />
           </div>
         </>

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Banknote, Check, ChevronsUpDown, Gift, PiggyBank } from "lucide-react"
+import { Banknote, Check, ChevronsUpDown, Gift } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -9,7 +9,6 @@ import type { ContributionType } from "@/types"
 const CONTRIBUTION_TYPES: { value: ContributionType; description: string; icon: typeof Banknote }[] = [
   { value: "Monthly Dues", description: "Regular monthly membership dues", icon: Banknote },
   { value: "Cash Pabaon", description: "Cash Pabaon contribution", icon: Gift },
-  { value: "Savings", description: "Member savings contribution", icon: PiggyBank },
 ]
 
 interface ContributionTypeCommandSelectProps {

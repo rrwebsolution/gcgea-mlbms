@@ -5,7 +5,7 @@ import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis
 import { ArrowLeft, Banknote, Building2, Download, RotateCcw } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { getAllBenefits } from "@/services/benefits.service"
 import { formatCurrency } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const PIE_COLORS = ["var(--color-primary)", "var(--color-success)", "var(--color-gold)", "var(--color-info)", "var(--color-warning)", "var(--color-destructive)"]
 
@@ -34,7 +35,7 @@ interface OfficeRow {
 
 export default function BenefitsByOfficeReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
 
   const rows = React.useMemo<OfficeRow[]>(() => {
     if (!applied) return []
@@ -78,7 +79,7 @@ export default function BenefitsByOfficeReportPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   function handleExportCsv() {
@@ -118,7 +119,7 @@ export default function BenefitsByOfficeReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="benefits.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -173,7 +174,7 @@ export default function BenefitsByOfficeReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No benefit applications match your filters"

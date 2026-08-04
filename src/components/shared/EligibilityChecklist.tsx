@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import type { EligibilityCheckItem } from "@/types"
@@ -9,6 +10,7 @@ interface EligibilityChecklistProps {
   items: EligibilityCheckItem[]
   result: EligibilityResult
   columns?: 1 | 2
+  renderItemFooter?: (item: EligibilityCheckItem) => ReactNode
 }
 
 const RESULT_TONE: Record<EligibilityResult, "success" | "warning" | "danger"> = {
@@ -17,7 +19,7 @@ const RESULT_TONE: Record<EligibilityResult, "success" | "warning" | "danger"> =
   "Not Eligible": "danger",
 }
 
-export function EligibilityChecklist({ items, result, columns = 1 }: EligibilityChecklistProps) {
+export function EligibilityChecklist({ items, result, columns = 1, renderItemFooter }: EligibilityChecklistProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
@@ -46,10 +48,11 @@ export function EligibilityChecklist({ items, result, columns = 1 }: Eligibility
             ) : (
               <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
             )}
-            <span>
+            <div className="min-w-0 flex-1">
               <span className="block font-medium text-foreground">{item.label}</span>
               <span className="block text-xs text-muted-foreground">{item.detail}</span>
-            </span>
+              {!item.passed && renderItemFooter?.(item)}
+            </div>
           </li>
           )
         })}

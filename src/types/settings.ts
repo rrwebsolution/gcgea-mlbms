@@ -7,6 +7,7 @@ export interface GeneralSettings {
   currency: string
   fiscalYearStart: string
   recordsPerPage: number
+  membershipRegistrationFee: number
   maintenanceMode: boolean
   enableAlertTranslations: boolean
 }
@@ -39,6 +40,7 @@ export interface NumberingFormatsSettings {
   member: NumberingFormatConfig
   loan: NumberingFormatConfig
   loanPayment: NumberingFormatConfig
+  officialReceipt: NumberingFormatConfig
   contribution: NumberingFormatConfig
   benefit: NumberingFormatConfig
   benefitRelease: NumberingFormatConfig
@@ -111,6 +113,7 @@ export interface BenefitSettings {
   defaultFrequencyLimit: string
   requireSupportingDocuments: boolean
   allowMultiplePendingApplications: boolean
+  requireRetiredStatusForRetirementBenefit: boolean
   benefitYearResetMonth: string
   nuclearFamilyParentAmount: number
   nuclearFamilyFirstSiblingAmount: number

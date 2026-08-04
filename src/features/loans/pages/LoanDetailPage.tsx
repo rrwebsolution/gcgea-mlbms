@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   RotateCw,
   LayoutGrid,
+  Wallet,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { DataTable } from "@/components/shared/DataTable"
@@ -26,6 +27,7 @@ import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { StatCard } from "@/components/shared/StatCard"
 import { PrintButton } from "@/components/shared/PrintButton"
+import { PermissionButton } from "@/components/shared/PermissionButton"
 import { ApprovalTimeline } from "@/components/shared/ApprovalTimeline"
 import { AlertBanner } from "@/components/shared/AlertBanner"
 import { EligibilityChecklist, type EligibilityResult } from "@/components/shared/EligibilityChecklist"
@@ -47,22 +49,49 @@ const SETTLEMENT_METHOD_LABEL: Record<PreviousObligationSettlementMethod, string
   deducted: "Deducted From New Loan Proceeds",
 }
 
-const amortizationColumns: ColumnDef<AmortizationEntry, unknown>[] = [
-  { accessorKey: "installmentNumber", header: "#" },
-  { accessorKey: "dueDate", header: "Due Month", cell: ({ row }) => formatMonthYear(row.original.dueDate) },
-  { accessorKey: "beginningBalance", header: "Beginning Balance", cell: ({ row }) => formatCurrency(row.original.beginningBalance) },
-  { accessorKey: "principal", header: "Principal", cell: ({ row }) => formatCurrency(row.original.principal) },
-  { accessorKey: "interest", header: "Interest", cell: ({ row }) => formatCurrency(row.original.interest) },
-  { accessorKey: "penalty", header: "Penalty", cell: ({ row }) => formatCurrency(row.original.penalty) },
-  { accessorKey: "amountDue", header: "Amount Due", cell: ({ row }) => formatCurrency(row.original.amountDue) },
-  { accessorKey: "amountPaid", header: "Amount Paid", cell: ({ row }) => formatCurrency(row.original.amountPaid) },
-  { accessorKey: "remainingBalance", header: "Remaining Balance", cell: ({ row }) => formatCurrency(row.original.remainingBalance) },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => <StatusBadge label={row.original.status} tone={AMORTIZATION_STATUS_TONE[row.original.status]} />,
-  },
-]
+/**
+ * Built per-render from the full schedule (not a static array) so the "Amount Due"
+ * column can look at the *previous* row — a Partially Paid installment's shortfall
+ * carries forward and is collected from whatever payment comes in next (see
+ * LoanPaymentPoster::applyPaymentToSchedule on the backend), so the row right after
+ * it should visibly show that it owes more than its own scheduled amount.
+ */
+function buildAmortizationColumns(schedule: AmortizationEntry[]): ColumnDef<AmortizationEntry, unknown>[] {
+  return [
+    { accessorKey: "installmentNumber", header: "#" },
+    { accessorKey: "dueDate", header: "Due Date", cell: ({ row }) => formatDateShort(row.original.dueDate) },
+    { accessorKey: "beginningBalance", header: "Beginning Balance", cell: ({ row }) => formatCurrency(row.original.beginningBalance) },
+    { accessorKey: "principal", header: "Principal", cell: ({ row }) => formatCurrency(row.original.principal) },
+    { accessorKey: "interest", header: "Interest", cell: ({ row }) => formatCurrency(row.original.interest) },
+    { accessorKey: "penalty", header: "Penalty", cell: ({ row }) => formatCurrency(row.original.penalty) },
+    {
+      accessorKey: "amountDue",
+      header: "Amount Due",
+      cell: ({ row }) => {
+        const index = schedule.findIndex((entry) => entry.installmentNumber === row.original.installmentNumber)
+        const previous = index > 0 ? schedule[index - 1] : undefined
+        const carriedShortfall = previous?.status === "Partially Paid" ? previous.amountDue - previous.amountPaid : 0
+        return (
+          <div>
+            {formatCurrency(row.original.amountDue)}
+            {carriedShortfall > 0 && (
+              <div className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                + {formatCurrency(carriedShortfall)} shortfall (#{previous!.installmentNumber})
+              </div>
+            )}
+          </div>
+        )
+      },
+    },
+    { accessorKey: "amountPaid", header: "Amount Paid", cell: ({ row }) => formatCurrency(row.original.amountPaid) },
+    { accessorKey: "remainingBalance", header: "Remaining Balance", cell: ({ row }) => formatCurrency(row.original.remainingBalance) },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <StatusBadge label={row.original.status} tone={AMORTIZATION_STATUS_TONE[row.original.status]} />,
+    },
+  ]
+}
 
 export default function LoanDetailPage() {
   const { id = "" } = useParams()
@@ -100,6 +129,9 @@ export default function LoanDetailPage() {
   const averageMonthlyInterest = loan.termMonths > 0 ? loan.totalInterest / loan.termMonths : 0
   const effectiveInterestPercent = loan.principal > 0 ? (loan.totalInterest / loan.principal) * 100 : 0
 
+  const paidMonths = schedule.filter((entry) => entry.status === "Paid").length
+  const monthsProgressPercent = loan.termMonths > 0 ? Math.min(100, (paidMonths / loan.termMonths) * 100) : 0
+
   const eligibilityAllPassed = loan.eligibility.every((item) => item.passed)
   const eligibilityResult: EligibilityResult = loan.eligibilityOverridden
     ? "Eligible with Warning"
@@ -128,6 +160,16 @@ export default function LoanDetailPage() {
               <StatusBadge label={`Reloan #${loan.reloanSequence ?? 1}`} tone="gold" className="h-9 px-3.5 text-xs font-semibold rounded-xl" />
             )}
             <ReloanButton loan={loan} eligible={reloanEligible} blockedReason={reloanBlockedReason} />
+            {["Released", "Active", "Overdue", "Restructured"].includes(loan.status) && loan.outstandingBalance > 0 && (
+              <PermissionButton
+                permission="loan_payments.create"
+                size="sm"
+                className="h-9 text-xs gap-1.5 rounded-xl"
+                render={<Link to={`/loan-payments/new?member=${loan.memberId}&loan=${loan.id}`} target="_blank" rel="noopener noreferrer" />}
+              >
+                <Wallet className="size-3.5" /> Record Payment
+              </PermissionButton>
+            )}
             <PrintButton permission="loans.print" label="Print Application" />
           </div>
         }
@@ -197,6 +239,33 @@ export default function LoanDetailPage() {
 
         {/* TAB: Overview */}
         <TabsContent value="overview" className="mt-4 outline-none focus-visible:ring-0 space-y-6">
+          {loan.termMonths > 0 && (
+            <AlertBanner
+              tone={paidMonths >= loan.termMonths ? "success" : "info"}
+              title={`${paidMonths} of ${loan.termMonths} months paid`}
+              description={
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="w-full max-w-xs">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-current/15">
+                      <div
+                        className="h-full rounded-full bg-current transition-[width] duration-500"
+                        style={{ width: `${monthsProgressPercent}%` }}
+                      />
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[11px] font-semibold">
+                      <span>{monthsProgressPercent.toFixed(0)}%</span>
+                      <span>{Math.max(0, loan.termMonths - paidMonths)} left</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs sm:justify-end sm:text-right">
+                    <TimelineStat label="Application" value={formatMonthYear(loan.applicationDate)} />
+                    <TimelineStat label="First Due" value={formatDateShort(loan.firstDueDate)} />
+                    <TimelineStat label="Maturity" value={formatDateShort(loan.maturityDate)} />
+                  </div>
+                </div>
+              }
+            />
+          )}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Application Details */}
             <Section icon={User} title="Application Details">
@@ -215,20 +284,12 @@ export default function LoanDetailPage() {
               </DetailGroup>
             </Section>
 
-            {/* Timeline & Release */}
+            {/* Release (Timeline now lives in the months-paid alert above) */}
             <div className="space-y-6">
-              <Section icon={Calendar} title="Timeline">
-                <DetailGroup>
-                  <DetailRow label="Application Month" value={formatMonthYear(loan.applicationDate)} />
-                  <DetailRow label="First Due Month" value={formatMonthYear(loan.firstDueDate)} />
-                  <DetailRow label="Maturity Month" value={formatMonthYear(loan.maturityDate)} />
-                </DetailGroup>
-              </Section>
-
               {loan.releaseDate && (
                 <Section icon={Building2} title="Release Information" tone="success">
                   <DetailGroup>
-                    <DetailRow label="Release Month" value={formatMonthYear(loan.releaseDate)} />
+                    <DetailRow label="Release Date" value={formatDateShort(loan.releaseDate)} />
                     <DetailRow label="Reference #" value={loan.releaseReferenceNumber ?? "—"} />
                     <DetailRow label="Release Method" value={loan.releaseMethod ?? "—"} />
                     <DetailRow label="Released Amount" value={loan.actualReleasedAmount != null ? formatCurrency(loan.actualReleasedAmount) : "—"} />
@@ -346,7 +407,7 @@ export default function LoanDetailPage() {
         <TabsContent value="schedule" className="mt-4 outline-none focus-visible:ring-0">
           <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
             <DataTable
-              columns={amortizationColumns}
+              columns={buildAmortizationColumns(schedule)}
               data={schedule}
               isLoading={isLoadingSchedule}
               isError={isScheduleError}
@@ -497,6 +558,15 @@ function Section({
         <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">{title}</h3>
       </div>
       <div className="p-5 space-y-4">{children}</div>
+    </div>
+  )
+}
+
+function TimelineStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">{label}</p>
+      <p className="text-xs font-semibold">{value}</p>
     </div>
   )
 }

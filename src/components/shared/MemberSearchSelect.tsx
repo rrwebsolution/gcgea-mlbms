@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Check, ChevronsUpDown, User } from "lucide-react"
+import { Check, ChevronsUpDown, Loader2, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
@@ -74,7 +74,15 @@ export function MemberSearchSelect({
         <Command>
           <CommandInput placeholder="Type a name or member number…" />
           <CommandList>
-            <CommandEmpty>{isLoading ? "Loading members…" : "No member found."}</CommandEmpty>
+            <CommandEmpty>
+              {isLoading ? (
+                <span className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" /> Loading members…
+                </span>
+              ) : (
+                "No member found."
+              )}
+            </CommandEmpty>
             <CommandGroup>
               {members.map((member) => (
                 <CommandItem

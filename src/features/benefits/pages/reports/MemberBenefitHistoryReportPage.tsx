@@ -7,16 +7,17 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { MemberSearchSelect } from "@/components/shared/MemberSearchSelect"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import type { ColumnDef } from "@tanstack/react-table"
-import { getMemberBenefits } from "@/services/benefits.service"
+import { getAllBenefits, getMemberBenefits } from "@/services/benefits.service"
 import { BENEFIT_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
 import type { BenefitApplication } from "@/types"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 export default function MemberBenefitHistoryReportPage() {
   const [draftMemberId, setDraftMemberId] = React.useState<string>("")
@@ -24,11 +25,11 @@ export default function MemberBenefitHistoryReportPage() {
 
   const rows = React.useMemo<BenefitApplication[]>(() => {
     if (!appliedMemberId) return []
-    return getMemberBenefits(appliedMemberId).sort((a, b) => a.applicationDate.localeCompare(b.applicationDate))
+    return (appliedMemberId === "all" ? getAllBenefits() : getMemberBenefits(appliedMemberId)).slice().sort((a, b) => a.applicationDate.localeCompare(b.applicationDate))
   }, [appliedMemberId])
 
-  const memberName = rows[0]?.memberName ?? ""
-  const memberOffice = rows[0]?.officeName ?? ""
+  const memberName = appliedMemberId === "all" ? "All Members" : rows[0]?.memberName ?? ""
+  const memberOffice = appliedMemberId === "all" ? "All Offices" : rows[0]?.officeName ?? ""
 
   const chartData = React.useMemo(
     () => rows.map((b) => ({ date: b.applicationDate, requested: b.requestedAmount, approved: b.approvedAmount ?? 0 })),
@@ -98,7 +99,7 @@ export default function MemberBenefitHistoryReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate} disabled={!draftMemberId}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} disabled={!draftMemberId} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset</Button>
           <PermissionButton permission="benefits.export" size="sm" variant="outline" disabled={!appliedMemberId} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -143,7 +144,7 @@ export default function MemberBenefitHistoryReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No benefit records"

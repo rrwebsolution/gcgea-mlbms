@@ -3,7 +3,7 @@ import { format, parseISO } from "date-fns"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, CalendarDays, Download, Landmark, ReceiptText } from "lucide-react"
+import { ArrowLeft, CalendarDays, Download, Landmark, Loader2, ReceiptText } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { StatCard } from "@/components/shared/StatCard"
@@ -115,7 +115,7 @@ export default function RemittanceBreakdownReportPage() {
             />
           </div>
           <Button size="sm" onClick={generate} disabled={isFetching}>
-            <CalendarDays /> {isFetching ? "Generating…" : "Generate"}
+            {isFetching ? <Loader2 className="animate-spin" /> : <CalendarDays />} {isFetching ? "Generating…" : "Generate"}
           </Button>
           <PermissionButton permission="reports.export" size="sm" variant="outline" disabled={!data || isFetching} onClick={exportCsv}>
             <Download /> Export CSV

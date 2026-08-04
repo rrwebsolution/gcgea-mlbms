@@ -38,6 +38,8 @@ import { DataTable } from "@/components/shared/DataTable"
 import { DocumentCard } from "@/components/shared/DocumentCard"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -66,10 +68,14 @@ import { actOnApproval, getApprovalHistory } from "@/services/approvals.service"
 import { getAnnualBudgetById } from "@/services/annual-budgets.service"
 import { getDisbursement } from "@/services/disbursements.service"
 import { getSettings } from "@/services/settings.service"
+import { listAllContributions } from "@/services/contributions.service"
+import { listAllDeductions } from "@/services/deductions.service"
+import { listDeductionTypes } from "@/services/deduction-types.service"
 import { LOAN_STATUS_TONE, BENEFIT_STATUS_TONE, AMORTIZATION_STATUS_TONE, type StatusTone } from "@/constants/status"
-import { formatCurrency, formatDateShort, formatMonthYear } from "@/utils/format"
+import { formatCurrency, formatDateShort } from "@/utils/format"
+import { CASH_PABAON_PROGRAM_NAME } from "@/utils/eligibility"
 import { cn } from "@/lib/utils"
-import type { AmortizationEntry, ApprovalSubjectType, LoanApplication, Member } from "@/types"
+import type { AmortizationEntry, ApprovalSubjectType, BenefitApplication, LoanApplication, Member } from "@/types"
 
 export default function ApprovalDetailPage() {
   const params = useParams<{ subjectType: string; id: string }>()
@@ -86,11 +92,42 @@ export default function ApprovalDetailPage() {
     queryFn: () => getMember(loan!.memberId),
     enabled: type === "loans" && Boolean(loan?.memberId),
   })
+  const { data: benefitMember } = useQuery({
+    queryKey: ["members", benefit?.memberId],
+    queryFn: () => getMember(benefit!.memberId),
+    enabled: type === "benefits" && Boolean(benefit?.memberId),
+  })
   const { data: loanSchedule = [], isLoading: isLoadingLoanSchedule } = useQuery({
     queryKey: ["loans", id, "schedule"],
     queryFn: () => getLoanSchedule(id),
     enabled: type === "loans" && Boolean(id),
   })
+  const isCashPabaonBenefit = type === "benefits" && benefit?.benefitTypeName === CASH_PABAON_PROGRAM_NAME
+  const { data: allContributions = [] } = useQuery({ queryKey: ["contributions", "all"], queryFn: listAllContributions, enabled: isCashPabaonBenefit })
+  const { data: allDeductions = [] } = useQuery({ queryKey: ["deductions", "all"], queryFn: listAllDeductions, enabled: isCashPabaonBenefit })
+  const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes, enabled: isCashPabaonBenefit })
+  const pabaonDeductionType = deductionTypes.find((deductionType) => deductionType.code.toLowerCase() === "pabaon")
+  // Cash Pabaon Program benefit payout is net of what the member already contributed into
+  // Cash Pabaon over their membership — the association only actually disburses the
+  // difference. Same period-based de-dup as the Contribution Snapshot on the application
+  // form (a payroll-deducted month is auto-mirrored into a matching Contribution record,
+  // so summing both ledgers as-is would double-count it).
+  const memberPosted = allContributions.filter((contribution) => contribution.memberId === benefit?.memberId && contribution.status === "Posted")
+  const memberDirectPabaon = memberPosted.filter((contribution) => contribution.contributionType === "Cash Pabaon")
+  const memberPabaonDeductions = allDeductions.filter((deduction) =>
+    deduction.memberId === benefit?.memberId
+    && deduction.status === "Posted"
+    && (deduction.deductionTypeId === pabaonDeductionType?.id || deduction.deductionTypeCode?.toLowerCase() === "pabaon")
+  )
+  const pabaonPeriodsWithContribution = new Set(memberDirectPabaon.map((contribution) => contribution.contributionPeriod))
+  const totalCashPabaonContributed = memberDirectPabaon.reduce((sum, contribution) => sum + contribution.amount, 0)
+    + memberPabaonDeductions
+        .filter((deduction) => !pabaonPeriodsWithContribution.has(deduction.period))
+        .reduce((sum, deduction) => sum + deduction.amount, 0)
+  const benefitApprovedAmount = benefit?.approvedAmount ?? benefit?.requestedAmount ?? 0
+  const defaultReleaseAmount = isCashPabaonBenefit
+    ? Math.max(0, benefitApprovedAmount - totalCashPabaonContributed)
+    : benefitApprovedAmount
   const { data: annualBudget } = useQuery({ queryKey: ["annual-budgets", "id", id], queryFn: () => getAnnualBudgetById(id), enabled: type === "annual-budgets" && Boolean(id) })
   const { data: disbursement } = useQuery({ queryKey: ["disbursements", id], queryFn: () => getDisbursement(id), enabled: type === "disbursements" && Boolean(id) })
   const { data: history = [], isLoading: isLoadingHistory } = useQuery({
@@ -103,6 +140,11 @@ export default function ApprovalDetailPage() {
   const [returnOpen, setReturnOpen] = React.useState(false)
   const [releaseOpen, setReleaseOpen] = React.useState(false)
   const [releaseRemarks, setReleaseRemarks] = React.useState("")
+  const [releaseAmount, setReleaseAmount] = React.useState<number>()
+
+  React.useEffect(() => {
+    if (releaseOpen) setReleaseAmount(defaultReleaseAmount)
+  }, [releaseOpen, defaultReleaseAmount])
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: [type, id] })
@@ -165,7 +207,7 @@ export default function ApprovalDetailPage() {
   })
 
   const releaseBenefitMutation = useMutation({
-    mutationFn: (remarks?: string) => releaseBenefit(id, remarks ?? ""),
+    mutationFn: () => releaseBenefit(id, releaseRemarks || undefined, releaseAmount),
     onSuccess: () => { toast.success("Benefit released."); setReleaseOpen(false); setReleaseRemarks(""); invalidate() },
     onError: (err) => handleError(err, "Unable to release this benefit."),
   })
@@ -252,11 +294,31 @@ export default function ApprovalDetailPage() {
             reviewPermission="benefits.review" approvePermission="benefits.approve" releasePermission="benefits.release" rejectPermission="benefits.reject"
           />}
         />
-        <DetailBody historyLoading={isLoadingHistory} history={history} detailPath={`/benefits/${benefit.id}`} />
+        <ApprovalRecordLinks detailPath={`/benefits/${benefit.id}`} />
+        <BenefitMemberProfileCard member={benefitMember} />
+        <BenefitApplicationDetails benefit={benefit} />
+        <BenefitDocumentsCard documents={benefit.documents ?? []} />
+        <DetailBody historyLoading={isLoadingHistory} history={history} detailPath={`/benefits/${benefit.id}`} showLinks={false} />
         <ReasonDialog open={rejectOpen} onOpenChange={setRejectOpen} title="Reject Benefit Application" reasonLabel="Rejection Reason" confirmLabel="Reject Application" destructive isLoading={rejectMutation.isPending} onConfirm={(reason) => rejectMutation.mutate(reason)} />
         <ReasonDialog open={returnOpen} onOpenChange={setReturnOpen} title="Return for Revision" reasonLabel="Return Remarks" confirmLabel="Return Application" isLoading={returnMutation.isPending} onConfirm={(reason) => returnMutation.mutate(reason)} />
-        <ConfirmDialog open={releaseOpen} onOpenChange={setReleaseOpen} title="Release Benefit" description="Confirm this benefit has been released to the member/beneficiary." confirmLabel="Release Benefit" isLoading={releaseBenefitMutation.isPending} onConfirm={() => releaseBenefitMutation.mutate(releaseRemarks || undefined)}>
-          <Textarea value={releaseRemarks} onChange={(e) => setReleaseRemarks(e.target.value)} placeholder="Optional remarks about the release…" rows={2} className="rounded-xl text-sm" />
+        <ConfirmDialog open={releaseOpen} onOpenChange={setReleaseOpen} title="Release Benefit" description="Confirm this benefit has been released to the member/beneficiary." confirmLabel="Release Benefit" isLoading={releaseBenefitMutation.isPending} onConfirm={() => releaseBenefitMutation.mutate()}>
+          <div className="space-y-3">
+            {isCashPabaonBenefit && (
+              <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-3 text-xs space-y-1">
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Approved Amount</span><span className="font-semibold text-foreground">{formatCurrency(benefitApprovedAmount)}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Less: Total Cash Pabaon Contributed</span><span className="font-semibold text-destructive">− {formatCurrency(totalCashPabaonContributed)}</span></div>
+                <div className="flex items-center justify-between border-t border-primary/15 pt-1"><span className="font-semibold text-foreground">Net Payable</span><span className="font-bold text-primary">{formatCurrency(defaultReleaseAmount)}</span></div>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground/80">Amount Released</Label>
+              <CurrencyInput value={releaseAmount} onChange={setReleaseAmount} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground/80">Remarks</Label>
+              <Textarea value={releaseRemarks} onChange={(e) => setReleaseRemarks(e.target.value)} placeholder="Optional remarks about the release…" rows={2} className="rounded-xl text-sm" />
+            </div>
+          </div>
         </ConfirmDialog>
       </div>
     )
@@ -551,7 +613,7 @@ function LoanDocumentsCard({ documents }: { documents: LoanApplication["document
 
 const amortizationColumns: ColumnDef<AmortizationEntry, unknown>[] = [
   { accessorKey: "installmentNumber", header: "#" },
-  { accessorKey: "dueDate", header: "Due Month", cell: ({ row }) => formatMonthYear(row.original.dueDate) },
+  { accessorKey: "dueDate", header: "Due Date", cell: ({ row }) => formatDateShort(row.original.dueDate) },
   { accessorKey: "beginningBalance", header: "Beginning Balance", cell: ({ row }) => formatCurrency(row.original.beginningBalance) },
   { accessorKey: "principal", header: "Principal", cell: ({ row }) => formatCurrency(row.original.principal) },
   { accessorKey: "interest", header: "Interest", cell: ({ row }) => formatCurrency(row.original.interest) },
@@ -707,6 +769,159 @@ function LoanApplicationDetails({ loan }: { loan: LoanApplication }) {
             </h3>
             <EligibilityChecklist items={loan.eligibility} result={eligibilityResult} />
           </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/** Applicant snapshot — same layout as the loan version, surfaced inline so an approver doesn't have to open the member's profile separately. */
+function BenefitMemberProfileCard({ member }: { member?: Member }) {
+  if (!member) return null
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+      <div className="border-b border-border/50 bg-muted/20 p-5 flex items-center gap-2.5">
+        <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+          <User className="size-4" />
+        </span>
+        <div>
+          <h2 className="text-base font-bold text-foreground tracking-tight">Member Profile</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">The applicant this benefit belongs to.</p>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-5">
+        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+          <BudgetMetric label="Net Pay / Salary" value={member.netPay != null ? formatCurrency(member.netPay) : "Not on file"} icon={Wallet2} />
+          <BudgetMetric label="Membership Status" value={member.membershipStatus} icon={ShieldCheck} />
+          <BudgetMetric label="Employment Status" value={member.employmentStatus || "—"} icon={User} />
+          <BudgetMetric label="Retiree Status" value={member.retireeStatus} icon={User} />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <BudgetText label="Full Name" value={member.fullName} />
+          <BudgetText label="Member Number" value={member.memberNumber} />
+          <BudgetText label="Office / Branch" value={member.officeName} />
+          <BudgetText label="Position" value={member.position || "—"} />
+          <BudgetText label="Membership Type" value={member.membershipType} />
+          <BudgetText label="Cellphone Number" value={member.cellphoneNumber || "—"} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/** Uploaded requirement documents for this benefit application, so an approver can review what was actually submitted without leaving the page. */
+function BenefitDocumentsCard({ documents }: { documents: BenefitApplication["documents"] }) {
+  const items = documents ?? []
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+      <div className="border-b border-border/50 bg-muted/20 p-5 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+            <FileText className="size-4" />
+          </span>
+          <div>
+            <h2 className="text-base font-bold text-foreground tracking-tight">Submitted Documents</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Requirement files attached to this application.</p>
+          </div>
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-full">
+          {items.length} file{items.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      <div className="p-5">
+        {items.length === 0 ? (
+          <EmptyState icon={FileText} title="No documents uploaded" description="No requirement files have been attached to this application yet." />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {items.map((doc) => (
+              <DocumentCard
+                key={doc.id}
+                title={doc.fileName}
+                fileName={doc.fileName}
+                fileUrl={doc.fileUrl}
+                fileSize={doc.fileSize}
+                uploadedAt={formatDateShort(doc.uploadedAt)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** Full benefit application details shown inline on the approval screen, so an approver doesn't have to leave to the source record just to see what they're deciding on. */
+function BenefitApplicationDetails({ benefit }: { benefit: BenefitApplication }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+      <div className="border-b border-border/50 bg-muted/20 p-5">
+        <h2 className="text-base font-bold text-foreground tracking-tight">Benefit Application Details</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">Review the full application before reviewing, approving, or releasing it.</p>
+      </div>
+
+      <div className="space-y-6 p-5">
+        {benefit.rejectionReason && <AlertBanner tone="danger" title="This application was previously rejected." description={benefit.rejectionReason} />}
+        {benefit.cancellationReason && <AlertBanner tone="warning" title="This application was cancelled." description={benefit.cancellationReason} />}
+
+        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+          <BudgetMetric label="Requested Amount" value={formatCurrency(benefit.requestedAmount)} icon={DollarSign} />
+          <BudgetMetric label="Approved Amount" value={benefit.approvedAmount != null ? formatCurrency(benefit.approvedAmount) : "Pending"} icon={CheckCircle2} />
+          <BudgetMetric label="Released Amount" value={benefit.actualReleasedAmount != null ? formatCurrency(benefit.actualReleasedAmount) : "Not yet released"} icon={Wallet} />
+          <BudgetMetric label="Application Date" value={formatDateShort(benefit.applicationDate)} icon={CalendarDays} />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <BudgetText label="Member" value={`${benefit.memberName} (${benefit.memberNumber}) · ${benefit.officeName}`} />
+          <BudgetText label="Benefit Type" value={benefit.benefitTypeName} />
+          <BudgetText label="Beneficiary / Recipient" value={benefit.beneficiaryOrRecipient || "—"} />
+          <BudgetText label="Incident Date" value={benefit.incidentDate ? formatDateShort(benefit.incidentDate) : "—"} />
+          <BudgetText label="Reason" value={benefit.reason || "Not specified"} />
+          {benefit.remarks && <BudgetText label="Remarks" value={benefit.remarks} />}
+        </div>
+
+        {(benefit.releaseDate || benefit.releaseReferenceNumber) && (
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.03] p-4 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+              <Wallet className="size-3.5" /> Release Information
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <BudgetText label="Release Date" value={benefit.releaseDate ? formatDateShort(benefit.releaseDate) : "—"} />
+              <BudgetText label="Release Reference" value={benefit.releaseReferenceNumber || "—"} />
+              <BudgetText label="Released Amount" value={benefit.actualReleasedAmount != null ? formatCurrency(benefit.actualReleasedAmount) : "—"} />
+            </div>
+          </div>
+        )}
+
+        <Separator className="bg-border/50" />
+
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border/40 pb-3">
+            <CheckSquare className="size-4 text-primary" /> Documentary Requirements
+          </h3>
+          <ul className="space-y-2.5">
+            {benefit.requirements.map((req) => (
+              <li
+                key={req.label}
+                className={cn(
+                  "flex items-center justify-between p-3.5 rounded-xl border text-xs transition-all duration-200",
+                  req.completed ? "bg-emerald-500/[0.03] border-emerald-500/25 text-foreground" : "bg-muted/20 border-border/50 text-muted-foreground"
+                )}
+              >
+                <span className={req.completed ? "font-semibold text-foreground" : "text-muted-foreground"}>{req.label}</span>
+                <span className={cn(
+                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                  req.completed ? "bg-emerald-500 text-white dark:bg-emerald-500/20 dark:text-emerald-400" : "bg-muted-foreground/15 text-muted-foreground"
+                )}>
+                  {req.completed ? "✓" : "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>

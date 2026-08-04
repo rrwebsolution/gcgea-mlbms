@@ -15,9 +15,10 @@ import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { Button } from "@/components/ui/button"
 import { CommandSelect } from "@/components/shared/CommandSelect"
-import { deleteBenefitApplication, listBenefits } from "@/services/benefits.service"
+import { deleteBenefitApplication, listAllBenefits } from "@/services/benefits.service"
 import { BENEFIT_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import { useAuth } from "@/contexts/AuthContext"
 import type { BenefitApplication, BenefitStatus } from "@/types"
 
@@ -42,10 +43,27 @@ export default function BenefitsPage({ presetStatus, title = "Benefit Applicatio
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["benefits", { search, status, page, perPage }],
-    queryFn: () => listBenefits({ search, status: status || undefined, page, perPage }),
+  // Fetches the full list once and pages/searches/filters entirely client-side, mirroring
+  // BenefitApplicationController::applyFilters()'s rules so results match what the
+  // equivalent server query used to return.
+  const { data: allBenefits = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["benefits", "all"],
+    queryFn: listAllBenefits,
   })
+
+  const filteredBenefits = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allBenefits.filter((benefit) => {
+      const matchesSearch = !q
+        || (benefit.applicationNumber ?? "").toLowerCase().includes(q)
+        || (benefit.memberName ?? "").toLowerCase().includes(q)
+        || (benefit.memberNumber ?? "").toLowerCase().includes(q)
+      const matchesStatus = !status || benefit.status === status
+      return matchesSearch && matchesStatus
+    })
+  }, [allBenefits, search, status])
+
+  const { data: pagedBenefits, meta } = paginate(filteredBenefits, page, perPage)
 
   const selectedIds = Object.keys(rowSelection).filter((rowId) => rowSelection[rowId])
 
@@ -86,11 +104,11 @@ export default function BenefitsPage({ presetStatus, title = "Benefit Applicatio
   }
 
   const columns: ColumnDef<BenefitApplication, unknown>[] = [
-    { accessorKey: "applicationNumber", header: "Application #", cell: ({ row }) => (
+    { accessorKey: "applicationNumber", header: "Application #", meta: { sticky: "left" }, cell: ({ row }) => (
         <Link to={`/benefits/${row.original.id}`} className="font-medium text-primary hover:underline">{row.original.applicationNumber}</Link>
       ) },
     { accessorKey: "applicationDate", header: "Application Date", cell: ({ row }) => formatDateShort(row.original.applicationDate) },
-    { accessorKey: "memberName", header: "Member Name" },
+    { accessorKey: "memberName", header: "Member Name", meta: { sticky: "left" } },
     { accessorKey: "officeName", header: "Office" },
     { accessorKey: "benefitTypeName", header: "Benefit Type" },
     { accessorKey: "requestedAmount", header: "Requested Amount", cell: ({ row }) => formatCurrency(row.original.requestedAmount) },
@@ -154,7 +172,7 @@ export default function BenefitsPage({ presetStatus, title = "Benefit Applicatio
         </div>
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={pagedBenefits}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
@@ -164,8 +182,9 @@ export default function BenefitsPage({ presetStatus, title = "Benefit Applicatio
           rowSelection={rowSelection}
           onRowSelectionChange={setRowSelection}
           getRowId={(row) => row.id}
+          enableColumnVisibility={false}
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
 
       <ConfirmDialog

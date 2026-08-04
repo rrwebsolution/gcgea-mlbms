@@ -11,8 +11,9 @@ import { SearchInput } from "@/components/shared/SearchInput"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { Button } from "@/components/ui/button"
-import { listDisbursements } from "@/services/disbursements.service"
+import { listAllDisbursements } from "@/services/disbursements.service"
 import { formatCurrency, formatDate } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import type { Disbursement, DisbursementStatus } from "@/types"
 import type { StatusTone } from "@/constants/status"
 
@@ -28,10 +29,28 @@ export default function DisbursementsPage() {
   const [perPage, setPerPage] = React.useState(10)
   const [search, setSearch] = React.useState("")
   const [status, setStatus] = React.useState<DisbursementStatus | "">("")
+  // Fetches the full list once and pages/searches/filters entirely client-side, mirroring
+  // DisbursementController::index()'s rules so results match what the equivalent server
+  // query used to return.
   const query = useQuery({
-    queryKey: ["disbursements", { page, perPage, search, status }],
-    queryFn: () => listDisbursements({ page, perPage, search, status }),
+    queryKey: ["disbursements", "all"],
+    queryFn: listAllDisbursements,
   })
+  const allDisbursements = query.data ?? []
+
+  const filteredDisbursements = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allDisbursements.filter((d) => {
+      const matchesSearch = !q
+        || (d.referenceNumber ?? "").toLowerCase().includes(q)
+        || (d.payee ?? "").toLowerCase().includes(q)
+        || (d.accountTitle ?? "").toLowerCase().includes(q)
+      const matchesStatus = !status || d.status === status
+      return matchesSearch && matchesStatus
+    })
+  }, [allDisbursements, search, status])
+
+  const { data: pagedDisbursements, meta } = paginate(filteredDisbursements, page, perPage)
 
   const columns: ColumnDef<Disbursement, unknown>[] = [
     { accessorKey: "referenceNumber", header: "Reference", cell: ({ row }) => <span className="font-semibold">{row.original.referenceNumber}</span> },
@@ -77,8 +96,8 @@ export default function DisbursementsPage() {
             hideSearch
           />
         </div>
-        <DataTable columns={columns} data={query.data?.data ?? []} isLoading={query.isLoading} emptyTitle="No disbursements found" getRowId={(row) => row.id} />
-        {query.data && <Pagination meta={query.data.meta} onPageChange={setPage} onPerPageChange={(value) => { setPerPage(value); setPage(1) }} />}
+        <DataTable columns={columns} data={pagedDisbursements} isLoading={query.isLoading} emptyTitle="No disbursements found" getRowId={(row) => row.id} />
+        {!query.isLoading && !query.isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(value) => { setPerPage(value); setPage(1) }} />}
       </div>
     </div>
   )

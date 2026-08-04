@@ -5,7 +5,7 @@ import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis
 import { ArrowLeft, Banknote, Building2, Download, RotateCcw, Users } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { getAllContributions, getContributionPeriods } from "@/services/contributions.service"
 import { formatCurrency } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const PIE_COLORS = ["var(--color-primary)", "var(--color-success)", "var(--color-gold)", "var(--color-info)", "var(--color-warning)", "var(--color-destructive)"]
 
@@ -28,7 +29,7 @@ const EMPTY_FILTERS: Filters = { dateFrom: "", dateTo: "", period: "" }
 
 interface OfficeRow {
   office: string
-  memberNames: string
+  memberNames: string[]
   amount: number
   count: number
   members: number
@@ -37,7 +38,8 @@ interface OfficeRow {
 
 export default function ContributionsByOfficeReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
+  const [expandedOffices, setExpandedOffices] = React.useState<Set<string>>(new Set())
 
   const periods = React.useMemo(() => getContributionPeriods(), [])
 
@@ -61,7 +63,7 @@ export default function ContributionsByOfficeReportPage() {
       map.set(c.officeName, entry)
     }
     return Array.from(map.entries())
-      .map(([office, v]) => ({ office, memberNames: Array.from(v.memberNames).sort().map((name) => `* ${name}`).join("\n"), amount: v.amount, count: v.count, members: v.members.size, share: totalCollected > 0 ? (v.amount / totalCollected) * 100 : 0 }))
+      .map(([office, v]) => ({ office, memberNames: Array.from(v.memberNames).sort(), amount: v.amount, count: v.count, members: v.members.size, share: totalCollected > 0 ? (v.amount / totalCollected) * 100 : 0 }))
       .sort((a, b) => b.amount - a.amount)
   }, [applied])
 
@@ -76,12 +78,14 @@ export default function ContributionsByOfficeReportPage() {
   }, [rows])
 
   function handleGenerate() {
+    setExpandedOffices(new Set())
     setApplied(draft)
   }
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
+    setExpandedOffices(new Set())
   }
 
   function handleExportCsv() {
@@ -95,7 +99,38 @@ export default function ContributionsByOfficeReportPage() {
 
   const columns: ColumnDef<OfficeRow, unknown>[] = [
     { accessorKey: "office", header: "Office" },
-    { accessorKey: "memberNames", header: "Member Name(s)", cell: ({ row }) => <span className="whitespace-pre-line">{row.original.memberNames}</span> },
+    {
+      accessorKey: "memberNames",
+      header: "Member Name(s)",
+      cell: ({ row }) => {
+        const expanded = expandedOffices.has(row.original.office)
+        const visibleNames = expanded ? row.original.memberNames : row.original.memberNames.slice(0, 3)
+        const remaining = row.original.memberNames.length - 3
+        return (
+          <div className="min-w-52 space-y-1.5">
+            <ul className="space-y-1">
+              {visibleNames.map((name) => <li key={name}>• {name}</li>)}
+            </ul>
+            {remaining > 0 && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                onClick={() => setExpandedOffices((current) => {
+                  const next = new Set(current)
+                  if (expanded) next.delete(row.original.office)
+                  else next.add(row.original.office)
+                  return next
+                })}
+              >
+                {expanded ? "View Less" : `View More (${remaining})`}
+              </Button>
+            )}
+          </div>
+        )
+      },
+    },
     { accessorKey: "members", header: "Contributing Members" },
     { accessorKey: "amount", header: "Total Collected", cell: ({ row }) => formatCurrency(row.original.amount) },
     { accessorKey: "share", header: "Share", cell: ({ row }) => `${row.original.share.toFixed(1)}%` },
@@ -131,7 +166,7 @@ export default function ContributionsByOfficeReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="contributions.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -186,7 +221,7 @@ export default function ContributionsByOfficeReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No contributions match your filters"

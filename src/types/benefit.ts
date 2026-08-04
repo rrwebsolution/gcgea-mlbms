@@ -59,6 +59,15 @@ export type BenefitStatus =
   | "Completed"
   | "Cancelled"
 
+export interface BenefitDocument {
+  id: string
+  benefitId: string
+  fileName: string
+  fileUrl: string
+  fileSize?: string
+  uploadedAt: string
+}
+
 export interface BenefitApplication {
   id: string
   applicationNumber: string
@@ -82,11 +91,13 @@ export interface BenefitApplication {
   incidentDate?: string
   beneficiaryOrRecipient: string
   requirements: { label: string; completed: boolean }[]
+  documents?: BenefitDocument[]
   status: BenefitStatus
   /** Which wizard step a draft was last saved on (Create Benefit Application page). */
   draftCurrentStep?: number
   releaseDate?: string
   releaseReferenceNumber?: string
+  actualReleasedAmount?: number
   rejectionReason?: string
   cancellationReason?: string
   remarks?: string

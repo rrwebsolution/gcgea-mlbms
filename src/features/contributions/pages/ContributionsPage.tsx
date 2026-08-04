@@ -22,26 +22,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { listContributions, getAllContributions, getContributionPeriods, voidContribution } from "@/services/contributions.service"
-import { getAllActiveMembers } from "@/services/members.service"
+import { getContributionSummary, listContributionPeriods, listContributions, voidContribution } from "@/services/contributions.service"
 import { CONTRIBUTION_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
 import type { Contribution, ContributionType, PaymentMethod } from "@/types"
 
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
-const CONTRIBUTION_TYPES: ContributionType[] = ["Monthly Dues", "Cash Pabaon", "Savings"]
-
-function currentPeriod(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-}
+const CONTRIBUTION_TYPES: ContributionType[] = ["Monthly Dues", "Cash Pabaon"]
 
 export default function ContributionsPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
   const [search, setSearch] = React.useState("")
+  const [debouncedSearch, setDebouncedSearch] = React.useState("")
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
   const [period, setPeriod] = React.useState("")
@@ -55,42 +50,20 @@ export default function ContributionsPage() {
   const [voidTarget, setVoidTarget] = React.useState<Contribution | null>(null)
   const [isVoiding, setIsVoiding] = React.useState(false)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["contributions", { search, page, perPage, period, contributionType, office, paymentMethod, status, dateFrom, dateTo }],
-    queryFn: () =>
-      listContributions({
-        search,
-        page,
-        perPage,
-        period: period || undefined,
-        contributionType: (contributionType || undefined) as ContributionType | undefined,
-        office: office || undefined,
-        paymentMethod: paymentMethod || undefined,
-        status: status || undefined,
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined,
-      }),
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [search])
+
+  const filters = { page, perPage, search: debouncedSearch, period, contributionType: contributionType as ContributionType || undefined, office, paymentMethod, status, dateFrom, dateTo }
+  const { data: contributionPage, isLoading, isError, refetch } = useQuery({
+    queryKey: ["contributions", filters],
+    queryFn: () => listContributions(filters),
   })
-
-  const periods = React.useMemo(() => getContributionPeriods(), [data])
-
-  const summary = React.useMemo(() => {
-    const all = getAllContributions()
-    const posted = all.filter((c) => c.status === "Posted")
-    const thisPeriod = currentPeriod()
-    const activeMembers = getAllActiveMembers()
-    const paidThisPeriodIds = new Set(posted.filter((c) => c.contributionPeriod === thisPeriod).map((c) => c.memberId))
-    const paidMembers = activeMembers.filter((m) => paidThisPeriodIds.has(m.id)).length
-    const unpaidMembers = activeMembers.length - paidMembers
-    const contributionsThisMonth = posted.filter((c) => c.paymentDate.slice(0, 7) === thisPeriod).length
-    return {
-      totalContributions: all.length,
-      totalAmount: posted.reduce((sum, c) => sum + c.amount, 0),
-      paidMembers,
-      unpaidMembers: Math.max(0, unpaidMembers),
-      contributionsThisMonth,
-    }
-  }, [data])
+  const { data: summary = { totalContributions: 0, totalAmount: 0, paidMembers: 0, unpaidMembers: 0, contributionsThisMonth: 0 } } = useQuery({ queryKey: ["contributions", "summary"], queryFn: getContributionSummary })
+  const { data: periods = [] } = useQuery({ queryKey: ["contributions", "periods"], queryFn: listContributionPeriods })
+  const pagedContributions = contributionPage?.data ?? []
+  const meta = contributionPage?.meta ?? { currentPage: page, perPage, totalRecords: 0, totalPages: 1 }
 
   async function handleVoid(reason: string) {
     if (!voidTarget || !user) return
@@ -111,14 +84,15 @@ export default function ContributionsPage() {
     {
       accessorKey: "referenceNumber",
       header: "Reference #",
+      meta: { sticky: "left" },
       cell: ({ row }) => (
         <Link to={`/contributions/${row.original.id}`} className="font-semibold text-primary hover:text-primary/80 hover:underline tracking-tight transition-colors">
           {row.original.referenceNumber}
         </Link>
       ),
     },
-    { accessorKey: "memberNumber", header: "Member #" },
-    { accessorKey: "memberName", header: "Member Name" },
+    { accessorKey: "memberNumber", header: "Member #", meta: { sticky: "left" } },
+    { accessorKey: "memberName", header: "Member Name", meta: { sticky: "left" } },
     { accessorKey: "officeName", header: "Office" },
     { accessorKey: "contributionType", header: "Type" },
     { accessorKey: "contributionPeriod", header: "Period" },
@@ -205,12 +179,13 @@ export default function ContributionsPage() {
         {/* Data list view with integrated filters and column selector */}
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={pagedContributions}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
           emptyTitle="No contributions found"
           emptyDescription="Try adjusting your search or filters."
+          enableColumnVisibility={false}
           toolbar={
             <>
           <SearchInput 
@@ -300,7 +275,7 @@ export default function ContributionsPage() {
         />
         
         {/* Pagination element */}
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
 
       {/* Transaction Cancellation Confirmation Overlay */}

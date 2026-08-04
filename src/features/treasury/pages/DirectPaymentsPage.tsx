@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { CreditCard, Loader2, ReceiptText, Save, Wallet } from "lucide-react"
+import { CreditCard, HeartHandshake, Loader2, ReceiptText, Save, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
@@ -9,22 +9,26 @@ import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { AlertBanner } from "@/components/shared/AlertBanner"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/contexts/AuthContext"
 import { getMember } from "@/services/members.service"
-import { createContribution, defaultContributionAmountForType, getAllContributions, hasExistingContribution } from "@/services/contributions.service"
+import { createContribution, defaultContributionAmountForType, getAllContributions, listAllContributions, hasExistingContribution } from "@/services/contributions.service"
 import { createLoanPayment } from "@/services/loan-payments.service"
 import { getLoanSettings } from "@/services/loan-settings.service"
-import { getMemberLoans, listAllLoans } from "@/services/loans.service"
+import { getMemberLoans, getLoanSchedule, listAllLoans } from "@/services/loans.service"
+import { listAllBenefits, releaseBenefit } from "@/services/benefits.service"
+import { listAllDeductions } from "@/services/deductions.service"
 import { listDeductionTypes } from "@/services/deduction-types.service"
 import { getSettings } from "@/services/settings.service"
-import { formatCurrency } from "@/utils/format"
+import { formatCurrency, formatMonthYear } from "@/utils/format"
+import { CASH_PABAON_PROGRAM_NAME } from "@/utils/eligibility"
 import { cn } from "@/lib/utils"
 import type { PaymentMethod } from "@/types"
 
-type DirectPaymentType = "Contribution" | "Loan Payment"
+type DirectPaymentType = "Contribution" | "Loan Payment" | "Benefit Payment"
 // Same options as the standalone Add Contribution / Record Payment pages.
 const DIRECT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
 // Matches the field label styling used on the standalone Add Contribution page, so this
@@ -47,11 +51,13 @@ export default function DirectPaymentsPage() {
   const queryClient = useQueryClient()
   const canPostContribution = hasPermission("contributions.create")
   const canPostLoanPayment = hasPermission("loan_payments.create")
-  const firstAvailableType: DirectPaymentType = canPostContribution ? "Contribution" : "Loan Payment"
+  const canPostBenefitPayment = hasPermission("benefits.release")
+  const firstAvailableType: DirectPaymentType = canPostContribution ? "Contribution" : canPostLoanPayment ? "Loan Payment" : "Benefit Payment"
 
   const [paymentType, setPaymentType] = React.useState<DirectPaymentType>(firstAvailableType)
   const [memberId, setMemberId] = React.useState("")
   const [loanId, setLoanId] = React.useState("")
+  const [benefitId, setBenefitId] = React.useState("")
   const [contributionPeriod, setContributionPeriod] = React.useState(() => currentPeriod())
   const [paymentDate, setPaymentDate] = React.useState(() => new Date().toISOString().slice(0, 10))
   const [amount, setAmount] = React.useState<number>(() => defaultContributionAmountForType("Monthly Dues") ?? 150)
@@ -61,6 +67,7 @@ export default function DirectPaymentsPage() {
   const [payrollReference, setPayrollReference] = React.useState("")
   const [remarks, setRemarks] = React.useState("")
   const [isSaving, setIsSaving] = React.useState(false)
+  const [includeShortfall, setIncludeShortfall] = React.useState(true)
 
   const { data: member } = useQuery({
     queryKey: ["members", memberId],
@@ -69,9 +76,43 @@ export default function DirectPaymentsPage() {
   })
   const { data: loans = [] } = useQuery({ queryKey: ["loans", "all"], queryFn: listAllLoans, enabled: canPostLoanPayment })
   const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings, enabled: paymentType === "Loan Payment" })
-  const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes, enabled: paymentType === "Contribution" })
+  const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes, enabled: paymentType === "Contribution" || paymentType === "Benefit Payment" })
   const globalPabaonAmount = deductionTypes.find((t) => t.code.toLowerCase() === "pabaon" && t.isActive)?.defaultAmount
   const contributionSettings = getSettings().contribution
+
+  const { data: benefits = [] } = useQuery({ queryKey: ["benefits", "all"], queryFn: listAllBenefits, enabled: canPostBenefitPayment })
+  const memberApprovedBenefits = benefits.filter((b) => b.memberId === memberId && b.status === "Approved")
+  const selectedBenefit = memberApprovedBenefits.find((b) => b.id === benefitId)
+  const { data: allContributionsForBenefit = [] } = useQuery({ queryKey: ["contributions", "all"], queryFn: listAllContributions, enabled: paymentType === "Benefit Payment" })
+  const { data: allDeductionsForBenefit = [] } = useQuery({ queryKey: ["deductions", "all"], queryFn: listAllDeductions, enabled: paymentType === "Benefit Payment" })
+  const pabaonDeductionType = deductionTypes.find((t) => t.code.toLowerCase() === "pabaon")
+  const isCashPabaonBenefit = selectedBenefit?.benefitTypeName === CASH_PABAON_PROGRAM_NAME
+  // Same net-payable computation as the Approvals → Release Benefit dialog: Cash Pabaon
+  // Program payouts are net of what the member already contributed into Cash Pabaon, with
+  // the same period-based de-dup (a payroll-deducted month is auto-mirrored into a matching
+  // Contribution record, so summing both ledgers as-is would double-count it).
+  const benefitMemberPosted = allContributionsForBenefit.filter((c) => c.memberId === memberId && c.status === "Posted")
+  const benefitMemberDirectPabaon = benefitMemberPosted.filter((c) => c.contributionType === "Cash Pabaon")
+  const benefitMemberPabaonDeductions = allDeductionsForBenefit.filter((d) =>
+    d.memberId === memberId
+    && d.status === "Posted"
+    && (d.deductionTypeId === pabaonDeductionType?.id || d.deductionTypeCode?.toLowerCase() === "pabaon")
+  )
+  const benefitPabaonPeriodsWithContribution = new Set(benefitMemberDirectPabaon.map((c) => c.contributionPeriod))
+  const totalCashPabaonContributed = benefitMemberDirectPabaon.reduce((sum, c) => sum + c.amount, 0)
+    + benefitMemberPabaonDeductions
+        .filter((d) => !benefitPabaonPeriodsWithContribution.has(d.period))
+        .reduce((sum, d) => sum + d.amount, 0)
+  const benefitApprovedAmount = selectedBenefit?.approvedAmount ?? selectedBenefit?.requestedAmount ?? 0
+  const defaultBenefitReleaseAmount = isCashPabaonBenefit
+    ? Math.max(0, benefitApprovedAmount - totalCashPabaonContributed)
+    : benefitApprovedAmount
+
+  React.useEffect(() => {
+    if (paymentType !== "Benefit Payment" || !selectedBenefit) return
+    setAmount(defaultBenefitReleaseAmount)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentType, selectedBenefit?.id, defaultBenefitReleaseAmount])
 
   const activeLoans = loans.filter((loan) =>
     loan.memberId === memberId
@@ -79,6 +120,13 @@ export default function DirectPaymentsPage() {
     && loan.outstandingBalance > 0
   )
   const selectedLoan = activeLoans.find((loan) => loan.id === loanId)
+  const { data: selectedLoanSchedule = [] } = useQuery({
+    queryKey: ["loans", loanId, "schedule"],
+    queryFn: () => getLoanSchedule(loanId),
+    enabled: paymentType === "Loan Payment" && !!loanId,
+  })
+  const partiallyPaidInstallment = selectedLoanSchedule.find((entry) => entry.status === "Partially Paid")
+  const shortfallAmount = partiallyPaidInstallment ? partiallyPaidInstallment.amountDue - partiallyPaidInstallment.amountPaid : 0
 
   // Member summary card stats — same source/definition as the standalone Add Contribution
   // and Record Payment pages (member's full loan/contribution history), not the narrower
@@ -103,9 +151,20 @@ export default function DirectPaymentsPage() {
     setPenalty(configuredPenalty)
   }, [loanSettings, paymentType, selectedLoan])
 
+  // Suggests this month's amortization plus any carried-over shortfall from a
+  // Partially Paid installment (when "include shortfall" is checked) — same
+  // behavior as the standalone Record Payment page.
+  React.useEffect(() => {
+    if (paymentType !== "Loan Payment" || !selectedLoan) return
+    const suggested = includeShortfall ? selectedLoan.monthlyAmortization + shortfallAmount : selectedLoan.monthlyAmortization
+    setAmount(Math.min(suggested, selectedLoan.outstandingBalance))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentType, selectedLoan?.id, partiallyPaidInstallment?.installmentNumber, includeShortfall])
+
   function changePaymentType(type: DirectPaymentType) {
     setPaymentType(type)
     setLoanId("")
+    setBenefitId("")
     setPenalty(0)
     setAmount(type === "Contribution" ? (defaultContributionAmountForType("Monthly Dues") ?? 150) : 0)
   }
@@ -113,19 +172,20 @@ export default function DirectPaymentsPage() {
   function selectMember(id: string) {
     setMemberId(id)
     setLoanId("")
+    setBenefitId("")
     setPenalty(0)
-    if (paymentType === "Loan Payment") setAmount(0)
+    if (paymentType !== "Contribution") setAmount(0)
   }
 
   const loanPrincipalPayment = amount - penalty
   const canSave = Boolean(
     member
-    && paymentDate
     && amount > 0
-    && officialReceiptNumber.trim()
     && (paymentType === "Contribution"
-      ? contributionPeriod && !isDuplicateContribution
-      : selectedLoan && loanPrincipalPayment > 0 && loanPrincipalPayment <= selectedLoan.outstandingBalance)
+      ? paymentDate && officialReceiptNumber.trim() && contributionPeriod && !isDuplicateContribution
+      : paymentType === "Loan Payment"
+        ? paymentDate && officialReceiptNumber.trim() && selectedLoan && loanPrincipalPayment > 0 && loanPrincipalPayment <= selectedLoan.outstandingBalance
+        : selectedBenefit && amount <= benefitApprovedAmount)
   )
 
   async function handleSave() {
@@ -170,12 +230,20 @@ export default function DirectPaymentsPage() {
           queryClient.invalidateQueries({ queryKey: ["loans"] }),
         ])
         toast.success(`Direct loan payment ${payment.paymentReferenceNumber} posted successfully.`)
+      } else if (selectedBenefit) {
+        const released = await releaseBenefit(selectedBenefit.id, remarks.trim() || undefined, amount)
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["benefits"] }),
+          queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+        ])
+        toast.success(`Benefit ${released.releaseReferenceNumber ?? released.applicationNumber} released and paid successfully.`)
       }
 
       setOfficialReceiptNumber("")
       setPayrollReference("")
       setRemarks("")
       setLoanId("")
+      setBenefitId("")
       setPenalty(0)
       setContributionPeriod(currentPeriod())
       setAmount(paymentType === "Contribution" ? (defaultContributionAmountForType("Monthly Dues") ?? 150) : 0)
@@ -190,7 +258,7 @@ export default function DirectPaymentsPage() {
     <div className="space-y-5 pb-20">
       <PageHeader title="Payments" description="Record walk-in payments received directly by the Treasurer and issue an official receipt." />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         {canPostContribution && (
           <button
             type="button"
@@ -215,6 +283,19 @@ export default function DirectPaymentsPage() {
           >
             <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary"><CreditCard /></span>
             <span><strong className="block text-sm text-foreground">Loan Payment</strong><span className="text-xs text-muted-foreground">Post payment to an active loan</span></span>
+          </button>
+        )}
+        {canPostBenefitPayment && (
+          <button
+            type="button"
+            onClick={() => changePaymentType("Benefit Payment")}
+            className={cn(
+              "flex items-center gap-3 rounded-2xl border p-4 text-left transition-all",
+              paymentType === "Benefit Payment" ? "border-primary bg-primary/8 shadow-sm" : "border-border bg-card hover:border-primary/35"
+            )}
+          >
+            <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary"><HeartHandshake /></span>
+            <span><strong className="block text-sm text-foreground">Benefit Payment</strong><span className="text-xs text-muted-foreground">Release an approved benefit application</span></span>
           </button>
         )}
       </div>
@@ -298,6 +379,27 @@ export default function DirectPaymentsPage() {
           {activeLoans.length === 0 && (
             <AlertBanner tone="warning" title="No payable loan found" description="This member has no active loan with an outstanding balance." className="mb-4" />
           )}
+          {partiallyPaidInstallment && (
+            <AlertBanner
+              tone="warning"
+              title={`Partially Paid — Installment #${partiallyPaidInstallment.installmentNumber} (${formatMonthYear(partiallyPaidInstallment.dueDate)})`}
+              description={
+                <div className="space-y-2">
+                  <p>This installment is still short by {formatCurrency(shortfallAmount)}.</p>
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                    <Checkbox checked={includeShortfall} onCheckedChange={(checked) => setIncludeShortfall(!!checked)} />
+                    Include this shortfall in the suggested Amount Paid (pay it now)
+                  </label>
+                  {!includeShortfall && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Unchecked — the {formatCurrency(shortfallAmount)} shortfall stays open and will be collected from whatever payment comes in next.
+                    </p>
+                  )}
+                </div>
+              }
+              className="mb-4"
+            />
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Loan Account <span className="text-destructive">*</span></Label>
@@ -305,8 +407,8 @@ export default function DirectPaymentsPage() {
                 value={loanId}
                 onValueChange={(value) => {
                   setLoanId(value)
-                  const loan = activeLoans.find((item) => item.id === value)
-                  setAmount(loan ? Math.min(loan.monthlyAmortization, loan.outstandingBalance) : 0)
+                  setIncludeShortfall(true)
+                  if (!value) setAmount(0)
                 }}
                 options={activeLoans.map((loan) => ({
                   value: loan.id,
@@ -337,11 +439,55 @@ export default function DirectPaymentsPage() {
         </FormSection>
       )}
 
+      {/* Benefit Payment Details — releases an Approved benefit application, same action as
+          Approvals → Release Benefit, surfaced here so the Treasurer doesn't have to leave
+          the Payments hub to pay one out. */}
+      {member && paymentType === "Benefit Payment" && (
+        <FormSection title="Step 2 · Benefit Payment Details">
+          {memberApprovedBenefits.length === 0 && (
+            <AlertBanner tone="warning" title="No payable benefit found" description="This member has no benefit application awaiting release." className="mb-4" />
+          )}
+          {isCashPabaonBenefit && (
+            <div className="mb-4 rounded-xl border border-primary/20 bg-primary/[0.03] p-3 text-xs space-y-1">
+              <div className="flex items-center justify-between"><span className="text-muted-foreground">Approved Amount</span><span className="font-semibold text-foreground">{formatCurrency(benefitApprovedAmount)}</span></div>
+              <div className="flex items-center justify-between"><span className="text-muted-foreground">Less: Total Cash Pabaon Contributed</span><span className="font-semibold text-destructive">− {formatCurrency(totalCashPabaonContributed)}</span></div>
+              <div className="flex items-center justify-between border-t border-primary/15 pt-1"><span className="font-semibold text-foreground">Net Payable</span><span className="font-bold text-primary">{formatCurrency(defaultBenefitReleaseAmount)}</span></div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Benefit Application <span className="text-destructive">*</span></Label>
+              <CommandSelect
+                value={benefitId}
+                onValueChange={setBenefitId}
+                options={memberApprovedBenefits.map((b) => ({
+                  value: b.id,
+                  label: `${b.applicationNumber} · ${b.benefitTypeName} · Approved ${formatCurrency(b.approvedAmount ?? b.requestedAmount)}`,
+                }))}
+                placeholder="Select an approved benefit application"
+                disabled={memberApprovedBenefits.length === 0}
+              />
+            </div>
+            <div className="space-y-1.5"><Label>Amount Released <span className="text-destructive">*</span></Label><CurrencyInput value={amount || undefined} onChange={(value) => setAmount(value ?? 0)} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Remarks</Label><Textarea rows={2} value={remarks} onChange={(event) => setRemarks(event.target.value)} placeholder="Optional remarks about the release…" /></div>
+          </div>
+          {selectedBenefit && amount > benefitApprovedAmount && (
+            <p className="mt-3 text-sm font-medium text-destructive">Amount released cannot exceed the approved amount of {formatCurrency(benefitApprovedAmount)}.</p>
+          )}
+        </FormSection>
+      )}
+
       {member && (
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={!canSave || isSaving}>
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
-            {isSaving ? "Posting payment…" : paymentType === "Contribution" ? "Post Direct Payment" : "Record Payment"}
+            {isSaving
+              ? "Posting payment…"
+              : paymentType === "Contribution"
+                ? "Post Direct Payment"
+                : paymentType === "Loan Payment"
+                  ? "Record Payment"
+                  : "Release Benefit"}
           </Button>
         </div>
       )}

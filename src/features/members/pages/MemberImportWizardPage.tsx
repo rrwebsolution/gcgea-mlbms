@@ -30,7 +30,6 @@ import {
   downloadMemberImportReport,
 } from "@/services/member-import.service"
 import { OfficeAliasResolutionPanel } from "@/features/members/components/OfficeAliasResolutionPanel"
-import { DuplicateComparisonTable } from "@/features/members/components/DuplicateComparisonTable"
 import { FixInvalidMemberRowDialog, type MemberRowEdit } from "@/features/members/components/FixInvalidMemberRowDialog"
 import { calculateAge, formatDateShort } from "@/utils/format"
 import type {
@@ -53,7 +52,6 @@ const STEPS = [
   "Preview Records",
   "Validate & Clean",
   "Resolve Offices",
-  "Resolve Duplicates",
   "Review Beneficiaries",
   "Review Legacy Loan Data",
   "Confirm Import",
@@ -99,10 +97,11 @@ export default function MemberImportWizardPage() {
   const [filterCategory, setFilterCategory] = React.useState<MemberValidationCategory | "All">("All")
   const [searchTerm, setSearchTerm] = React.useState("")
 
-  // Shared row decisions: rowNumber -> 'create_new' | 'skip' | 'merge_into:{id}'
-  const [resolutions, setResolutions] = React.useState<Record<number, string>>({})
+  // Always empty now that Resolve Duplicates was removed — kept only because
+  // commitMemberImport()'s signature still expects a per-row resolution map.
+  const [resolutions] = React.useState<Record<number, string>>({})
 
-  // Corrections made to rows across the wizard (Step 5 fixes, Step 9 beneficiary edits, etc.) — partial since a row may only ever get some fields touched
+  // Corrections made to rows across the wizard (Step 5 fixes, Step 8 beneficiary edits, etc.) — partial since a row may only ever get some fields touched
   const [rowEdits, setRowEdits] = React.useState<Record<number, Partial<MemberRowEdit>>>({})
   const [fixDialogRow, setFixDialogRow] = React.useState<MemberImportRowResult | null>(null)
 
@@ -162,7 +161,6 @@ export default function MemberImportWizardPage() {
       const result = await previewMemberImport(uploadResult.token, mapping)
       setPreviewResult(result)
       setUnresolvedOffices(result.unresolvedOffices)
-      setResolutions({})
       setRowEdits({})
       setStep(5)
     } catch (err) {
@@ -210,7 +208,7 @@ export default function MemberImportWizardPage() {
     try {
       const result = await commitMemberImport(uploadResult.token, resolutions, rowEdits)
       setCommitResult(result)
-      setStep(12)
+      setStep(11)
       toast.success(
         result.summary.pendingReview > 0
           ? `Imported member records were submitted for approval (${result.summary.pendingReview} pending).`
@@ -234,7 +232,6 @@ export default function MemberImportWizardPage() {
     setPreviewResult(null)
     setFilterCategory("All")
     setSearchTerm("")
-    setResolutions({})
     setRowEdits({})
     setFixDialogRow(null)
     setUnresolvedOffices([])
@@ -278,9 +275,7 @@ export default function MemberImportWizardPage() {
         : searchedRows.filter((r) => r.category === filterCategory)
 
   const invalidRows = rows.filter((r) => r.category === "Invalid")
-  const unresolvedInvalidRows = invalidRows.filter((r) => !isRowFixed(r) && resolutions[r.rowNumber] !== "skip")
-  const ambiguousRows = rows.filter((r) => ["Exact", "Probable", "Possible"].includes(r.category) && r.duplicateCandidates.length > 0)
-  const unresolvedAmbiguous = ambiguousRows.filter((r) => !resolutions[r.rowNumber])
+  const unresolvedInvalidRows = invalidRows.filter((r) => !isRowFixed(r))
   const beneficiaryRows = rows.filter((r) => r.data.beneficiary_1 || r.data.beneficiary_2)
   const legacyLoanRows = rows.filter((r) => r.data.legacy_loan_status !== "No legacy loan information")
 
@@ -385,12 +380,7 @@ export default function MemberImportWizardPage() {
     },
   ]
 
-  const excludedCount = Object.values(resolutions).filter((a) => a === "skip").length
-  const importableCount = rows.filter((r) => {
-    if (resolutions[r.rowNumber] === "skip") return false
-    if (r.category === "Invalid" && !isRowFixed(r)) return false
-    return true
-  }).length
+  const importableCount = rows.filter((r) => r.category !== "Invalid" || isRowFixed(r)).length
 
   return (
     <div className="space-y-5 pb-10">
@@ -719,36 +709,7 @@ export default function MemberImportWizardPage() {
 
       {step === 8 && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 8 · Resolve Duplicates</h2>
-          {ambiguousRows.length === 0 ? (
-            <EmptyState icon={CheckCircle2} title="No possible duplicates" description="Every row is a new record with no matching existing member." />
-          ) : (
-            <div className="space-y-3">
-              {unresolvedAmbiguous.length > 0 && (
-                <p className="text-xs font-medium text-warning">{unresolvedAmbiguous.length} row(s) still need a decision.</p>
-              )}
-              {ambiguousRows.map((r) => (
-                <DuplicateComparisonTable
-                  key={r.rowNumber}
-                  row={r}
-                  resolution={resolutions[r.rowNumber]}
-                  onChange={(action) => setResolutions((prev) => ({ ...prev, [r.rowNumber]: action }))}
-                />
-              ))}
-            </div>
-          )}
-          <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(7)}>
-              Back
-            </Button>
-            <Button onClick={() => setStep(9)}>Continue</Button>
-          </div>
-        </div>
-      )}
-
-      {step === 9 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 9 · Review Beneficiaries</h2>
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 8 · Review Beneficiaries</h2>
           {beneficiaryRows.length === 0 ? (
             <EmptyState title="No beneficiaries in this worksheet" description="Neither dependent/beneficiary column had any names to import." />
           ) : (
@@ -805,17 +766,17 @@ export default function MemberImportWizardPage() {
             Relationships are unknown for imported beneficiaries and can be filled in later from the member&apos;s profile.
           </p>
           <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(8)}>
+            <Button variant="outline" onClick={() => setStep(7)}>
               Back
             </Button>
-            <Button onClick={() => setStep(10)}>Continue</Button>
+            <Button onClick={() => setStep(9)}>Continue</Button>
           </div>
         </div>
       )}
 
-      {step === 10 && (
+      {step === 9 && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 10 · Review Legacy Loan Data</h2>
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 9 · Review Legacy Loan Data</h2>
           {legacyLoanRows.length === 0 ? (
             <EmptyState title="No legacy loan data" description="No rows have values in the CASH PABAON / Loan Start / Solidarity Assistance Loan columns." />
           ) : (
@@ -858,17 +819,17 @@ export default function MemberImportWizardPage() {
             </>
           )}
           <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(9)}>
+            <Button variant="outline" onClick={() => setStep(8)}>
               Back
             </Button>
-            <Button onClick={() => setStep(11)}>Continue</Button>
+            <Button onClick={() => setStep(10)}>Continue</Button>
           </div>
         </div>
       )}
 
-      {step === 11 && (
+      {step === 10 && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 11 · Confirm Import</h2>
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Step 10 · Confirm Import</h2>
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <SummaryStat label="Total Rows" value={String(rows.length)} />
             <SummaryStat label="New" value={String(summaryCounts.New)} />
@@ -876,21 +837,15 @@ export default function MemberImportWizardPage() {
             <SummaryStat label="Invalid" value={String(summaryCounts.Invalid)} />
           </div>
           <p className="text-sm text-muted-foreground">
-            You are about to import <strong className="text-foreground">{importableCount}</strong> record(s)
-            {excludedCount > 0 && (
-              <>
-                {" "}
-                (<strong className="text-foreground">{excludedCount}</strong> excluded)
-              </>
-            )}
-            . Imported members are <strong className="text-foreground">automatically approved and activated</strong> — this cannot be undone from this wizard.
+            You are about to import <strong className="text-foreground">{importableCount}</strong> record(s).
+            Imported members are <strong className="text-foreground">automatically approved and activated</strong> — this cannot be undone from this wizard.
           </p>
           <label className="mt-4 flex items-center gap-2 text-sm font-medium text-foreground">
             <Checkbox checked={confirmChecked} onCheckedChange={(v) => setConfirmChecked(!!v)} />
             I confirm that I have reviewed the member records and import decisions.
           </label>
           <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(10)} disabled={isCommitting}>
+            <Button variant="outline" onClick={() => setStep(9)} disabled={isCommitting}>
               Back
             </Button>
             <Button onClick={handleConfirmImport} disabled={!confirmChecked || isCommitting || importableCount === 0}>
@@ -901,7 +856,7 @@ export default function MemberImportWizardPage() {
         </div>
       )}
 
-      {step === 12 && commitResult && (
+      {step === 11 && commitResult && (
         <div className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
           <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-full bg-success/10 text-success">
             <CheckCircle2 className="size-7" />

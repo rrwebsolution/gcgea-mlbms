@@ -74,6 +74,15 @@ export interface Member {
   retireeStatus: RetireeStatus
   remarks?: string
 
+  membershipFeePayment?: {
+    referenceNumber: string
+    amount: number
+    paymentDate: string
+    paymentMethod: string
+    receivedBy: string
+    status: string
+  } | null
+
   beneficiaries: Beneficiary[]
   documents: MemberDocument[]
 

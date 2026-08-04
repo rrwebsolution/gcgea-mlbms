@@ -24,13 +24,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command"
-import { listAllActiveMembers } from "@/services/members.service"
-import { listAllLoans } from "@/services/loans.service"
-import { listAllBenefits } from "@/services/benefits.service"
-import { listAllContributions } from "@/services/contributions.service"
-import { listAllUsers } from "@/services/users.service"
-import { listAllRoles } from "@/services/roles.service"
-import { listAllOffices } from "@/services/offices.service"
+import { api } from "@/lib/api"
 import { readStorage, writeStorage, STORAGE_KEYS } from "@/lib/storage"
 import { useHeaderDropdownSlot } from "@/contexts/HeaderDropdownContext"
 import { NAV_ITEMS, type NavItem } from "@/constants/navigation"
@@ -44,6 +38,16 @@ interface SystemSearchEntry {
   category: string
   path: string
   keywords: string
+}
+
+interface GlobalSearchData {
+  members: Array<{ id: string; fullName: string; memberNumber: string }>
+  loans: Array<{ id: string; memberName: string; applicationNumber: string }>
+  benefits: Array<{ id: string; memberName: string; applicationNumber: string }>
+  contributions: Array<{ id: string; memberName: string; memberNumber: string; referenceNumber: string; contributionPeriod: string }>
+  users: Array<{ id: string; fullName: string; username: string }>
+  roles: Array<{ id: string; name: string; code: string }>
+  offices: Array<{ id: string; name: string; code: string }>
 }
 
 function searchableText(value: unknown): string {
@@ -101,23 +105,23 @@ const SYSTEM_SEARCH_ENTRIES = [...flattenNavigation(NAV_ITEMS), ...REPORT_SEARCH
 export function GlobalSearch() {
   const [open, setOpen] = useHeaderDropdownSlot("search")
   const [query, setQuery] = React.useState("")
+  const [serverTerm, setServerTerm] = React.useState("")
   const [recent, setRecent] = React.useState<string[]>(() => readStorage<string[]>(STORAGE_KEYS.recentSearches, []))
   const navigate = useNavigate()
+  const term = query.trim().toLowerCase()
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setServerTerm(term.length >= 2 ? term : ""), 250)
+    return () => window.clearTimeout(timer)
+  }, [term])
+
   const { data: searchData, isLoading, isError } = useQuery({
-    queryKey: ["global-search-data"],
+    queryKey: ["global-search", serverTerm],
     queryFn: async () => {
-      const [members, loans, benefits, contributions, users, roles, offices] = await Promise.all([
-        listAllActiveMembers(),
-        listAllLoans(),
-        listAllBenefits(),
-        listAllContributions(),
-        listAllUsers(),
-        listAllRoles(),
-        listAllOffices(),
-      ])
-      return { members, loans, benefits, contributions, users, roles, offices }
+      const { data } = await api.get<GlobalSearchData>("/global-search", { params: { q: serverTerm } })
+      return data
     },
-    enabled: open,
+    enabled: open && serverTerm.length >= 2,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -158,7 +162,6 @@ export function GlobalSearch() {
     navigate(path)
   }
 
-  const term = query.trim().toLowerCase()
   const showRecent = term.length === 0 && recent.length > 0
   const hasSearchTerm = term.length > 0
   const members = hasSearchTerm

@@ -42,6 +42,8 @@ export interface FileUploaderProps {
   progress?: number
 
   onUpload?: (file: File) => void
+  /** Receives one batch when `multiple` is enabled. */
+  onFilesSelect?: (files: File[]) => void
   onRemove?: () => void
   onReplace?: (file: File) => void
   onCancel?: () => void
@@ -68,6 +70,7 @@ export function FileUploader({
   status = "idle",
   progress = 0,
   onUpload,
+  onFilesSelect,
   onRemove,
   onReplace,
   onCancel,
@@ -140,6 +143,21 @@ export function FileUploader({
   function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return
     const list = multiple ? Array.from(files) : [files[0]]
+    const acceptedList = strict
+      ? list.filter((file) => {
+          const result = validateFile(file, { mimeTypes, extensions: acceptExtensions!, maxSizeMB })
+          return result.valid && !isDuplicateFile(file, hasFile ? { name: displayName!, sizeBytes: displaySize } : null)
+        })
+      : list
+    onFilesSelect?.(acceptedList)
+    // Multi-file callers render their own gallery/list. Keep this component as
+    // the drop zone so the last selected file is not duplicated as a large
+    // single-file preview above that gallery.
+    if (multiple && onFilesSelect) {
+      if (acceptedList.length !== list.length) setValidationError("One or more files were rejected because of their type, size, or because they were duplicates.")
+      else setValidationError(null)
+      return
+    }
     list.forEach((file) => processFile(file, hasFile))
   }
 

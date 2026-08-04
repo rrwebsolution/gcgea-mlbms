@@ -16,6 +16,7 @@ import { getMember } from "@/services/members.service"
 import { downloadCsv } from "@/utils/csv"
 import { formatCurrency } from "@/utils/format"
 import type { Contribution, ContributionFundAllocation } from "@/types"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -58,10 +59,10 @@ function isContributionPeriodInYear(period: string, year: number): boolean {
 
 export default function MemberMonthlyDuesSummaryReportPage() {
   const currentYear = new Date().getFullYear()
-  const [draftScope, setDraftScope] = React.useState<"member" | "overall">("member")
+  const [draftScope, setDraftScope] = React.useState<"member" | "overall">("overall")
   const [draftMemberId, setDraftMemberId] = React.useState("")
   const [draftYear, setDraftYear] = React.useState(currentYear)
-  const [applied, setApplied] = React.useState<{ scope: "member" | "overall"; memberId?: string; year: number } | null>(null)
+  const [applied, setApplied] = React.useState<{ scope: "member" | "overall"; memberId?: string; year: number } | null>({ scope: "overall", year: currentYear })
 
   const { data: allContributions = [], isLoading } = useQuery({
     queryKey: ["contributions", "all"],
@@ -125,10 +126,10 @@ export default function MemberMonthlyDuesSummaryReportPage() {
   }
 
   function handleReset() {
-    setDraftScope("member")
+    setDraftScope("overall")
     setDraftMemberId("")
     setDraftYear(currentYear)
-    setApplied(null)
+    setApplied({ scope: "overall", year: currentYear })
   }
 
   function handleExportCsv() {
@@ -190,7 +191,7 @@ export default function MemberMonthlyDuesSummaryReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate} disabled={draftScope === "member" && !draftMemberId}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} disabled={draftScope === "member" && !draftMemberId} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset</Button>
           <PermissionButton permission="contributions.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV

@@ -17,7 +17,10 @@ import {
   ChevronLeft,
   FileCheck,
   Building2,
-  Calculator
+  Calculator,
+  X,
+  Eye,
+  FileText
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
@@ -25,6 +28,8 @@ import { WizardStepIndicator } from "@/components/shared/WizardStepIndicator"
 import { MemberSelectionStep } from "@/components/shared/MemberSelectionStep"
 import { EligibilityChecklist, type EligibilityResult } from "@/components/shared/EligibilityChecklist"
 import { FileUploader } from "@/components/shared/FileUploader"
+import { ImagePreviewDialog } from "@/components/shared/ImagePreviewDialog"
+import { PDFPreviewDialog } from "@/components/shared/PDFPreviewDialog"
 import { FormSkeleton } from "@/components/shared/loaders/FormSkeleton"
 import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
@@ -43,22 +48,22 @@ import { CommandSelect } from "@/components/shared/CommandSelect"
 import { BenefitsOfficerCommandSelect } from "@/features/benefits/components/BenefitsOfficerCommandSelect"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { getMember } from "@/services/members.service"
+import { getMember, missingProfileFields } from "@/services/members.service"
 import { listAllContributions } from "@/services/contributions.service"
 import { listAllDeductions } from "@/services/deductions.service"
 import { listDeductionTypes } from "@/services/deduction-types.service"
 import { getMemberLoans } from "@/services/loans.service"
-import { createBenefitApplication, getBenefit, listBenefitTypes, getMemberBenefits, updateBenefitApplication, type CreateBenefitApplicationInput } from "@/services/benefits.service"
+import { createBenefitApplication, getBenefit, listBenefitTypes, getMemberBenefits, updateBenefitApplication, uploadBenefitDocument, type CreateBenefitApplicationInput } from "@/services/benefits.service"
 import { loadSystemSettings } from "@/services/settings.service"
 import { CASH_PABAON_PROGRAM_NAME, evaluateBenefitEligibility, resultFor } from "@/utils/eligibility"
 import { computeProratedAmount, countDistinctPeriods } from "@/utils/proration"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
 import { useDraft } from "@/hooks/useDraft"
-import { useAutosaveDraft } from "@/hooks/useAutosaveDraft"
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges"
 import { cn } from "@/lib/utils"
-import type { BenefitApplication } from "@/types"
+import { isImageFile, isPdfFile } from "@/lib/upload-validation"
+import type { BenefitApplication, BenefitDocument } from "@/types"
 
 const STEPS = ["Select Member", "Benefit Details", "Eligibility & Requirements", "Review & Submit"]
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -66,7 +71,21 @@ const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "Ju
 /** Policy defaults used while system settings are loading or for older saved settings. */
 const DEFAULT_SIBLING_SCHEDULE = [15000, 10000, 5000]
 const NUCLEAR_MORTUARY_BENEFIT_NAME = "Mortuary Cash Assistance for Nuclear Family Member"
+const RETIREMENT_BENEFIT_NAME = "Retirement and Separation Benefit"
 type NuclearClaimSubjectType = "Member" | "Spouse" | "Child" | "Parent" | "Sibling"
+
+function fileKey(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`
+}
+
+/** Plain recipient/claim-subject names out of a stored `beneficiaryOrRecipient` label (strips any trailing "(Relationship)" or "(ClaimSubjectType)" suffix). */
+function extractRecipientNames(storedLabel: string): string[] {
+  return storedLabel
+    .split("; Claim Subject:")[0]
+    .split(",")
+    .map((name) => name.replace(/\s*\([^)]*\)\s*$/, "").trim())
+    .filter(Boolean)
+}
 
 export default function CreateBenefitApplicationPage() {
   const navigate = useNavigate()
@@ -127,11 +146,12 @@ export default function CreateBenefitApplicationPage() {
   const [siblingBeneficiaryIds, setSiblingBeneficiaryIds] = React.useState<string[]>([])
 
   const [requirements, setRequirements] = React.useState<Record<string, boolean>>({})
-  const [fileMeta, setFileMeta] = React.useState<{ fileName: string; fileSize: string } | null>(null)
+  const [supportingFiles, setSupportingFiles] = React.useState<File[]>([])
+  const [isUploadingDocuments, setIsUploadingDocuments] = React.useState(false)
+  const [supportingUploadProgress, setSupportingUploadProgress] = React.useState<Record<string, number>>({})
 
   const [agree, setAgree] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const [isAutosaving, setIsAutosaving] = React.useState(false)
   const [successDialog, setSuccessDialog] = React.useState<{ id: string; applicationNumber: string } | null>(null)
 
   const { data: member } = useQuery({
@@ -147,6 +167,8 @@ export default function CreateBenefitApplicationPage() {
   const { data: allContributions = [] } = useQuery({ queryKey: ["contributions", "all"], queryFn: listAllContributions })
   const { data: allDeductions = [] } = useQuery({ queryKey: ["deductions", "all"], queryFn: listAllDeductions })
   const benefitType = benefitTypes.find((bt) => bt.id === benefitTypeId)
+  const retirementBenefitRestricted = (benefitSettings?.requireRetiredStatusForRetirementBenefit ?? true)
+    && member?.retireeStatus !== "Retired"
   const pabaonDeductionType = deductionTypes.find((type) => type.code.toLowerCase() === "pabaon")
 
   const memberLoans = memberId ? getMemberLoans(memberId) : []
@@ -161,14 +183,6 @@ export default function CreateBenefitApplicationPage() {
   const now = new Date()
   const benefitYearStart = new Date(now.getFullYear(), Math.max(0, resetMonthIndex), 1)
   if (benefitYearStart > now) benefitYearStart.setFullYear(benefitYearStart.getFullYear() - 1)
-  const priorBenefitOfType = memberBenefits.filter((b) =>
-    b.benefitTypeId === benefitTypeId
-    && ["Released", "Completed"].includes(b.status)
-    && Boolean(b.releaseDate)
-    && new Date(b.releaseDate!) >= benefitYearStart
-  )
-  const pendingBenefitOfType = !(benefitSettings?.allowMultiplePendingApplications ?? false)
-    && memberBenefits.some((b) => b.benefitTypeId === benefitTypeId && ["Draft", "Submitted", "Under Review", "For Approval"].includes(b.status))
 
   const memberPabaonDeductions = memberId
     ? allDeductions.filter((deduction) =>
@@ -181,11 +195,27 @@ export default function CreateBenefitApplicationPage() {
       )
     : []
   const memberDirectPabaonContributions = memberContributions.filter((contribution) => contribution.contributionType === "Cash Pabaon")
+  const memberMonthlyDuesContributions = memberContributions.filter((contribution) => contribution.contributionType === "Monthly Dues")
   const monthlyDuesMonthCount = countDistinctPeriods(
-    memberContributions
-      .filter((contribution) => contribution.contributionType === "Monthly Dues")
-      .map((contribution) => contribution.contributionPeriod)
+    memberMonthlyDuesContributions.map((contribution) => contribution.contributionPeriod)
   )
+  // Cash Pabaon can be posted either as its own contribution or as a payroll deduction —
+  // but a payroll-deducted one always gets mirrored into a matching Contribution record
+  // too (ContributionController::postCashPabaonContribution), so summing both ledgers
+  // as-is would double-count every payroll-deducted month. Only fall back to a period's
+  // Deduction amount when no Contribution record exists for that period (legacy/imported
+  // data predating the auto-mirroring) — same period-based de-dup as the month count below.
+  const pabaonPeriodsWithContribution = new Set(memberDirectPabaonContributions.map((contribution) => contribution.contributionPeriod))
+  const totalCashPabaonAmount = memberDirectPabaonContributions.reduce((sum, contribution) => sum + contribution.amount, 0)
+    + memberPabaonDeductions
+        .filter((deduction) => !pabaonPeriodsWithContribution.has(deduction.period))
+        .reduce((sum, deduction) => sum + deduction.amount, 0)
+  const monthlyDuesFundTotals = memberMonthlyDuesContributions
+    .flatMap((contribution) => contribution.fundAllocations ?? [])
+    .reduce<Record<string, number>>((totals, allocation) => {
+      totals[allocation.fundName] = (totals[allocation.fundName] ?? 0) + allocation.allocatedAmount
+      return totals
+    }, {})
   const cashPabaonMonthCount = countDistinctPeriods([
     ...memberPabaonDeductions.map((deduction) => deduction.period),
     ...memberDirectPabaonContributions.map((contribution) => contribution.contributionPeriod),
@@ -282,9 +312,9 @@ export default function CreateBenefitApplicationPage() {
   React.useEffect(() => {
     if (!existingBenefit) return
     // Only hydrate local wizard state the first time a draft is opened.
-    // The query cache is rewritten with the server response on every
-    // autosave/manual save, which changes `existingBenefit`'s reference on
-    // every save — re-running this on each of those would snap the step
+    // The query cache is rewritten with the server response after a manual
+    // save, which changes `existingBenefit`'s reference. Re-running this
+    // after that would snap the step
     // (and any in-flight edits) back to whatever was last persisted.
     if (hydratedBenefitIdRef.current === existingBenefit.id) return
     hydratedBenefitIdRef.current = existingBenefit.id
@@ -293,8 +323,7 @@ export default function CreateBenefitApplicationPage() {
     setRequestedAmount(existingBenefit.requestedAmount || undefined)
     setIncidentDate(existingBenefit.incidentDate ?? "")
     setReason(existingBenefit.reason ?? "")
-    const storedRecipient = existingBenefit.beneficiaryOrRecipient ?? ""
-    setRecipientNames(storedRecipient.split("; Claim Subject:")[0].split(",").map((name) => name.replace(/\s*\([^)]*\)\s*$/, "").trim()).filter(Boolean))
+    setRecipientNames(extractRecipientNames(existingBenefit.beneficiaryOrRecipient ?? ""))
     setRequirements(Object.fromEntries((existingBenefit.requirements ?? []).map((r) => [r.label, r.completed])))
     setStep(existingBenefit.draftCurrentStep ?? 1)
   }, [existingBenefit])
@@ -329,6 +358,27 @@ export default function CreateBenefitApplicationPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save draft."),
   })
 
+  // An existing draft is itself present in the member's benefits list, so it
+  // must be excluded here to avoid counting the draft as its own duplicate.
+  const currentBenefitId = id ?? benefitDraft.draftId
+  const otherMemberBenefits = memberBenefits.filter((b) => b.id !== currentBenefitId)
+  const priorBenefitOfType = otherMemberBenefits.filter((b) =>
+    b.benefitTypeId === benefitTypeId
+    && ["Released", "Completed"].includes(b.status)
+    && Boolean(b.releaseDate)
+    && new Date(b.releaseDate!) >= benefitYearStart
+  )
+  // A "duplicate" pending application is one for the same benefit type AND the same
+  // recipient/claim subject — e.g. two separate pending claims for two different
+  // children under the same benefit type are not duplicates of each other.
+  const currentRecipientNames = isNuclearMortuary ? effectiveClaimSubjectNames : recipientNames
+  const pendingBenefitOfType = !(benefitSettings?.allowMultiplePendingApplications ?? false)
+    && otherMemberBenefits.some((b) =>
+      b.benefitTypeId === benefitTypeId
+      && ["Draft", "Submitted", "Under Review", "For Approval"].includes(b.status)
+      && extractRecipientNames(b.beneficiaryOrRecipient ?? "").some((name) => currentRecipientNames.includes(name))
+    )
+
   const eligibilityItems = member && benefitType
     ? evaluateBenefitEligibility(
         member,
@@ -338,11 +388,18 @@ export default function CreateBenefitApplicationPage() {
         pendingBenefitOfType,
         benefitType.name === CASH_PABAON_PROGRAM_NAME
           ? { recipientType, recipientNames, hasOutstandingObligations: overdueLoans.length > 0 }
-          : undefined
+          : undefined,
+        benefitSettings?.requireRetiredStatusForRetirementBenefit ?? true,
       )
     : []
   const eligibilityResult: EligibilityResult = eligibilityItems.length > 0 ? resultFor(eligibilityItems) : "Not Eligible"
-  const isBlocked = eligibilityResult === "Not Eligible" && !(overrideEnabled && overrideReason.trim() && overrideConfirmed)
+  const isBlocked = eligibilityResult !== "Eligible" && !(overrideEnabled && overrideReason.trim() && overrideConfirmed)
+  const missingMemberProfileFields = member ? missingProfileFields(member) : []
+  const missingMemberSectionLabel = missingMemberProfileFields.some((field) => ["Email Address", "Cellphone Number", "Permanent Address"].includes(field))
+    ? "Personal Information"
+    : missingMemberProfileFields.includes("Beneficiaries")
+      ? "Beneficiaries"
+      : "Documents"
 
   const requirementEntries = benefitType ? benefitType.requiredDocuments.map((label) => ({ label, completed: !!requirements[label] })) : []
   const missingRequirements = requirementEntries.filter((r) => !r.completed)
@@ -375,33 +432,54 @@ export default function CreateBenefitApplicationPage() {
       return
     }
     try {
-      await benefitDraft.save(draftSnapshot)
-      toast.success("Draft saved successfully.")
+      const benefit = await benefitDraft.save(draftSnapshot)
+      const failedFiles = await uploadSupportingFiles(benefit)
+      if (failedFiles.length > 0) {
+        toast.warning(`Draft saved, but these files could not be uploaded: ${failedFiles.map((file) => file.name).join(", ")}.`)
+      } else {
+        toast.success("Draft saved successfully.")
+      }
     } catch {}
   }
 
-  const autosave = useAutosaveDraft(
-    draftSnapshot,
-    async (snap) => {
-      if (!memberId) return
-      // Background autosave shouldn't flip the "Save as Draft" button into its
-      // busy/disabled spinner state — that only reflects a real user click.
-      setIsAutosaving(true)
-      try {
-        await benefitDraft.save(snap)
-      } catch {
-        // already surfaced via benefitDraft's onError toast
-      } finally {
-        setIsAutosaving(false)
+  async function uploadSupportingFiles(benefit: BenefitApplication, filesToUpload: File[] = supportingFiles): Promise<File[]> {
+    if (filesToUpload.length === 0) return []
+    setIsUploadingDocuments(true)
+    const failed: File[] = []
+    const uploaded: BenefitDocument[] = []
+    try {
+      for (const file of filesToUpload) {
+        const key = fileKey(file)
+        try {
+          setSupportingUploadProgress((current) => ({ ...current, [key]: 0 }))
+          uploaded.push(await uploadBenefitDocument(benefit.id, file, (progress) => {
+            setSupportingUploadProgress((current) => ({ ...current, [key]: progress }))
+          }))
+        } catch {
+          failed.push(file)
+          setSupportingUploadProgress((current) => {
+            const next = { ...current }
+            delete next[key]
+            return next
+          })
+        }
       }
-    },
-    {
-      enabled: Boolean(memberId) && Boolean(benefitDraft.draftId) && (!isEdit || isDraftContext) && benefitDraft.status !== "saving" && !isSubmitting,
-      delayMs: 30000,
+      queryClient.setQueryData<BenefitApplication>(["benefits", benefit.id], (current) => ({
+        ...(current ?? benefit),
+        documents: [...(current?.documents ?? benefit.documents ?? []), ...uploaded],
+      }))
+      const attemptedKeys = new Set(filesToUpload.map(fileKey))
+      setSupportingFiles((current) => {
+        const untouched = current.filter((file) => !attemptedKeys.has(fileKey(file)))
+        const retainedKeys = new Set(untouched.map(fileKey))
+        return [...untouched, ...failed.filter((file) => !retainedKeys.has(fileKey(file)))]
+      })
+      if (failed.length === 0) setSupportingUploadProgress({})
+      return failed
+    } finally {
+      setIsUploadingDocuments(false)
     }
-  )
-
-  const draftButtonStatus = isAutosaving && benefitDraft.status === "saving" ? "idle" : benefitDraft.status
+  }
 
   const hasUnsavedChanges = Boolean(memberId) && !successDialog
   const { showPrompt: showUnsavedPrompt, promptLeave, resolvePrompt } = useUnsavedChanges(hasUnsavedChanges)
@@ -424,11 +502,6 @@ export default function CreateBenefitApplicationPage() {
     }
     const nextStep = Math.min(STEPS.length, step + 1)
     setStep(nextStep)
-    // Save the step we're navigating to, not the pre-navigation `step` closure
-    // value — otherwise the persisted draftCurrentStep lags behind the UI by
-    // one step, and the next server-response cache write snaps the wizard
-    // back a step.
-    if (memberId && benefitDraft.draftId) void autosave.triggerNow({ ...draftSnapshot, draftCurrentStep: nextStep })
   }
   function goBack() {
     setStep((s) => Math.max(1, s - 1))
@@ -462,10 +535,13 @@ export default function CreateBenefitApplicationPage() {
         overrideEligibility: !asDraft && overrideEnabled && overrideConfirmed,
         overrideReason: !asDraft && overrideEnabled ? overrideReason.trim() : undefined,
       })
+      const failedFiles = await uploadSupportingFiles(benefit)
       if (asDraft) {
-        toast.success("Draft saved successfully.")
+        if (failedFiles.length > 0) toast.warning(`Draft saved, but ${failedFiles.length} supporting file(s) could not be uploaded.`)
+        else toast.success("Draft saved successfully.")
       } else {
-        toast.success("Benefit application submitted successfully.")
+        if (failedFiles.length > 0) toast.warning(`Application submitted, but ${failedFiles.length} supporting file(s) could not be uploaded.`)
+        else toast.success("Benefit application submitted successfully.")
         setSuccessDialog({ id: benefit.id, applicationNumber: benefit.applicationNumber })
       }
     } catch (err) {
@@ -490,7 +566,8 @@ export default function CreateBenefitApplicationPage() {
     setOverrideReason("")
     setOverrideConfirmed(false)
     setRequirements({})
-    setFileMeta(null)
+    setSupportingFiles([])
+    setSupportingUploadProgress({})
     setSiblingBeneficiaryIds([])
     setAgree(false)
     setSuccessDialog(null)
@@ -554,6 +631,7 @@ export default function CreateBenefitApplicationPage() {
                 <ReviewRow label="Member Number" value={member.memberNumber} />
                 <ReviewRow label="Office" value={member.officeName} />
                 <ReviewRow label="Membership Status" value={member.membershipStatus} />
+                <ReviewRow label="Retiree Status" value={member.retireeStatus} />
               </dl>
               <div className="mt-4 border-t border-primary/15 pt-4">
                 <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -564,9 +642,23 @@ export default function CreateBenefitApplicationPage() {
                   <ReviewRow label="Posted Contribution Amount" value={formatCurrency(totalContributions)} />
                   <ReviewRow label="Monthly Dues Months" value={String(monthlyDuesMonthCount)} />
                   <ReviewRow label="Cash Pabaon Months" value={String(cashPabaonMonthCount)} />
+                  <ReviewRow label="Total Cash Pabaon Amount" value={formatCurrency(totalCashPabaonAmount)} />
                   <ReviewRow label="Latest Posted Payment" value={latestContributionDate ? formatDateShort(latestContributionDate) : "No posted payment"} />
                 </dl>
               </div>
+              {Object.keys(monthlyDuesFundTotals).length > 0 && (
+                <div className="mt-4 border-t border-primary/15 pt-4">
+                  <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <Layers className="size-3.5 text-primary" />
+                    Monthly Dues — Fund Allocation Totals
+                  </div>
+                  <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    {Object.entries(monthlyDuesFundTotals).map(([fundName, total]) => (
+                      <ReviewRow key={fundName} label={fundName} value={formatCurrency(total)} />
+                    ))}
+                  </dl>
+                </div>
+              )}
             </div>
           )}
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-6">
@@ -598,9 +690,16 @@ export default function CreateBenefitApplicationPage() {
                     setSiblingBeneficiaryIds([])
                   }
                 }}
-                options={benefitTypes.filter((bt) => bt.status === "Active").map((bt) => ({ value: bt.id, label: bt.name }))}
+                options={benefitTypes
+                  .filter((bt) => bt.status === "Active" && !(retirementBenefitRestricted && bt.name === RETIREMENT_BENEFIT_NAME))
+                  .map((bt) => ({ value: bt.id, label: bt.name }))}
                 placeholder="Select benefit program type"
               />
+              {retirementBenefitRestricted && (
+                <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                  Retirement and Separation Benefit is unavailable because this member&apos;s Retiree Status is not Retired.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2 lg:col-span-3">
@@ -950,9 +1049,19 @@ export default function CreateBenefitApplicationPage() {
             <AlertBanner tone="warning" title="Incomplete information" description="Select a member and benefit type first." />
           ) : (
             <div className="space-y-6">
-              <EligibilityChecklist items={eligibilityItems} result={eligibilityResult} />
+              <EligibilityChecklist
+                items={eligibilityItems}
+                result={eligibilityResult}
+                renderItemFooter={(item) => item.label === "Required Personal Data Complete" && member ? (
+                  <span className="mt-2 block rounded-md border border-destructive/20 bg-background/70 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
+                    {hasPermission("members.update")
+                      ? `${user?.roleName ?? "Your role"}: Update the member's ${missingMemberSectionLabel} under Member Records before continuing.`
+                      : `${user?.roleName ?? "Your role"}: You do not have permission to update member records. Coordinate with a role that has Update Members permission.`}
+                  </span>
+                ) : null}
+              />
 
-              {eligibilityResult === "Not Eligible" && canOverride && (
+              {eligibilityResult !== "Eligible" && canOverride && (
                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-3">
                   <label className="flex items-center gap-3 text-sm font-bold text-foreground cursor-pointer">
                     <Checkbox checked={overrideEnabled} onCheckedChange={(v) => setOverrideEnabled(!!v)} />
@@ -991,7 +1100,7 @@ export default function CreateBenefitApplicationPage() {
                 </div>
               )}
 
-              {eligibilityResult === "Not Eligible" && !canOverride && (
+              {eligibilityResult !== "Eligible" && !canOverride && (
                 <AlertBanner tone="danger" title="Eligibility override unavailable" description="You do not hold permissions to override system eligibility filters." />
               )}
 
@@ -1023,8 +1132,26 @@ export default function CreateBenefitApplicationPage() {
                 <div className="mt-4">
                   <FileUploader
                     label="Attach Supporting Document (optional)"
-                    fileName={fileMeta?.fileName}
-                    onFileSelect={(file) => setFileMeta(file ? { fileName: file.name, fileSize: `${Math.max(1, Math.round(file.size / 1024))} KB` } : null)}
+                    description="Select one or more images or documents."
+                    multiple
+                    disabled={isUploadingDocuments}
+                    onFilesSelect={(files) => {
+                      const known = new Set(supportingFiles.map(fileKey))
+                      const newFiles = files.filter((file) => !known.has(fileKey(file)))
+                      if (newFiles.length === 0) return
+                      setSupportingFiles((current) => [...current, ...newFiles])
+
+                      const savedBenefit = existingBenefit ?? (benefitDraft.draftId
+                        ? queryClient.getQueryData<BenefitApplication>(["benefits", benefitDraft.draftId])
+                        : undefined)
+                      if (savedBenefit) void uploadSupportingFiles(savedBenefit, newFiles)
+                    }}
+                  />
+                  <SupportingFilesList
+                    files={supportingFiles}
+                    documents={existingBenefit?.documents ?? []}
+                    uploadProgress={supportingUploadProgress}
+                    onRemove={(file) => setSupportingFiles((current) => current.filter((item) => item !== file))}
                   />
                 </div>
 
@@ -1090,19 +1217,20 @@ export default function CreateBenefitApplicationPage() {
           )}
 
           <SaveDraftButton
-            status={draftButtonStatus}
+            status={benefitDraft.status}
             lastSavedAt={benefitDraft.lastSavedAt}
             onClick={saveDraft} 
-            disabled={!memberId || isSubmitting} 
+            disabled={!memberId || isSubmitting || isUploadingDocuments}
           />
 
           {step < STEPS.length ? (
-            <Button onClick={goNext} disabled={!canProceedFromStep(step)} className="h-9 text-xs rounded-xl gap-1 shadow-2xs">
+            <Button variant="success" onClick={goNext} disabled={!canProceedFromStep(step)} className="h-9 text-xs rounded-xl gap-1 shadow-2xs">
               Next Step <ChevronRight className="size-3.5" />
             </Button>
           ) : (
-            <Button 
-              onClick={() => handleSubmit(false)} 
+            <Button
+              variant="success"
+              onClick={() => handleSubmit(false)}
               disabled={isSubmitting || isBlocked || !agree} 
               aria-busy={isSubmitting} 
               className="h-9 text-xs rounded-xl gap-1.5 shadow-md active:scale-97 transition-all"
@@ -1164,6 +1292,86 @@ export default function CreateBenefitApplicationPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function SupportingFilesList({ files, documents, uploadProgress, onRemove }: { files: File[]; documents: BenefitDocument[]; uploadProgress: Record<string, number>; onRemove: (file: File) => void }) {
+  const [localEntries, setLocalEntries] = React.useState<Array<{ file: File; url: string }>>([])
+
+  React.useEffect(() => {
+    const entries = files.map((file) => ({ file, url: URL.createObjectURL(file) }))
+    setLocalEntries(entries)
+    return () => entries.forEach((entry) => URL.revokeObjectURL(entry.url))
+  }, [files])
+
+  const imageGallery = [
+    ...localEntries.filter((entry) => isImageFile(entry.file.name)).map((entry) => ({ url: entry.url, name: entry.file.name })),
+    ...documents.filter((document) => isImageFile(document.fileName)).map((document) => ({ url: document.fileUrl, name: document.fileName })),
+  ]
+
+  if (localEntries.length === 0 && documents.length === 0) return null
+
+  return (
+    <div className="mt-3 space-y-2">
+      {localEntries.map(({ file, url }) => {
+        const progress = uploadProgress[fileKey(file)]
+        return (
+        <SupportingFileRow
+          key={`${file.name}-${file.size}-${file.lastModified}`}
+          name={file.name}
+          url={url}
+          status={progress !== undefined ? "Uploading" : "Ready to upload"}
+          progress={progress}
+          imageGallery={imageGallery}
+          onRemove={() => onRemove(file)}
+        />
+        )
+      })}
+      {documents.map((document) => (
+        <SupportingFileRow key={document.id} name={document.fileName} url={document.fileUrl} status="Uploaded" imageGallery={imageGallery} />
+      ))}
+    </div>
+  )
+}
+
+function SupportingFileRow({ name, url, status, progress, imageGallery, onRemove }: { name: string; url: string; status: "Ready to upload" | "Uploading" | "Uploaded"; progress?: number; imageGallery: Array<{ url: string; name: string }>; onRemove?: () => void }) {
+  const [previewOpen, setPreviewOpen] = React.useState(false)
+  const isImage = isImageFile(name)
+  const isPdf = isPdfFile(name)
+  const imageIndex = isImage ? Math.max(0, imageGallery.findIndex((image) => image.url === url)) : 0
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2.5">
+        {isImage ? <img src={url} alt={name} className="size-10 shrink-0 rounded-md border border-border object-cover" /> : <FileText className="size-5 shrink-0 text-primary" />}
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium text-foreground">{name}</p>
+          <p className={cn("text-[11px]", status === "Uploaded" ? "text-success" : status === "Uploading" ? "text-primary" : "text-muted-foreground")}>{status}</p>
+          {status === "Uploading" && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="h-1.5 w-36 max-w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary transition-[width] duration-200" style={{ width: `${progress ?? 0}%` }} />
+              </div>
+              <span className="text-[10px] tabular-nums text-primary">{progress ?? 0}%</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {(isImage || isPdf) && (
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Preview ${name}`} onClick={() => setPreviewOpen(true)}>
+            <Eye className="size-3.5" />
+          </Button>
+        )}
+        {onRemove && status !== "Uploading" && (
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} onClick={onRemove}>
+            <X className="size-3.5" />
+          </Button>
+        )}
+      </div>
+      {isImage && <ImagePreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} images={imageGallery} initialIndex={imageIndex} />}
+      {isPdf && <PDFPreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} url={url} name={name} />}
     </div>
   )
 }
@@ -1236,8 +1444,27 @@ function RecipientMultiSelect({
             ) : (
               <span className="flex min-w-0 flex-wrap gap-1.5">
                 {values.map((value) => (
-                  <span key={value} className="max-w-full truncate rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-                    {value}
+                  <span key={value} className="flex max-w-full items-center gap-1 rounded-full bg-primary/10 border border-primary/20 pl-2.5 pr-1 py-0.5 text-[11px] font-semibold text-primary">
+                    <span className="truncate">{value}</span>
+                    {/* span, not button — this whole chip list already sits inside the trigger's own <button>, and nested buttons are invalid HTML */}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggle(value)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter" && e.key !== " ") return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        toggle(value)
+                      }}
+                      className="shrink-0 rounded-full p-0.5 hover:bg-primary/20"
+                      aria-label={`Remove ${value}`}
+                    >
+                      <X className="size-3" />
+                    </span>
                   </span>
                 ))}
               </span>

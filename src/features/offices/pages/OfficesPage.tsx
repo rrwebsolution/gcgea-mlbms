@@ -13,8 +13,9 @@ import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { ExportButtons } from "@/components/shared/ExportButtons"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { listOffices, createOffice, updateOffice, toggleOfficeStatus } from "@/services/offices.service"
+import { listAllOffices, createOffice, updateOffice, toggleOfficeStatus } from "@/services/offices.service"
 import { formatDateShort } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import type { Office } from "@/types"
 import { OfficeFormDialog } from "@/features/offices/components/OfficeFormDialog"
 
@@ -27,10 +28,22 @@ export default function OfficesPage() {
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editingOffice, setEditingOffice] = React.useState<Office | undefined>(undefined)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["offices", { search, page, perPage }],
-    queryFn: () => listOffices({ search, page, perPage }),
+  // Fetches the full list once (shares its cache with OfficeSelect and every other picker
+  // that already calls listAllOffices) and pages/searches entirely client-side, mirroring
+  // OfficeController::index()'s search rule so results match what the equivalent server
+  // query used to return.
+  const { data: allOffices = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["offices", "all"],
+    queryFn: listAllOffices,
   })
+
+  const filteredOffices = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return allOffices
+    return allOffices.filter((o) => (o.name ?? "").toLowerCase().includes(q) || (o.code ?? "").toLowerCase().includes(q))
+  }, [allOffices, search])
+
+  const { data: pagedOffices, meta } = paginate(filteredOffices, page, perPage)
 
   const createMutation = useMutation({
     mutationFn: createOffice,
@@ -149,7 +162,7 @@ export default function OfficesPage() {
         </div>
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={pagedOffices}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
@@ -157,7 +170,7 @@ export default function OfficesPage() {
           emptyDescription="Try a different search term, or add a new office."
           enableColumnVisibility={false}
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
 
       <OfficeFormDialog

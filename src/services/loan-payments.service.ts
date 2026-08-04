@@ -12,7 +12,8 @@ export interface CreateLoanPaymentInput {
   amountPaid: number
   penalty: number
   paymentMethod: PaymentMethod
-  officialReceiptNumber: string
+  /** Omit to auto-generate one (e.g. payroll-deducted payments with no physical receipt). */
+  officialReceiptNumber?: string
   payrollReference?: string
   remarks?: string
 }

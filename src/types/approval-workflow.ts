@@ -23,10 +23,21 @@ export interface WorkflowStage {
 
 export type WorkflowModuleKey = "member_registration" | "loan_application" | "benefit_application" | "annual_budget" | "disbursement"
 
+/** The implicit "step 0" every workflow starts with — the creator submitting the record.
+ *  Not a row in workflow_stages (it isn't an approver step and isn't configurable), so it's
+ *  read-only display data, never sent back through the stages update endpoint. */
+export interface WorkflowSubmissionStage {
+  sequence: number
+  code: string
+  label: string
+  description: string
+}
+
 export interface WorkflowDefinition {
   id: string
   moduleKey: WorkflowModuleKey
   label: string
   isEnabled: boolean
+  submissionStage: WorkflowSubmissionStage
   stages: WorkflowStage[]
 }

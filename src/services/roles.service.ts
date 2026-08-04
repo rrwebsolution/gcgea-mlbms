@@ -1,5 +1,7 @@
 import type { PaginatedResponse, PaginationParams, PermissionCode, Role } from "@/types"
 import { api, getPaginated } from "@/lib/api"
+import { queryClient } from "@/lib/query-client"
+import { getLookups } from "@/services/lookups.service"
 
 function slugify(input: string): string {
   return input
@@ -37,7 +39,7 @@ export async function listRoles(params: RoleListParams = {}): Promise<PaginatedR
 }
 
 export async function listAllRoles(): Promise<Role[]> {
-  const { data } = await api.get<Role[]>("/roles/all")
+  const data = (await queryClient.fetchQuery({ queryKey: ["lookups"], queryFn: getLookups, staleTime: Infinity })).roles
   cachedRoles = data
   return data
 }

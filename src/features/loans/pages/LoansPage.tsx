@@ -16,9 +16,10 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { ReloanButton } from "@/features/loans/components/ReloanButton"
 import { Button } from "@/components/ui/button"
 import { CommandSelect } from "@/components/shared/CommandSelect"
-import { listLoans, deleteLoanApplication } from "@/services/loans.service"
+import { listAllLoans, deleteLoanApplication } from "@/services/loans.service"
 import { LOAN_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatMonthYear } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import { useAuth } from "@/contexts/AuthContext"
 import type { LoanApplication, LoanApplicationType, LoanStatus } from "@/types"
 
@@ -50,10 +51,32 @@ export default function LoansPage({ presetStatus, overdueOnly, activeOnly, title
 
   const officeFilter = searchParams.get("office") ?? undefined
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["loans", { search, status, applicationType, page, perPage, overdueOnly, activeOnly, officeFilter }],
-    queryFn: () => listLoans({ search, status: status || undefined, page, perPage, overdueOnly, activeOnly, office: officeFilter, applicationType: (applicationType || undefined) as LoanApplicationType | undefined }),
+  // Fetches the full loan list once (shares its cache with every other page that already
+  // calls listAllLoans — DirectPaymentsPage, MemberProfilePage, CreateLoanPaymentPage) and
+  // pages/searches/filters entirely client-side, mirroring LoanController::applyFilters()'s
+  // rules so results match what the equivalent server query used to return.
+  const { data: allLoans = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["loans", "all"],
+    queryFn: listAllLoans,
   })
+
+  const filteredLoans = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allLoans.filter((loan) => {
+      const matchesSearch = !q
+        || (loan.applicationNumber ?? "").toLowerCase().includes(q)
+        || (loan.memberName ?? "").toLowerCase().includes(q)
+        || (loan.memberNumber ?? "").toLowerCase().includes(q)
+      const matchesStatus = !status || loan.status === status
+      const matchesType = !applicationType || loan.applicationType === (applicationType as LoanApplicationType)
+      const matchesOffice = !officeFilter || loan.officeName === officeFilter
+      const matchesOverdue = !overdueOnly || loan.status === "Overdue"
+      const matchesActive = !activeOnly || (["Released", "Active", "Overdue", "Restructured"] as LoanStatus[]).includes(loan.status)
+      return matchesSearch && matchesStatus && matchesType && matchesOffice && matchesOverdue && matchesActive
+    })
+  }, [allLoans, search, status, applicationType, officeFilter, overdueOnly, activeOnly])
+
+  const { data: pagedLoans, meta } = paginate(filteredLoans, page, perPage)
 
   const selectedIds = Object.keys(rowSelection).filter((rowId) => rowSelection[rowId])
 
@@ -94,11 +117,11 @@ export default function LoansPage({ presetStatus, overdueOnly, activeOnly, title
   }
 
   const columns: ColumnDef<LoanApplication, unknown>[] = [
-    { accessorKey: "applicationNumber", header: "Application #", cell: ({ row }) => (
+    { accessorKey: "applicationNumber", header: "Application #", meta: { sticky: "left" }, cell: ({ row }) => (
         <Link to={`/loans/${row.original.id}`} className="font-medium text-primary hover:underline">{row.original.applicationNumber}</Link>
       ) },
     { accessorKey: "applicationDate", header: "Started Application", cell: ({ row }) => formatMonthYear(row.original.applicationDate) },
-    { accessorKey: "memberName", header: "Member Name" },
+    { accessorKey: "memberName", header: "Member Name", meta: { sticky: "left" } },
     { accessorKey: "officeName", header: "Office" },
     { accessorKey: "loanTypeName", header: "Loan Type" },
     {
@@ -205,18 +228,19 @@ export default function LoansPage({ presetStatus, overdueOnly, activeOnly, title
         </div>
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={pagedLoans}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
           emptyTitle="No loan applications found"
           emptyDescription="Try adjusting your search or filters."
-          enableRowSelection={canDeleteDrafts ? (row) => row.original.status === "Draft" : false}
+          enableRowSelection={canDeleteDrafts && !activeOnly ? (row) => row.original.status === "Draft" : false}
           rowSelection={rowSelection}
           onRowSelectionChange={setRowSelection}
           getRowId={(row) => row.id}
+          enableColumnVisibility={false}
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
 
       <ConfirmDialog

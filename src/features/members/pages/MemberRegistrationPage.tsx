@@ -3,13 +3,15 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Save, Sparkles, User, FileText, Briefcase, FilePlus2, Landmark } from "lucide-react"
+import { Loader2, Save, Sparkles, User, FileText, Briefcase, FilePlus2, Landmark, X, Eye } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
 import { OfficeCommandSelect } from "@/components/shared/OfficeCommandSelect"
 import { FileUploader } from "@/components/shared/FileUploader"
 import { DocumentGallery, type DocumentGalleryItem } from "@/components/shared/DocumentGallery"
+import { ImagePreviewDialog } from "@/components/shared/ImagePreviewDialog"
+import { PDFPreviewDialog } from "@/components/shared/PDFPreviewDialog"
 import { AddressCommandSelect } from "@/components/shared/AddressCommandSelect"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { FormSkeleton } from "@/components/shared/loaders/FormSkeleton"
@@ -42,9 +44,10 @@ import {
   uploadMemberPhoto,
   type MemberDraftInput,
 } from "@/services/members.service"
-import { calculateAge, calculateDurationLabel, formatDateShort } from "@/utils/format"
+import { calculateAge, calculateDurationLabel, formatCurrency, formatDateShort } from "@/utils/format"
+import { getSettings } from "@/services/settings.service"
 import { listEmploymentStatuses } from "@/services/employment-statuses.service"
-import { DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, IMAGE_EXTENSIONS, IMAGE_MIME_TYPES, type UploadStatus } from "@/lib/upload-validation"
+import { DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, IMAGE_EXTENSIONS, IMAGE_MIME_TYPES, isImageFile, isPdfFile, type UploadStatus } from "@/lib/upload-validation"
 import { cn } from "@/lib/utils"
 import type { ApiValidationError } from "@/lib/api"
 import type { DocumentCategory, Member } from "@/types"
@@ -90,6 +93,7 @@ export default function MemberRegistrationPage() {
   const [completionPercentage, setCompletionPercentage] = React.useState<number | undefined>(existingMember?.draftCompletionPercentage)
   const [profilePhoto, setProfilePhoto] = React.useState<File | null>(null)
   const [documents, setDocuments] = React.useState<Partial<Record<DocumentCategory, File | null>>>({})
+  const [otherDocuments, setOtherDocuments] = React.useState<File[]>([])
   const [validIdError, setValidIdError] = React.useState(false)
   const [appointmentDocumentError, setAppointmentDocumentError] = React.useState(false)
   const [membershipFormError, setMembershipFormError] = React.useState(false)
@@ -293,6 +297,22 @@ export default function MemberRegistrationPage() {
     onError: (err: Error) => toast.error(err.message || "Failed to remove document."),
   })
 
+  const otherDocumentsUploadMutation = useMutation({
+    mutationFn: async (files: File[]) => {
+      let member = existingMember!
+      for (const file of files) {
+        member = await uploadMemberDocument(id!, "Other Supporting Document", file)
+      }
+      return (await getMember(id!)) ?? member
+    },
+    onSuccess: (member) => {
+      queryClient.setQueryData(["members", id], member)
+      queryClient.invalidateQueries({ queryKey: ["members"] })
+      toast.success("Supporting documents uploaded.")
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to upload supporting documents."),
+  })
+
   function handlePhotoUpload(file: File) {
     if (isEdit) {
       photoUploadMutation.mutate(file)
@@ -349,7 +369,7 @@ export default function MemberRegistrationPage() {
     }
   }
 
-  const isAnyLiveUploadInProgress = photoSlot.status === "uploading" || Object.values(docSlots).some((s) => s.status === "uploading")
+  const isAnyLiveUploadInProgress = photoSlot.status === "uploading" || Object.values(docSlots).some((s) => s.status === "uploading") || otherDocumentsUploadMutation.isPending
 
   const wasExistingDraft = isEdit ? existingMember?.isDraft === true : false
   const memberDraft = useDraft<MemberDraftInput, Member>({
@@ -378,10 +398,21 @@ export default function MemberRegistrationPage() {
     } catch {}
   }
 
-  useAutosaveDraft(watch(), saveDraft, {
-    enabled: isDirty && Boolean(memberDraft.draftId) && !isAnyLiveUploadInProgress && (!isEdit || wasExistingDraft) && memberDraft.status !== "saving",
-    delayMs: 30000,
-  })
+  useAutosaveDraft(
+    watch(),
+    async (values) => {
+      const payload: MemberDraftInput = { ...values, beneficiaries: values.beneficiaries, asDraft: true }
+      try {
+        await memberDraft.save(payload, { silent: true })
+      } catch {
+        // already surfaced via memberDraft's onError toast
+      }
+    },
+    {
+      enabled: isDirty && Boolean(memberDraft.draftId) && !isAnyLiveUploadInProgress && (!isEdit || wasExistingDraft) && memberDraft.status !== "saving",
+      delayMs: 30000,
+    }
+  )
 
   const mutation = useMutation({
     mutationFn: async (values: MemberFormValues) => {
@@ -414,6 +445,13 @@ export default function MemberRegistrationPage() {
           } catch {
             setDocSlots((prev) => ({ ...prev, [category]: { status: "failed", progress: 0 } }))
             uploadFailures.push(category)
+          }
+        }
+        for (const file of otherDocuments) {
+          try {
+            member = await uploadMemberDocument(member.id, "Other Supporting Document", file)
+          } catch {
+            uploadFailures.push(file.name)
           }
         }
       }
@@ -513,7 +551,7 @@ export default function MemberRegistrationPage() {
 
   const hasMonthlyNetPay = Number(watch("netPay") ?? 0) > 0
   const visibleDocumentCategories = DOCUMENT_CATEGORIES.filter((category) => category !== "Payslip" || hasMonthlyNetPay)
-  const documentGalleryItems: DocumentGalleryItem[] = visibleDocumentCategories.map((category) => {
+  const documentGalleryItems: DocumentGalleryItem[] = visibleDocumentCategories.filter((category) => category !== "Other Supporting Document").map((category) => {
     const existingDoc = existingMember?.documents.find((d) => d.category === category)
     const hasFile = Boolean(documents[category] || existingDoc)
     const slot = docSlots[category]
@@ -549,6 +587,42 @@ export default function MemberRegistrationPage() {
         </div>
       ),
     }
+  })
+  const existingOtherDocuments = existingMember?.documents.filter((document) => document.category === "Other Supporting Document") ?? []
+  documentGalleryItems.push({
+    category: "Other Supporting Document",
+    node: (
+      <div className="rounded-xl border border-border/60 bg-card p-3 space-y-3 transition-all hover:border-border hover:shadow-xs">
+        <FileUploader
+          label="Other Supporting Documents (optional)"
+          description="Upload one or more optional images or documents."
+          accept={DOCUMENT_MIME_TYPES}
+          acceptExtensions={DOCUMENT_EXTENSIONS}
+          multiple
+          disabled={otherDocumentsUploadMutation.isPending}
+          onFilesSelect={(files) => {
+            if (isEdit) {
+              otherDocumentsUploadMutation.mutate(files)
+              return
+            }
+            setOtherDocuments((current) => {
+              const known = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`))
+              return [...current, ...files.filter((file) => !known.has(`${file.name}:${file.size}:${file.lastModified}`))]
+            })
+          }}
+        />
+        {(existingOtherDocuments.length > 0 || otherDocuments.length > 0) && (
+          <div className="space-y-2">
+            {existingOtherDocuments.map((document) => (
+              <OtherDocumentRow key={document.id} name={document.fileName} url={document.fileUrl} status={`Uploaded ${formatDateShort(document.uploadedAt)}`} onRemove={() => setRemoveTarget({ kind: "document", category: document.category, documentId: document.id })} />
+            ))}
+            {otherDocuments.map((file) => (
+              <OtherDocumentRow key={`${file.name}-${file.size}-${file.lastModified}`} file={file} status="Ready to upload" onRemove={() => setOtherDocuments((current) => current.filter((item) => item !== file))} />
+            ))}
+          </div>
+        )}
+      </div>
+    ),
   })
 
   return (
@@ -814,6 +888,31 @@ export default function MemberRegistrationPage() {
             <Field label="Monthly Net Pay" error={errors.netPay?.message}>
               <CurrencyInput value={watch("netPay")} onChange={(v) => setValue("netPay", v, { shouldDirty: true })} placeholder="Optional — used for income-tiered loan products" />
             </Field>
+            <div className="sm:col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Membership / Registration Fee" isCalculated>
+                    <Input value={formatCurrency(existingMember?.membershipFeePayment?.amount ?? getSettings().general.membershipRegistrationFee)} readOnly className="bg-background font-semibold text-foreground" />
+                  </Field>
+                  <Field label="Payment Method" isCalculated>
+                    <Input value={existingMember?.membershipFeePayment?.paymentMethod ?? "Cash"} readOnly className="bg-background font-medium text-foreground" />
+                  </Field>
+                  {existingMember?.membershipFeePayment && (
+                    <Field label="Payment Reference" isCalculated>
+                      <Input value={existingMember.membershipFeePayment.referenceNumber} readOnly className="bg-background font-medium text-foreground" />
+                    </Field>
+                  )}
+                  {isEdit && (
+                    <Field label="Payment Status" isCalculated>
+                      <Input value={existingMember?.membershipFeePayment?.status ?? (existingMember?.isDraft ? "Not posted — draft" : "No payment record")} readOnly className="bg-background font-medium text-foreground" />
+                    </Field>
+                  )}
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {existingMember?.membershipFeePayment
+                    ? `Posted on ${formatDateShort(existingMember.membershipFeePayment.paymentDate)} and received by ${existingMember.membershipFeePayment.receivedBy}.`
+                    : "This one-time fee will be posted automatically when the member registration is submitted. It is not recorded while saved as draft."}
+                </p>
+              </div>
             <Field label="Remarks" className="sm:col-span-2">
               <Textarea rows={2} placeholder="Additional notes about this member (optional)" {...register("remarks")} className="bg-background" />
             </Field>
@@ -884,7 +983,7 @@ export default function MemberRegistrationPage() {
               disabled={isSaving || isAnyLiveUploadInProgress}
             />
           )}
-          <Button type="submit" disabled={isSaving || isAnyLiveUploadInProgress} aria-busy={isSaving} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
+          <Button type="submit" variant="success" disabled={isSaving || isAnyLiveUploadInProgress} aria-busy={isSaving} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
             {isSaving ? <Loader2 className="animate-spin size-4" aria-hidden="true" /> : isDraftContext ? <FilePlus2 className="size-4" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}
             {isSaving ? "Saving changes…" : isDraftContext ? "Submit Registration" : isEdit ? "Save Changes" : "Register Member"}
           </Button>
@@ -918,6 +1017,41 @@ export default function MemberRegistrationPage() {
         isLoading={photoRemoveMutation.isPending || documentRemoveMutation.isPending}
         onConfirm={confirmRemove}
       />
+    </div>
+  )
+}
+
+function OtherDocumentRow({ file, name, url, status, onRemove }: { file?: File; name?: string; url?: string; status: string; onRemove: () => void }) {
+  const [previewOpen, setPreviewOpen] = React.useState(false)
+  const [localUrl, setLocalUrl] = React.useState<string>()
+  const fileName = file?.name ?? name ?? "Supporting document"
+
+  React.useEffect(() => {
+    if (!file) return
+    const objectUrl = URL.createObjectURL(file)
+    setLocalUrl(objectUrl)
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [file])
+
+  const previewUrl = localUrl ?? url
+  const isImage = isImageFile(fileName)
+  const isPdf = isPdfFile(fileName)
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2.5">
+        {isImage && previewUrl ? <img src={previewUrl} alt={fileName} className="size-10 shrink-0 rounded-md border border-border object-cover" /> : <FileText className="size-5 shrink-0 text-primary" />}
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium text-foreground">{fileName}</p>
+          <p className="text-[11px] text-muted-foreground">{status}</p>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {previewUrl && (isImage || isPdf) && <Button type="button" variant="ghost" size="icon-sm" aria-label={`Preview ${fileName}`} onClick={() => setPreviewOpen(true)}><Eye className="size-3.5" /></Button>}
+        <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${fileName}`} onClick={onRemove}><X className="size-3.5" /></Button>
+      </div>
+      {isImage && previewUrl && <ImagePreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} images={[{ url: previewUrl, name: fileName }]} />}
+      {isPdf && previewUrl && <PDFPreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} url={previewUrl} name={fileName} />}
     </div>
   )
 }

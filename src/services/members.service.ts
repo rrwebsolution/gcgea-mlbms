@@ -12,13 +12,18 @@ export interface MemberListParams extends PaginationParams {
 }
 
 export function isProfileComplete(member: Member): boolean {
-  return Boolean(
-    member.email &&
-      member.cellphoneNumber &&
-      member.permanentAddress &&
-      (member.beneficiaries?.length ?? 0) > 0 &&
-      (member.documents?.length ?? 0) > 0
-  )
+  return missingProfileFields(member).length === 0
+}
+
+/** Human-readable labels for whichever fields `isProfileComplete` is missing, so eligibility checks can tell the user exactly what to edit. */
+export function missingProfileFields(member: Member): string[] {
+  const missing: string[] = []
+  if (!member.email) missing.push("Email Address")
+  if (!member.cellphoneNumber) missing.push("Cellphone Number")
+  if (!member.permanentAddress) missing.push("Permanent Address")
+  if ((member.beneficiaries?.length ?? 0) === 0) missing.push("Beneficiaries")
+  if ((member.documents?.length ?? 0) === 0) missing.push("Documents")
+  return missing
 }
 
 export function profileCompleteness(member: Member): number {
@@ -41,6 +46,19 @@ export async function listMembers(params: MemberListParams = {}): Promise<Pagina
 
 export async function listArchivedMembers(params: PaginationParams = {}): Promise<PaginatedResponse<Member>> {
   return getPaginated<Member>("/members/archived", params)
+}
+
+/**
+ * Backs the Members management page's three views (browse/archived/drafts) with a single
+ * full-fetch each, so it can search/sort/filter/paginate entirely client-side. Distinct from
+ * listAllActiveMembers() below, which is the "active, non-archived, non-draft" picklist used
+ * by pickers elsewhere (bulk contribution entry, etc.) and must keep its existing behavior.
+ */
+export async function listAllMembersForBrowse(mode: { archived?: boolean; draftsOnly?: boolean } = {}): Promise<Member[]> {
+  const { data } = await api.get<Member[]>("/members/all", {
+    params: mode.archived ? { archived: true } : mode.draftsOnly ? { draftsOnly: true } : { browseAll: true },
+  })
+  return data
 }
 
 export async function getMember(id: string): Promise<Member | undefined> {
@@ -98,13 +116,13 @@ export async function updateMemberMembershipStatus(
  */
 export type MemberDraftInput = Partial<CreateMemberInput> & { asDraft: true; draftCurrentStep?: number }
 
-export async function createMemberDraft(input: MemberDraftInput): Promise<Member> {
-  const { data } = await api.post<Member>("/members", input)
+export async function createMemberDraft(input: MemberDraftInput, options?: { silent?: boolean }): Promise<Member> {
+  const { data } = await api.post<Member>("/members", input, { silent: options?.silent })
   return data
 }
 
-export async function updateMemberDraft(id: string, input: MemberDraftInput): Promise<Member> {
-  const { data } = await api.put<Member>(`/members/${id}`, input)
+export async function updateMemberDraft(id: string, input: MemberDraftInput, options?: { silent?: boolean }): Promise<Member> {
+  const { data } = await api.put<Member>(`/members/${id}`, input, { silent: options?.silent })
   return data
 }
 

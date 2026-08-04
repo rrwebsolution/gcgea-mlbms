@@ -12,10 +12,11 @@ import { DraftStatusBadge } from "@/components/shared/DraftStatusBadge"
 import { DraftCompletionBar } from "@/components/shared/DraftCompletionBar"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
-import { listMembers } from "@/services/members.service"
-import { listLoans } from "@/services/loans.service"
-import { listBenefits } from "@/services/benefits.service"
+import { listAllMembersForBrowse } from "@/services/members.service"
+import { listAllLoans } from "@/services/loans.service"
+import { listAllBenefits } from "@/services/benefits.service"
 import { formatDateTime } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 
 type DraftModule = "Member" | "Loan" | "Benefit"
 
@@ -56,23 +57,26 @@ export default function DraftCenterPage() {
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
 
+  // Previously capped at perPage: 100 per module — silently hiding any draft beyond the
+  // 100th. Now pulls each module's full list (shared cache with MembersPage's Drafts view,
+  // LoansPage, BenefitsPage) and filters to Draft status client-side instead.
   const { data: memberDrafts, isLoading: isLoadingMembers } = useQuery({
-    queryKey: ["members", { draftsOnly: true, perPage: 100 }],
-    queryFn: () => listMembers({ draftsOnly: true, perPage: 100 }),
+    queryKey: ["members", "all", "drafts"],
+    queryFn: () => listAllMembersForBrowse({ draftsOnly: true }),
   })
-  const { data: loanDrafts, isLoading: isLoadingLoans } = useQuery({
-    queryKey: ["loans", { status: "Draft", perPage: 100 }],
-    queryFn: () => listLoans({ status: "Draft", perPage: 100 }),
+  const { data: allLoans, isLoading: isLoadingLoans } = useQuery({
+    queryKey: ["loans", "all"],
+    queryFn: listAllLoans,
   })
-  const { data: benefitDrafts, isLoading: isLoadingBenefits } = useQuery({
-    queryKey: ["benefits", { status: "Draft", perPage: 100 }],
-    queryFn: () => listBenefits({ status: "Draft", perPage: 100 }),
+  const { data: allBenefits, isLoading: isLoadingBenefits } = useQuery({
+    queryKey: ["benefits", "all"],
+    queryFn: listAllBenefits,
   })
 
   const isLoading = isLoadingMembers || isLoadingLoans || isLoadingBenefits
 
   const rows: DraftRow[] = React.useMemo(() => {
-    const memberRows: DraftRow[] = (memberDrafts?.data ?? []).map((m) => ({
+    const memberRows: DraftRow[] = (memberDrafts ?? []).map((m) => ({
       key: `member-${m.id}`,
       module: "Member",
       reference: m.draftReferenceNo ?? "Untitled Member Draft",
@@ -82,7 +86,7 @@ export default function DraftCenterPage() {
       lastSavedAt: m.updatedAt,
       editPath: `/members/${m.id}/edit`,
     }))
-    const loanRows: DraftRow[] = (loanDrafts?.data ?? []).map((l) => ({
+    const loanRows: DraftRow[] = (allLoans ?? []).filter((l) => l.status === "Draft").map((l) => ({
       key: `loan-${l.id}`,
       module: "Loan",
       reference: l.applicationNumber || "Untitled Loan Draft",
@@ -91,7 +95,7 @@ export default function DraftCenterPage() {
       lastSavedAt: l.updatedAt,
       editPath: `/loans/${l.id}/edit`,
     }))
-    const benefitRows: DraftRow[] = (benefitDrafts?.data ?? []).map((b) => ({
+    const benefitRows: DraftRow[] = (allBenefits ?? []).filter((b) => b.status === "Draft").map((b) => ({
       key: `benefit-${b.id}`,
       module: "Benefit",
       reference: b.applicationNumber || "Untitled Benefit Draft",
@@ -101,24 +105,25 @@ export default function DraftCenterPage() {
       editPath: `/benefits/${b.id}/edit`,
     }))
     return [...memberRows, ...loanRows, ...benefitRows].sort((a, b) => b.lastSavedAt.localeCompare(a.lastSavedAt))
-  }, [memberDrafts, loanDrafts, benefitDrafts])
+  }, [memberDrafts, allLoans, allBenefits])
 
   const filteredRows = rows.filter((row) => {
     if (moduleFilter !== "all" && row.module !== moduleFilter) return false
     if (staleOnly && ageInDays(row.lastSavedAt) < STALE_AFTER_DAYS) return false
     if (search) {
       const term = search.toLowerCase()
-      if (!row.reference.toLowerCase().includes(term) && !row.recordTitle.toLowerCase().includes(term) && !row.createdBy.toLowerCase().includes(term)) {
+      if (
+        !(row.reference ?? "").toLowerCase().includes(term)
+        && !(row.recordTitle ?? "").toLowerCase().includes(term)
+        && !(row.createdBy ?? "").toLowerCase().includes(term)
+      ) {
         return false
       }
     }
     return true
   })
 
-  const totalRecords = filteredRows.length
-  const totalPages = Math.max(1, Math.ceil(totalRecords / perPage))
-  const currentPage = Math.min(page, totalPages)
-  const pageRows = filteredRows.slice((currentPage - 1) * perPage, currentPage * perPage)
+  const { data: pageRows, meta } = paginate(filteredRows, page, perPage)
 
   const staleCount = rows.filter((row) => ageInDays(row.lastSavedAt) >= STALE_AFTER_DAYS).length
   const memberCount = rows.filter((r) => r.module === "Member").length
@@ -238,7 +243,7 @@ export default function DraftCenterPage() {
         
         {/* Pagination element */}
         <Pagination
-          meta={{ currentPage, perPage, totalRecords, totalPages }}
+          meta={meta}
           onPageChange={setPage}
           onPerPageChange={(n) => { setPerPage(n); setPage(1) }}
         />

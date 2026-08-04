@@ -11,7 +11,16 @@ export async function listLoanImportBatches(params: ListLoanImportBatchesParams 
   return getPaginated<LoanImportBatchSummary>("/loan-imports/history", params)
 }
 
+export async function listAllLoanImportBatches(): Promise<LoanImportBatchSummary[]> {
+  const { data } = await api.get<LoanImportBatchSummary[]>("/loan-imports/history/all")
+  return data
+}
+
 export async function getLoanImportBatch(token: string): Promise<LoanImportBatchDetail> {
   const { data } = await api.get<LoanImportBatchDetail>(`/loan-imports/history/${token}`)
   return data
+}
+
+export async function undoLoanImportBatch(token: string): Promise<void> {
+  await api.post(`/loan-imports/history/${token}/undo`)
 }

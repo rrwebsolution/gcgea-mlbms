@@ -1,5 +1,7 @@
-import type { ApprovalHistoryEntry, BenefitApplication, BenefitType, BenefitTypeFyAmountInput, BenefitTypeProrationTierInput, PaginatedResponse, PaginationParams } from "@/types"
+import type { ApprovalHistoryEntry, BenefitApplication, BenefitDocument, BenefitType, BenefitTypeFyAmountInput, BenefitTypeProrationTierInput, PaginatedResponse, PaginationParams } from "@/types"
 import { api, getPaginated } from "@/lib/api"
+import { queryClient } from "@/lib/query-client"
+import { getLookups } from "@/services/lookups.service"
 
 type BenefitTypeInput = Omit<BenefitType, "id" | "prorationTiers" | "fyAmounts"> & {
   prorationTiers: BenefitTypeProrationTierInput[]
@@ -45,8 +47,8 @@ export async function returnBenefitForRevision(id: string, remarks: string): Pro
   return data
 }
 
-export async function releaseBenefit(id: string, remarks?: string): Promise<BenefitApplication> {
-  const { data } = await api.post<BenefitApplication>(`/benefits/${id}/release`, { remarks })
+export async function releaseBenefit(id: string, remarks?: string, actualReleasedAmount?: number): Promise<BenefitApplication> {
+  const { data } = await api.post<BenefitApplication>(`/benefits/${id}/release`, { remarks, actualReleasedAmount })
   return data
 }
 
@@ -56,7 +58,7 @@ export async function releaseBenefit(id: string, remarks?: string): Promise<Bene
 let cachedBenefitTypes: BenefitType[] = []
 
 export async function listBenefitTypes(): Promise<BenefitType[]> {
-  const { data } = await api.get<BenefitType[]>("/benefit-types")
+  const data = (await queryClient.fetchQuery({ queryKey: ["lookups"], queryFn: getLookups, staleTime: Infinity })).benefitTypes
   cachedBenefitTypes = data
   return data
 }
@@ -115,15 +117,25 @@ export interface CreateBenefitApplicationInput {
   overrideReason?: string
 }
 
-export async function createBenefitApplication(input: CreateBenefitApplicationInput): Promise<BenefitApplication> {
-  const { data } = await api.post<BenefitApplication>("/benefits", input)
+export async function createBenefitApplication(input: CreateBenefitApplicationInput, options?: { silent?: boolean }): Promise<BenefitApplication> {
+  const { data } = await api.post<BenefitApplication>("/benefits", input, { silent: options?.silent })
   cachedBenefits = [data, ...cachedBenefits]
   return data
 }
 
+export async function uploadBenefitDocument(benefitId: string, file: File, onUploadProgress?: (percent: number) => void): Promise<BenefitDocument> {
+  const form = new FormData()
+  form.append("file", file)
+  const { data } = await api.post<BenefitDocument>(`/benefits/${benefitId}/documents`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    onUploadProgress: (event) => onUploadProgress?.(event.total ? Math.round((event.loaded / event.total) * 100) : 0),
+  })
+  return data
+}
+
 /** Edits a draft application in place — only allowed while the benefit is still status "Draft". */
-export async function updateBenefitApplication(id: string, input: CreateBenefitApplicationInput): Promise<BenefitApplication> {
-  const { data } = await api.put<BenefitApplication>(`/benefits/${id}`, input)
+export async function updateBenefitApplication(id: string, input: CreateBenefitApplicationInput, options?: { silent?: boolean }): Promise<BenefitApplication> {
+  const { data } = await api.put<BenefitApplication>(`/benefits/${id}`, input, { silent: options?.silent })
   cachedBenefits = cachedBenefits.map((b) => (b.id === data.id ? data : b))
   return data
 }

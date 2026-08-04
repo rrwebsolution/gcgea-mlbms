@@ -37,8 +37,7 @@ function currentPeriod(): string {
 
 function defaultPostingDate(): string {
   const now = new Date()
-  const day = Math.min(getSettings().contribution.contributionDueDay, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
 }
 
 function defaultPaymentMethodSetting(): PaymentMethod {
@@ -158,6 +157,12 @@ export default function ContributionFormPage() {
     setEditPaymentDate(existing.paymentDate)
     setEditRemarks(existing.remarks ?? "")
   }, [existing])
+
+  React.useEffect(() => {
+    if (isEditMode && editType === "Monthly Dues") {
+      setEditAmount(contributionSettings.defaultMonthlyContribution)
+    }
+  }, [isEditMode, editType, contributionSettings.defaultMonthlyContribution])
 
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
   const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes })
@@ -411,9 +416,29 @@ export default function ContributionFormPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
-                Amount <span className="text-destructive font-bold">*</span>
+                Monthly Dues <span className="text-destructive font-bold">*</span>
               </Label>
-              <CurrencyInput value={editAmount} onChange={setEditAmount} />
+              <CurrencyInput
+                value={editAmount}
+                onChange={() => {}}
+                readOnly
+                disabled
+                className="bg-muted/40"
+              />
+              <p className="text-[11px] text-muted-foreground">Based on the Monthly Contribution configured in Contribution Settings.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                Cash Pabaon
+              </Label>
+              <CurrencyInput
+                value={existing?.cashPabaonAmount ?? globalPabaonAmount}
+                onChange={() => {}}
+                readOnly
+                disabled
+                className="bg-muted/40"
+              />
+              <p className="text-[11px] text-muted-foreground">Read-only amount posted for the same contribution period.</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payment Method</Label>
@@ -587,11 +612,11 @@ export default function ContributionFormPage() {
         <Button variant="outline" onClick={() => setShowCancelConfirm(true)} className="h-9 text-xs">Cancel</Button>
         <div className="flex flex-wrap gap-2">
           {!isEditMode && (
-            <Button variant="secondary" onClick={() => handleSave(true)} disabled={!canSave || isSaving} className="h-9 text-xs gap-1.5 active:scale-97 transition-all">
+            <Button variant="default" onClick={() => handleSave(true)} disabled={!canSave || isSaving} className="h-9 text-xs gap-1.5 active:scale-97 transition-all">
               {isSaving && pendingAddAnother ? <Loader2 className="animate-spin size-3.5" /> : <Save className="size-3.5" />} Save &amp; Add Another
             </Button>
           )}
-          <Button onClick={() => handleSave(false)} disabled={!canSave || isSaving} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
+          <Button variant="success" onClick={() => handleSave(false)} disabled={!canSave || isSaving} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
             {isSaving && !pendingAddAnother ? <Loader2 className="animate-spin size-3.5" /> : <Save className="size-3.5" />} {isEditMode ? "Save Changes" : entries.length > 1 ? `Save ${entries.length} Entries` : "Save"}
           </Button>
         </div>

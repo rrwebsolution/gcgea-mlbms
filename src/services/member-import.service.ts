@@ -98,9 +98,23 @@ export async function listMemberImportBatches(params: ListMemberImportBatchesPar
   return getPaginated<MemberImportBatchSummary>("/member-imports", params)
 }
 
+export async function listAllMemberImportBatches(): Promise<MemberImportBatchSummary[]> {
+  const { data } = await api.get<MemberImportBatchSummary[]>("/member-imports/all")
+  return data
+}
+
 export async function getMemberImportBatch(token: string): Promise<MemberImportBatchDetail> {
   const { data } = await api.get<MemberImportBatchDetail>(`/member-imports/${token}`)
   return data
+}
+
+/**
+ * Reverts a committed batch: deletes the members/beneficiaries/legacy loan drafts it
+ * created. Only offered in the UI for the most recent batch — undoing an older one could
+ * also delete records a later import has since built on top of (approvals, edits, etc.).
+ */
+export async function undoMemberImportBatch(token: string): Promise<void> {
+  await api.post(`/member-imports/${token}/undo`)
 }
 
 /** Downloads via the authenticated axios client — a plain `<a href>` can't reliably carry the Sanctum session cookie cross-origin. */

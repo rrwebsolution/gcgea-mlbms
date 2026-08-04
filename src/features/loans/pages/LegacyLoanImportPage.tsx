@@ -10,6 +10,11 @@ import { commitLegacyLoans, previewLegacyLoans, type LegacyLoanPreview } from "@
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" })
 
+function currentMonth(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+}
+
 function errorMessage(error: any, fallback: string) {
   const validationErrors = error?.response?.data?.errors
   const firstValidationError = validationErrors
@@ -20,7 +25,7 @@ function errorMessage(error: any, fallback: string) {
 
 export default function LegacyLoanImportPage() {
   const [file, setFile] = useState<File | null>(null)
-  const [period, setPeriod] = useState("2026-01")
+  const [period, setPeriod] = useState(currentMonth)
   const [preview, setPreview] = useState<LegacyLoanPreview | null>(null)
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [resolvedMatches, setResolvedMatches] = useState<Record<string, string>>({})

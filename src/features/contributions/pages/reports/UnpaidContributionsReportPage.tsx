@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowLeft, Building2, Download, RotateCcw, Users, UserX 
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { getAllContributions, getContributionPeriods } from "@/services/contributions.service"
 import { getAllActiveMembers } from "@/services/members.service"
 import { downloadCsv } from "@/utils/csv"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 interface Filters {
   period: string
@@ -39,7 +40,7 @@ export default function UnpaidContributionsReportPage() {
   const defaultFilters: Filters = { period: periods[0] ?? "", office: "" }
 
   const [draft, setDraft] = React.useState<Filters>(defaultFilters)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(defaultFilters)
 
   const rows = React.useMemo<UnpaidRow[]>(() => {
     if (!applied || !applied.period) return []
@@ -74,7 +75,7 @@ export default function UnpaidContributionsReportPage() {
 
   function handleReset() {
     setDraft(defaultFilters)
-    setApplied(null)
+    setApplied(defaultFilters)
   }
 
   function handleExportCsv() {
@@ -119,7 +120,7 @@ export default function UnpaidContributionsReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate} disabled={!draft.period}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} disabled={!draft.period} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="contributions.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -157,7 +158,7 @@ export default function UnpaidContributionsReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No unpaid members"

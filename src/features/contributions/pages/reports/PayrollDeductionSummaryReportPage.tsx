@@ -6,7 +6,7 @@ import { ArrowLeft, Banknote, Download, Hash, RotateCcw, Wallet } from "lucide-r
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import { getAllContributions, getContributionPeriods } from "@/services/contribu
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
 import type { Contribution } from "@/types"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 interface Filters {
   period: string
@@ -34,7 +35,7 @@ interface OfficeTotal {
 
 export default function PayrollDeductionSummaryReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
 
   const periods = React.useMemo(() => getContributionPeriods(), [])
 
@@ -76,7 +77,7 @@ export default function PayrollDeductionSummaryReportPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   function handleExportCsv() {
@@ -90,7 +91,15 @@ export default function PayrollDeductionSummaryReportPage() {
 
   const columns: ColumnDef<Contribution, unknown>[] = [
     { accessorKey: "payrollReference", header: "Payroll Reference", cell: ({ row }) => row.original.payrollReference || "—" },
-    { accessorKey: "memberName", header: "Member" },
+    {
+      accessorKey: "memberName",
+      header: "Member",
+      cell: ({ row }) => (
+        <Link to={`/contributions/${row.original.id}`} className="font-medium text-foreground hover:text-primary hover:underline">
+          {row.original.memberName}
+        </Link>
+      ),
+    },
     { accessorKey: "officeName", header: "Office" },
     { accessorKey: "contributionPeriod", header: "Period" },
     { accessorKey: "amount", header: "Amount", cell: ({ row }) => formatCurrency(row.original.amount) },
@@ -131,7 +140,7 @@ export default function PayrollDeductionSummaryReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="contributions.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -169,7 +178,7 @@ export default function PayrollDeductionSummaryReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No payroll deductions found"

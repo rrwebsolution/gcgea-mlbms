@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
 import { ProfileCompleteness } from "@/components/shared/ProfileCompleteness"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { getAllActiveMembers, isProfileComplete, profileCompleteness } from "@/services/members.service"
 import { downloadCsv } from "@/utils/csv"
 import type { Member } from "@/types"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const PIE_COLORS = ["var(--color-destructive)", "var(--color-success)"]
 
@@ -26,7 +27,7 @@ const EMPTY_FILTERS: Filters = { office: "" }
 
 export default function IncompleteMemberProfilesReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
 
   const allMembers = React.useMemo(() => {
     if (!applied) return []
@@ -58,7 +59,7 @@ export default function IncompleteMemberProfilesReportPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   function handleExportCsv() {
@@ -93,7 +94,7 @@ export default function IncompleteMemberProfilesReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="members.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -130,7 +131,7 @@ export default function IncompleteMemberProfilesReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No incomplete profiles found"

@@ -94,3 +94,26 @@ export async function getIncompleteProfiles(limit = 5): Promise<Member[]> {
   const { data } = await api.get<Member[]>("/dashboard/incomplete-profiles", { params: { limit } })
   return data
 }
+
+/** Everything the Dashboard page renders, in one request — see DashboardController::overview(). */
+export interface DashboardOverview {
+  summary: DashboardSummary
+  monthlyReleases: { month: string; amount: number }[]
+  monthlyCollections: { month: string; contributions: number; loanPayments: number }[]
+  loanStatus: { status: string; count: number }[]
+  benefitDistribution: { type: string; count: number }[]
+  membersPerOffice: { office: string; count: number }[]
+  membershipGrowth: { year: string; count: number }[]
+  recentLoans: LoanApplication[]
+  recentPayments: LoanPayment[]
+  upcomingDue: UpcomingDueEntry[]
+  overdueLoans: LoanApplication[]
+  recentBenefits: BenefitApplication[]
+  recentMembers: Member[]
+  incompleteProfiles: Member[]
+}
+
+export async function getDashboardOverview(limit = 5): Promise<DashboardOverview> {
+  const { data } = await api.get<DashboardOverview>("/dashboard/overview", { params: { limit } })
+  return data
+}

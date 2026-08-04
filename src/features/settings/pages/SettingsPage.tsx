@@ -42,6 +42,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { CommandSelect } from "@/components/shared/CommandSelect"
@@ -692,6 +693,13 @@ export default function SettingsPage() {
                     hideSearch
                   />
                 </Field>
+                <Field label="Default Membership / Registration Fee">
+                  <CurrencyInput
+                    value={settings.general.membershipRegistrationFee}
+                    onChange={(value) => patch("general", { membershipRegistrationFee: Math.max(0, value || 0) })}
+                    placeholder="100.00"
+                  />
+                </Field>
               </div>
               <div className="mt-4">
                 <ToggleField label="Maintenance Mode" description="Temporarily restrict access while performing system maintenance." checked={settings.general.maintenanceMode} onCheckedChange={(v) => patch("general", { maintenanceMode: v })} />
@@ -749,7 +757,7 @@ export default function SettingsPage() {
                 {(Object.keys(settings.numbering) as (keyof SystemSettings["numbering"])[]).map((key) => (
                   <NumberingFormatRow
                     key={key}
-                    label={{ member: "Member Number", loan: "Loan Application Number", loanPayment: "Loan Payment Number", contribution: "Contribution Reference Number", benefit: "Benefit Application Number", benefitRelease: "Benefit Release Number" }[key]}
+                    label={{ member: "Member Number", loan: "Loan Application Number", loanPayment: "Loan Payment Number", officialReceipt: "Official Receipt Number (auto-assigned)", contribution: "Contribution Reference Number", benefit: "Benefit Application Number", benefitRelease: "Benefit Release Number" }[key]}
                     config={settings.numbering[key]}
                     onChange={(next) => patch("numbering", { [key]: next } as Partial<SystemSettings["numbering"]>)}
                   />
@@ -782,7 +790,14 @@ export default function SettingsPage() {
                     className="h-10 text-sm"
                   />
                 </Field>
-                <Field label="Default Penalty Rate (%)"><Input type="number" min={0} max={100} step="0.01" value={settings.loan.defaultPenaltyRate} onChange={(e) => patch("loan", { defaultPenaltyRate: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })} className="h-10 text-sm" /></Field>
+                <Field label="Default Penalty Rate (%)">
+                  <Input type="number" min={0} max={100} step="0.01" value={settings.loan.defaultPenaltyRate} onChange={(e) => patch("loan", { defaultPenaltyRate: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })} className="h-10 text-sm" />
+                  {settings.loan.defaultPenaltyRate > 3 && (
+                    <p className="text-[11px] text-warning">
+                      Above 3%/month — combined with loan interest, rates over ~5%/month have been struck down by Philippine courts as unconscionable (Civil Code Art. 1229). Confirm this matches GCGEA's board resolution before saving.
+                    </p>
+                  )}
+                </Field>
                 <Field label="Grace Period (Days)"><Input type="number" min={0} max={365} value={settings.loan.gracePeriodDays} onChange={(e) => patch("loan", { gracePeriodDays: Math.min(365, Math.max(0, Number(e.target.value) || 0)) })} className="h-10 text-sm" /></Field>
                 <Field label="Default Payment Method">
                   <CommandSelect
@@ -1004,6 +1019,7 @@ export default function SettingsPage() {
                 <ToggleField label="Allow Eligibility Override" checked={settings.benefit.allowEligibilityOverride} onCheckedChange={(v) => patch("benefit", { allowEligibilityOverride: v })} />
                 <ToggleField label="Require Supporting Documents" checked={settings.benefit.requireSupportingDocuments} onCheckedChange={(v) => patch("benefit", { requireSupportingDocuments: v })} />
                 <ToggleField label="Allow Multiple Pending Applications" checked={settings.benefit.allowMultiplePendingApplications} onCheckedChange={(v) => patch("benefit", { allowMultiplePendingApplications: v })} />
+                <ToggleField label="Require Retired Status for Retirement Benefit" checked={settings.benefit.requireRetiredStatusForRetirementBenefit} onCheckedChange={(v) => patch("benefit", { requireRetiredStatusForRetirementBenefit: v })} />
               </div>
               <BenefitComputationSettingsCard
                 ref={benefitComputationRef}

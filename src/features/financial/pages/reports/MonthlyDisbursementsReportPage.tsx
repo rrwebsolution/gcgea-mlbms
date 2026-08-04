@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getMonthlyDisbursementReport } from "@/services/disbursements.service"
 import { formatCurrency } from "@/utils/format"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const currentYear = new Date().getFullYear()
@@ -36,7 +37,7 @@ export default function MonthlyDisbursementsReportPage() {
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm print:hidden">
         <div className="flex items-end gap-3">
           <div className="space-y-1.5"><Label>Reporting Year</Label><Input className="w-44" type="number" min={2000} max={2100} value={draftYear} onChange={(event) => setDraftYear(Number(event.target.value))} /></div>
-          <Button size="sm" onClick={() => setYear(Math.min(2100, Math.max(2000, Math.trunc(draftYear))))}><CalendarDays /> Generate</Button>
+          <ReportGenerateButton onGenerate={() => setYear(Math.min(2100, Math.max(2000, Math.trunc(draftYear))))} />
         </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

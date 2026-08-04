@@ -6,15 +6,17 @@ import { format, parseISO } from "date-fns"
 import { ArrowLeft, Banknote, Download, RotateCcw, TrendingUp, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { ColumnDef } from "@tanstack/react-table"
 import { getAllLoanPayments } from "@/services/loan-payments.service"
-import { formatCurrency } from "@/utils/format"
+import { formatCurrency, formatDateShort } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
+import type { LoanPayment } from "@/types"
 
 function monthTick(value: string) {
   try {
@@ -40,18 +42,21 @@ interface MonthlyRow {
 
 export default function LoanCollectionsReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
 
-  const rows = React.useMemo<MonthlyRow[]>(() => {
+  const payments = React.useMemo<LoanPayment[]>(() => {
     if (!applied) return []
-    const filtered = getAllLoanPayments().filter((p) => {
+    return getAllLoanPayments().filter((p) => {
       if (p.status !== "Posted") return false
       if (applied.dateFrom && p.paymentDate < applied.dateFrom) return false
       if (applied.dateTo && p.paymentDate > applied.dateTo) return false
       return true
-    })
+    }).sort((a, b) => b.paymentDate.localeCompare(a.paymentDate))
+  }, [applied])
+
+  const rows = React.useMemo<MonthlyRow[]>(() => {
     const map = new Map<string, { amount: number; count: number }>()
-    for (const p of filtered) {
+    for (const p of payments) {
       const period = p.paymentDate.slice(0, 7)
       const entry = map.get(period) ?? { amount: 0, count: 0 }
       entry.amount += p.amountPaid
@@ -61,7 +66,7 @@ export default function LoanCollectionsReportPage() {
     return Array.from(map.entries())
       .map(([period, v]) => ({ period, amount: v.amount, count: v.count, average: v.amount / v.count }))
       .sort((a, b) => a.period.localeCompare(b.period))
-  }, [applied])
+  }, [payments])
 
   const summary = React.useMemo(() => {
     const totalCollected = rows.reduce((sum, r) => sum + r.amount, 0)
@@ -80,23 +85,33 @@ export default function LoanCollectionsReportPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   function handleExportCsv() {
     downloadCsv(
       "loan-collections-report.csv",
-      ["Period", "Payments", "Total Collected", "Average"],
-      rows.map((r) => [monthTick(r.period), r.count, r.amount.toFixed(2), r.average.toFixed(2)])
+      ["Payment Reference", "Member", "Loan Application", "Payment Date", "Amount Paid", "Method"],
+      payments.map((p) => [p.paymentReferenceNumber, p.memberName, p.loanApplicationNumber, p.paymentDate, p.amountPaid.toFixed(2), p.paymentMethod])
     )
     toast.success("Loan collections report exported to CSV.")
   }
 
-  const columns: ColumnDef<MonthlyRow, unknown>[] = [
-    { accessorKey: "period", header: "Period", cell: ({ row }) => monthTick(row.original.period) },
-    { accessorKey: "count", header: "Payments" },
-    { accessorKey: "amount", header: "Total Collected", cell: ({ row }) => formatCurrency(row.original.amount) },
-    { accessorKey: "average", header: "Average", cell: ({ row }) => formatCurrency(row.original.average) },
+  const columns: ColumnDef<LoanPayment, unknown>[] = [
+    { accessorKey: "paymentReferenceNumber", header: "Payment Reference" },
+    { accessorKey: "memberName", header: "Member" },
+    {
+      accessorKey: "loanApplicationNumber",
+      header: "Loan Application",
+      cell: ({ row }) => (
+        <Link to={`/loans/${row.original.loanApplicationId}`} className="font-medium text-foreground hover:text-primary hover:underline">
+          {row.original.loanApplicationNumber}
+        </Link>
+      ),
+    },
+    { accessorKey: "paymentDate", header: "Payment Date", cell: ({ row }) => formatDateShort(row.original.paymentDate) },
+    { accessorKey: "amountPaid", header: "Amount Paid", cell: ({ row }) => formatCurrency(row.original.amountPaid) },
+    { accessorKey: "paymentMethod", header: "Method" },
   ]
 
   return (
@@ -119,7 +134,7 @@ export default function LoanCollectionsReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="loans.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -158,9 +173,9 @@ export default function LoanCollectionsReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
-              data={rows}
+              data={payments}
               emptyTitle="No loan payments match your filters"
               emptyDescription="Try widening the date range."
             />

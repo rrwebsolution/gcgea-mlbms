@@ -6,7 +6,7 @@ import { format, parseISO } from "date-fns"
 import { ArrowLeft, Banknote, Download, Hash, RotateCcw, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,7 @@ import { getAllContributions } from "@/services/contributions.service"
 import { getAllLoanPayments } from "@/services/loan-payments.service"
 import { formatCurrency } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 export type CollectionGranularity = "day" | "month" | "year"
 
@@ -82,7 +83,7 @@ interface CollectionReportPageProps {
 export function CollectionReportPage({ granularity, title, description }: CollectionReportPageProps) {
   const initialFilters = React.useMemo(() => defaultFilters(granularity), [granularity])
   const [draft, setDraft] = React.useState<Filters>(initialFilters)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>({ dateFrom: "", dateTo: "" })
 
   const rows = React.useMemo<CollectionRow[]>(() => {
     if (!applied) return []
@@ -144,7 +145,7 @@ export function CollectionReportPage({ granularity, title, description }: Collec
 
   function handleReset() {
     setDraft(initialFilters)
-    setApplied(null)
+    setApplied({ dateFrom: "", dateTo: "" })
   }
 
   function handleExportCsv() {
@@ -184,7 +185,7 @@ export function CollectionReportPage({ granularity, title, description }: Collec
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="reports.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -225,7 +226,7 @@ export function CollectionReportPage({ granularity, title, description }: Collec
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No collections match your filters"

@@ -34,9 +34,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { deleteRole, duplicateRole, listRoles, toggleRoleStatus } from "@/services/roles.service"
+import { deleteRole, duplicateRole, listAllRoles, toggleRoleStatus } from "@/services/roles.service"
 import { listAllUsers } from "@/services/users.service"
 import { formatDateShort } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
+import { cn } from "@/lib/utils"
+
+function RoleDescriptionCell({ description }: { description: string }) {
+  const [expanded, setExpanded] = React.useState(false)
+
+  if (!description) return <span className="text-muted-foreground">—</span>
+
+  return (
+    <div className="max-w-xs whitespace-normal">
+      <p className={cn("text-muted-foreground", !expanded && "line-clamp-2")}>{description}</p>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="mt-0.5 text-xs font-medium text-primary hover:underline"
+      >
+        {expanded ? "View less" : "View more"}
+      </button>
+    </div>
+  )
+}
 import type { Role } from "@/types"
 import { AssignedUsersDialog } from "@/features/roles/components/AssignedUsersDialog"
 
@@ -51,19 +72,27 @@ export default function RolesPage() {
   const [assignedUsersRole, setAssignedUsersRole] = React.useState<Role | null>(null)
   const [deleteTarget, setDeleteTarget] = React.useState<Role | null>(null)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["roles", { search, status, roleType, page, perPage }],
-    queryFn: () =>
-      listRoles({
-        search,
-        status: status || undefined,
-        roleType: (roleType as "System" | "Custom") || undefined,
-        page,
-        perPage,
-      }),
+  // Fetches the full list once and pages/searches/filters entirely client-side, mirroring
+  // RoleController::applyFilters()'s rules so results match what the equivalent server
+  // query used to return.
+  const { data: allRoles = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["roles", "all"],
+    queryFn: listAllRoles,
   })
 
   const { data: allUsers = [] } = useQuery({ queryKey: ["users", "all"], queryFn: listAllUsers })
+
+  const filteredRoles = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allRoles.filter((role) => {
+      const matchesSearch = !q || (role.name ?? "").toLowerCase().includes(q) || (role.code ?? "").toLowerCase().includes(q)
+      const matchesStatus = !status || role.status === status
+      const matchesType = !roleType || role.isSystemRole === (roleType === "System")
+      return matchesSearch && matchesStatus && matchesType
+    })
+  }, [allRoles, search, status, roleType])
+
+  const { data: pagedRoles, meta } = paginate(filteredRoles, page, perPage)
 
   function assignedUserCount(roleId: string) {
     return allUsers.filter((u) => u.roleId === roleId || u.additionalRoleIds.includes(roleId)).length
@@ -117,7 +146,7 @@ export default function RolesPage() {
       ),
     },
     { accessorKey: "code", header: "Role Code", cell: ({ row }) => <code className="text-xs text-muted-foreground">{row.original.code}</code> },
-    { accessorKey: "description", header: "Description", cell: ({ row }) => <span className="line-clamp-1 text-muted-foreground">{row.original.description}</span> },
+    { accessorKey: "description", header: "Description", cell: ({ row }) => <RoleDescriptionCell description={row.original.description} /> },
     {
       id: "assignedUsers",
       header: "Assigned Users",
@@ -237,14 +266,15 @@ export default function RolesPage() {
 
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={pagedRoles}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
           emptyTitle="No roles found"
           emptyDescription="Try adjusting your search or filters."
+          enableColumnVisibility={false}
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
 
       <AssignedUsersDialog open={!!assignedUsersRole} onOpenChange={(open) => !open && setAssignedUsersRole(null)} role={assignedUsersRole} />

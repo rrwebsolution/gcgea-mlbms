@@ -50,6 +50,10 @@ function mergeReportTemplate(value?: Partial<SystemSettings["reportTemplate"]>):
 let settings: SystemSettings = {
   ...DEFAULT_SYSTEM_SETTINGS,
   ...storedSettings,
+  general: {
+    ...DEFAULT_SYSTEM_SETTINGS.general,
+    ...storedSettings.general,
+  },
   benefit: {
     ...DEFAULT_SYSTEM_SETTINGS.benefit,
     ...storedSettings.benefit,
@@ -196,6 +200,17 @@ export function getBackupHistory(): BackupHistoryEntry[] {
   return backupHistory
 }
 
+export interface StorageUsage {
+  usedBytes: number
+  totalBytes: number
+}
+
+/** Database size against the hosting plan's fixed storage cap — backs the sidebar's usage indicator. */
+export async function getStorageUsage(): Promise<StorageUsage> {
+  const { data } = await api.get<StorageUsage>("/system-storage-usage")
+  return data
+}
+
 // A server section missing keys (e.g. a row saved before a field was added)
 // must fall back to defaults for those keys, not wipe out the whole section.
 function mergeServerSection<K extends keyof SystemSettings>(key: K, serverValue?: Partial<SystemSettings[K]>): SystemSettings[K] {
@@ -204,6 +219,19 @@ function mergeServerSection<K extends keyof SystemSettings>(key: K, serverValue?
 
 function validAmount(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+function normalizeRoundingRule(value: unknown): string {
+  const aliases: Record<string, string> = {
+    "Round to nearest centavo": "Nearest Centavo",
+    "Round to nearest peso": "Nearest Peso",
+    "Round up": "Round Up",
+    "Round down": "Round Down",
+  }
+  const normalized = aliases[String(value)] ?? String(value)
+  return ["Nearest Centavo", "Nearest Peso", "Round Up", "Round Down"].includes(normalized)
+    ? normalized
+    : "Nearest Centavo"
 }
 
 export async function loadSystemSettings(): Promise<{ settings: SystemSettings; appearance: AppearanceSettings }> {
@@ -226,7 +254,10 @@ export async function loadSystemSettings(): Promise<{ settings: SystemSettings; 
     general: mergeServerSection("general", serverSections.general),
     organization: mergeServerSection("organization", serverSections.organization),
     numbering: mergeServerSection("numbering", serverSections.numbering),
-    loan: mergeServerSection("loan", serverSections.loan),
+    loan: {
+      ...mergeServerSection("loan", serverSections.loan),
+      roundingRule: normalizeRoundingRule(mergeServerSection("loan", serverSections.loan).roundingRule),
+    },
     contribution: mergeServerSection("contribution", serverSections.contribution),
     benefit: {
       ...mergedBenefit,

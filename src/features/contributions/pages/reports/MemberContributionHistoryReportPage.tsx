@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { MemberSearchSelect } from "@/components/shared/MemberSearchSelect"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -18,6 +18,7 @@ import { CONTRIBUTION_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
 import type { Contribution } from "@/types"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 function monthTick(value: string) {
   try {
@@ -34,13 +35,13 @@ export default function MemberContributionHistoryReportPage() {
   const rows = React.useMemo<Contribution[]>(() => {
     if (!appliedMemberId) return []
     return getAllContributions()
-      .filter((c) => c.memberId === appliedMemberId)
+      .filter((c) => appliedMemberId === "all" || c.memberId === appliedMemberId)
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate))
   }, [appliedMemberId])
 
   const posted = rows.filter((c) => c.status === "Posted")
-  const memberName = rows[0]?.memberName ?? ""
-  const memberOffice = rows[0]?.officeName ?? ""
+  const memberName = appliedMemberId === "all" ? "All Members" : rows[0]?.memberName ?? ""
+  const memberOffice = appliedMemberId === "all" ? "All Offices" : rows[0]?.officeName ?? ""
 
   const chartData = React.useMemo(() => posted.map((c) => ({ period: c.contributionPeriod, amount: c.amount })), [posted])
 
@@ -67,8 +68,8 @@ export default function MemberContributionHistoryReportPage() {
   function handleExportCsv() {
     downloadCsv(
       `member-contribution-history-${memberName || "report"}.csv`,
-      ["Reference #", "Period", "Amount", "Payment Date", "Method", "Status"],
-      rows.map((c) => [c.referenceNumber, c.contributionPeriod, c.amount.toFixed(2), c.paymentDate, c.paymentMethod, c.status])
+      ["Reference #", "Period", "Type", "Amount", "Payment Date", "Method", "Status"],
+      rows.map((c) => [c.referenceNumber, c.contributionPeriod, c.contributionType, c.amount.toFixed(2), c.paymentDate, c.paymentMethod, c.status])
     )
     toast.success("Member contribution history exported to CSV.")
   }
@@ -76,6 +77,7 @@ export default function MemberContributionHistoryReportPage() {
   const columns: ColumnDef<Contribution, unknown>[] = [
     { accessorKey: "referenceNumber", header: "Reference", cell: ({ row }) => <Link to={`/contributions/${row.original.id}`} className="font-medium text-foreground hover:text-primary hover:underline">{row.original.referenceNumber}</Link> },
     { accessorKey: "contributionPeriod", header: "Period" },
+    { accessorKey: "contributionType", header: "Type" },
     { accessorKey: "amount", header: "Amount", cell: ({ row }) => formatCurrency(row.original.amount) },
     { accessorKey: "paymentDate", header: "Payment Date", cell: ({ row }) => formatDateShort(row.original.paymentDate) },
     { accessorKey: "paymentMethod", header: "Method" },
@@ -98,7 +100,7 @@ export default function MemberContributionHistoryReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate} disabled={!draftMemberId}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} disabled={!draftMemberId} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset</Button>
           <PermissionButton permission="contributions.export" size="sm" variant="outline" disabled={!appliedMemberId} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -142,7 +144,7 @@ export default function MemberContributionHistoryReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No contribution records"

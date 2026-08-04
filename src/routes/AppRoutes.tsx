@@ -52,6 +52,7 @@ import ActiveLoansPage from "@/features/loans/pages/ActiveLoansPage"
 import OverdueLoansPage from "@/features/loans/pages/OverdueLoansPage"
 import LoanTypesPage from "@/features/loans/pages/LoanTypesPage"
 import LoanDetailPage from "@/features/loans/pages/LoanDetailPage"
+import LoanStatementPage from "@/features/loans/pages/LoanStatementPage"
 import CreateLoanApplicationPage from "@/features/loans/pages/CreateLoanApplicationPage"
 import ReloanWizardPage from "@/features/loans/pages/ReloanWizardPage"
 import LoanDraftsPage from "@/features/loans/pages/LoanDraftsPage"
@@ -210,6 +211,10 @@ export function AppRoutes() {
             <Route path="/loans/types" element={<LoanTypesPage />} />
             <Route path="/loans/drafts" element={<LoanDraftsPage />} />
             <Route path="/loans/:id" element={<LoanDetailPage />} />
+          </Route>
+          {/* Reached from the Released Loans report (gated by reports.view, not loans.view) — accept either so report-only roles aren't locked out. */}
+          <Route element={<ProtectedRoute anyOf={["loans.view", "reports.view"]} />}>
+            <Route path="/loans/:id/statement" element={<LoanStatementPage />} />
           </Route>
           <Route element={<ProtectedRoute permission="loans.create" />}>
             <Route path="/loans/new" element={<CreateLoanApplicationPage />} />

@@ -20,6 +20,11 @@ export interface DisbursementInput {
 export const listDisbursements = (params: DisbursementListParams = {}): Promise<PaginatedResponse<Disbursement>> =>
   getPaginated<Disbursement>("/disbursements", params)
 
+export async function listAllDisbursements(): Promise<Disbursement[]> {
+  const { data } = await api.get<Disbursement[]>("/disbursements/all")
+  return data
+}
+
 export async function getDisbursement(id: string): Promise<Disbursement> {
   const { data } = await api.get<Disbursement>(`/disbursements/${id}`)
   return data

@@ -66,6 +66,8 @@ function toFormValues(benefitType?: BenefitType): BenefitTypeFormValues {
 
 export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmit }: BenefitTypeFormDialogProps) {
   const [submitError, setSubmitError] = React.useState<string | null>(null)
+  const [financialEditing, setFinancialEditing] = React.useState(false)
+  const [prorationEditing, setProrationEditing] = React.useState(false)
   const {
     register,
     control,
@@ -84,12 +86,16 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
   const isProrated = watch("prorationBasis") != null
   const isFyScoped = watch("fyAmounts").length > 0
   const isComputationManaged = !!benefitType && SETTINGS_MANAGED_BENEFIT_NAMES.has(benefitType.name)
+  const isFinancialReadOnly = isComputationManaged && !financialEditing
+  const isProrationReadOnly = isComputationManaged && !prorationEditing
 
   const [documentsText, setDocumentsText] = React.useState("")
 
   React.useEffect(() => {
     if (open) {
       setSubmitError(null)
+      setFinancialEditing(!benefitType)
+      setProrationEditing(!benefitType)
       const values = toFormValues(benefitType)
       reset(values)
       setDocumentsText(values.requiredDocuments.join("\n"))
@@ -193,16 +199,24 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
 
             {/* Section: Financial Limits */}
             <div className="space-y-4 rounded-xl border border-border/50 bg-muted/5 p-4">
-              <div className="flex items-center gap-2 pb-1.5 border-b border-border/30">
-                <Coins className="size-4 text-primary" />
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Financial Limits</h4>
+              <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-border/30">
+                <div className="flex items-center gap-2">
+                  <Coins className="size-4 text-primary" />
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Financial Limits</h4>
+                </div>
+                {isComputationManaged && (
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="benefit-financial-toggle" className="text-[11px] font-medium text-muted-foreground">Enable Editing</Label>
+                    <Switch id="benefit-financial-toggle" checked={financialEditing} onCheckedChange={setFinancialEditing} />
+                  </div>
+                )}
               </div>
 
               {isComputationManaged && (
                 <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs">
                   <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-primary" />
                   <p className="leading-relaxed text-muted-foreground">
-                    Amount limits, proration tiers, contribution basis, and fiscal-year amounts are managed together in{" "}
+                    Changes saved here are automatically reflected in{" "}
                     <Link
                       to="/admin/settings?section=benefit"
                       className="font-semibold text-primary underline-offset-4 hover:underline"
@@ -224,8 +238,8 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                     type="number"
                     step="0.01"
                     min={0}
-                    readOnly={isComputationManaged}
-                    className={cn("h-10 text-sm", isComputationManaged && "cursor-not-allowed bg-muted/50", errors.defaultAmount && "border-destructive focus-visible:ring-destructive")}
+                    readOnly={isFinancialReadOnly}
+                    className={cn("h-10 text-sm", isFinancialReadOnly && "cursor-not-allowed bg-muted/50", errors.defaultAmount && "border-destructive focus-visible:ring-destructive")}
                     aria-invalid={!!errors.defaultAmount}
                     {...register("defaultAmount", { valueAsNumber: true })}
                   />
@@ -244,8 +258,8 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                     type="number"
                     step="0.01"
                     min={0}
-                    readOnly={isComputationManaged}
-                    className={cn("h-10 text-sm", isComputationManaged && "cursor-not-allowed bg-muted/50", errors.maximumAmount && "border-destructive focus-visible:ring-destructive")}
+                    readOnly={isFinancialReadOnly}
+                    className={cn("h-10 text-sm", isFinancialReadOnly && "cursor-not-allowed bg-muted/50", errors.maximumAmount && "border-destructive focus-visible:ring-destructive")}
                     aria-invalid={!!errors.maximumAmount}
                     {...register("maximumAmount", { valueAsNumber: true })}
                   />
@@ -272,7 +286,14 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                     Adjust payment limits dynamically based on the applicant's paid months.
                   </p>
                 </div>
-                <Switch id="proration-toggle" checked={isProrated} disabled={isComputationManaged} onCheckedChange={toggleProrated} />
+                <div className="flex items-center gap-2">
+                  {isComputationManaged && <span className="text-[11px] font-medium text-muted-foreground">Enable Editing</span>}
+                  <Switch
+                    id="proration-toggle"
+                    checked={isComputationManaged ? prorationEditing : isProrated}
+                    onCheckedChange={isComputationManaged ? setProrationEditing : toggleProrated}
+                  />
+                </div>
               </div>
 
               {isProrated && (
@@ -281,7 +302,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                     <Label htmlFor="benefit-type-proration-basis" className="text-xs font-semibold">Count Months Against</Label>
                     <CommandSelect
                       className="w-full h-10"
-                      disabled={isComputationManaged}
+                      disabled={isProrationReadOnly}
                       value={watch("prorationBasis") ?? "dues"}
                       onValueChange={(v) => setValue("prorationBasis", v as "dues" | "pabaon")}
                       options={[
@@ -295,7 +316,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Proration Tiers</Label>
-                      {!isComputationManaged && <Button 
+                      {!isProrationReadOnly && <Button 
                         type="button" 
                         variant="outline" 
                         size="sm" 
@@ -318,7 +339,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                               type="number"
                               min={0}
                               placeholder="0"
-                              readOnly={isComputationManaged}
+                              readOnly={isProrationReadOnly}
                               className="h-9 text-xs read-only:cursor-not-allowed read-only:bg-muted/50"
                               {...register(`prorationTiers.${index}.minMonths`, { valueAsNumber: true })}
                             />
@@ -330,7 +351,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                               type="number"
                               min={0}
                               placeholder="Open limit"
-                              readOnly={isComputationManaged}
+                              readOnly={isProrationReadOnly}
                               className="h-9 text-xs read-only:cursor-not-allowed read-only:bg-muted/50"
                               {...register(`prorationTiers.${index}.maxMonths`, {
                                 setValueAs: (v) => (v === "" ? null : Number(v)),
@@ -347,7 +368,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                                 max={100}
                                 step="0.01"
                                 placeholder="100.00"
-                                readOnly={isComputationManaged}
+                                readOnly={isProrationReadOnly}
                                 className="h-9 text-xs pr-7 read-only:cursor-not-allowed read-only:bg-muted/50"
                                 {...register(`prorationTiers.${index}.percentage`, { valueAsNumber: true })}
                               />
@@ -363,7 +384,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                               )}
                             </div>
                           </div>
-                          {!isComputationManaged && <div className="pt-4">
+                          {!isProrationReadOnly && <div className="pt-4">
                             <Button 
                               type="button" 
                               variant="ghost" 
@@ -387,14 +408,14 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                           Base Amount Escalates by Fiscal Year
                         </Label>
                       </div>
-                      <Switch id="fy-escalation-switch" checked={isFyScoped} disabled={isComputationManaged} onCheckedChange={toggleFyScoped} />
+                      <Switch id="fy-escalation-switch" checked={isFyScoped} disabled={isProrationReadOnly} onCheckedChange={toggleFyScoped} />
                     </div>
 
                     {isFyScoped && (
                       <div className="space-y-2 pt-2 animate-in fade-in duration-200">
                         <div className="flex items-center justify-between">
                           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Fiscal Year Amounts</Label>
-                          {!isComputationManaged && <Button 
+                          {!isProrationReadOnly && <Button 
                             type="button" 
                             variant="outline" 
                             size="sm" 
@@ -415,7 +436,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                                 <Input
                                   type="number"
                                   placeholder="e.g. 2026"
-                                  readOnly={isComputationManaged}
+                                  readOnly={isProrationReadOnly}
                                   className="h-9 text-xs read-only:cursor-not-allowed read-only:bg-muted/50"
                                   {...register(`fyAmounts.${index}.fiscalYear`, {
                                     setValueAs: (v) => (v === "" ? null : Number(v)),
@@ -430,12 +451,12 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                                   min={0}
                                   step="0.01"
                                   placeholder="0.00"
-                                  readOnly={isComputationManaged}
+                                  readOnly={isProrationReadOnly}
                                   className="h-9 text-xs read-only:cursor-not-allowed read-only:bg-muted/50"
                                   {...register(`fyAmounts.${index}.baseAmount`, { valueAsNumber: true })}
                                 />
                               </div>
-                              {!isComputationManaged && <div className="pt-4">
+                              {!isProrationReadOnly && <div className="pt-4">
                                 <Button 
                                   type="button" 
                                   variant="ghost" 

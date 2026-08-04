@@ -12,8 +12,9 @@ import { CommandSelect } from "@/components/shared/CommandSelect"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
-import { listAnnualBudgets, type AnnualBudget, type AnnualBudgetStatus } from "@/services/annual-budgets.service"
+import { listAllAnnualBudgets, type AnnualBudget, type AnnualBudgetStatus } from "@/services/annual-budgets.service"
 import { formatCurrency } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import { cn } from "@/lib/utils"
 
 function badgeClass(status: AnnualBudgetStatus) {
@@ -30,13 +31,34 @@ export default function AnnualBudgetsPage() {
   const [status, setStatus] = React.useState<AnnualBudgetStatus | "">("")
   const [search, setSearch] = React.useState("")
 
+  // Fetches the full list once and pages/searches/filters entirely client-side. The
+  // search box previously sent a `search` param the backend never actually read (only
+  // `status` was filtered server-side) — implemented here for real, matching what the
+  // placeholder text already promised (fiscal year, status, preparer, approver).
   const query = useQuery({
-    queryKey: ["annual-budgets", { page, perPage, status, search }],
-    queryFn: () => listAnnualBudgets({ page, perPage, status, search }),
+    queryKey: ["annual-budgets", "all"],
+    queryFn: listAllAnnualBudgets,
   })
+  const allBudgets = query.data ?? []
 
-  // Executive KPI Summary Aggregation
-  const budgetList = React.useMemo(() => query.data?.data ?? [], [query.data?.data])
+  const filteredBudgets = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allBudgets.filter((b) => {
+      const matchesSearch = !q
+        || String(b.fiscalYear).includes(q)
+        || b.status.toLowerCase().includes(q)
+        || (b.preparedBy ?? "").toLowerCase().includes(q)
+        || (b.approvedBy ?? "").toLowerCase().includes(q)
+      const matchesStatus = !status || b.status === status
+      return matchesSearch && matchesStatus
+    })
+  }, [allBudgets, search, status])
+
+  const { data: pagedBudgets, meta } = paginate(filteredBudgets, page, perPage)
+
+  // Executive KPI Summary Aggregation — over the current page, matching the prior behavior
+  // (these figures were always computed from data?.data, i.e. only the visible page).
+  const budgetList = pagedBudgets
   const totalProposed = React.useMemo(() => budgetList.reduce((acc, item) => acc + (item.totalProposedBudget || 0), 0), [budgetList])
   const totalRevenue = React.useMemo(() => budgetList.reduce((acc, item) => acc + (item.estimatedRevenue || 0), 0), [budgetList])
   const totalUnallocated = React.useMemo(() => budgetList.reduce((acc, item) => acc + (item.unallocatedBalance || 0), 0), [budgetList])
@@ -194,16 +216,16 @@ export default function AnnualBudgetsPage() {
 
         <DataTable
           columns={columns}
-          data={query.data?.data ?? []}
+          data={pagedBudgets}
           isLoading={query.isLoading}
           emptyTitle="No annual budgets found"
           emptyDescription="Create a budget draft for an upcoming fiscal year to get started."
           getRowId={(row) => row.id ?? String(row.fiscalYear)}
         />
 
-        {query.data && (
+        {!query.isLoading && !query.isError && (
           <div className="p-3 border-t border-border/40">
-            <Pagination meta={query.data.meta} onPageChange={setPage} onPerPageChange={(value) => { setPerPage(value); setPage(1) }} />
+            <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(value) => { setPerPage(value); setPage(1) }} />
           </div>
         )}
       </div>

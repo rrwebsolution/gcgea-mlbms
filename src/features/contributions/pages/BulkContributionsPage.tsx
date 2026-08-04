@@ -50,8 +50,7 @@ function currentPeriod(): string {
 
 function defaultPostingDate(): string {
   const now = new Date()
-  const day = Math.min(getSettings().contribution.contributionDueDay, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
 }
 
 function defaultPaymentMethodSetting(): PaymentMethod {

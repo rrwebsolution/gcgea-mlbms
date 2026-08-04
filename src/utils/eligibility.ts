@@ -1,7 +1,7 @@
 import type { BenefitType, EligibilityCheckItem, LoanApplication, LoanType, Member } from "@/types"
 import type { EligibilityResult } from "@/components/shared/EligibilityChecklist"
 import { calculateAge, calculateDurationMonths } from "@/utils/format"
-import { isProfileComplete } from "@/services/members.service"
+import { isProfileComplete, missingProfileFields } from "@/services/members.service"
 
 /** GCGEA Board Resolution No. 24-2026, Table 2 — the one benefit type whose claim path (retirement / separation / a deceased member's nuclear family) is enforced beyond the generic checks below. */
 export const CASH_PABAON_PROGRAM_NAME = "Cash Pabaon Program"
@@ -198,7 +198,7 @@ export function evaluateLoanEligibility(
       severity: "error",
       detail: isProfileComplete(member)
         ? "Member profile is complete."
-        : "Member profile is missing required information.",
+        : `Member profile is missing: ${missingProfileFields(member).join(", ")}. Edit the member's profile to add this information.`,
     },
   ]
 
@@ -211,7 +211,8 @@ export function evaluateBenefitEligibility(
   requestedAmount: number | undefined,
   priorBenefitCount: number,
   hasPendingApplication: boolean,
-  cashPabaonClaim?: { recipientType: "Member" | "Beneficiary"; recipientNames: string[]; hasOutstandingObligations: boolean }
+  cashPabaonClaim?: { recipientType: "Member" | "Beneficiary"; recipientNames: string[]; hasOutstandingObligations: boolean },
+  requireRetiredStatusForRetirementBenefit = true,
 ): EligibilityCheckItem[] {
   const membershipMonths = calculateDurationMonths(member.membershipDate)
   const isCashPabaonDeathClaim = benefitType.name === CASH_PABAON_PROGRAM_NAME && member.membershipStatus === "Deceased"
@@ -244,7 +245,9 @@ export function evaluateBenefitEligibility(
     {
       label: "Required Personal Data Complete",
       passed: isProfileComplete(member),
-      detail: isProfileComplete(member) ? "Member profile is complete." : "Member profile is missing required information.",
+      detail: isProfileComplete(member)
+        ? "Member profile is complete."
+        : `Member profile is missing: ${missingProfileFields(member).join(", ")}. Edit the member's profile to add this information.`,
     },
     {
       label: "Within Maximum Benefit Amount",
@@ -252,6 +255,16 @@ export function evaluateBenefitEligibility(
       detail: `Maximum amount for ${benefitType.name}: ₱${benefitType.maximumAmount.toLocaleString()}.`,
     },
   ]
+
+  if (requireRetiredStatusForRetirementBenefit && benefitType.name === "Retirement and Separation Benefit") {
+    items.push({
+      label: "Retired Status Required",
+      passed: member.retireeStatus === "Retired",
+      detail: member.retireeStatus === "Retired"
+        ? "Member Retiree Status is Retired."
+        : `Member Retiree Status is ${member.retireeStatus}; this benefit requires Retired status.`,
+    })
+  }
 
   if (benefitType.name === CASH_PABAON_PROGRAM_NAME && cashPabaonClaim) {
     items.push(...evaluateCashPabaonClaimChecks(member, cashPabaonClaim))
@@ -279,6 +292,7 @@ export function resultFor(items: EligibilityCheckItem[]): EligibilityResult {
     "Retirement Age Within Policy",
     "Qualified Nuclear Family Beneficiary",
     "No Outstanding Obligations",
+    "Retired Status Required",
   ]
   const hasCritical = failed.some((i) => criticalLabels.includes(i.label))
   return hasCritical ? "Not Eligible" : "Eligible with Warning"
@@ -386,7 +400,9 @@ export function evaluateReloanEligibility(
     {
       label: "Required Member Profile Fields Complete",
       passed: isProfileComplete(member),
-      detail: isProfileComplete(member) ? "Member profile is complete." : "Member profile is missing required information (contact, beneficiaries, or documents).",
+      detail: isProfileComplete(member)
+        ? "Member profile is complete."
+        : `Member profile is missing: ${missingProfileFields(member).join(", ")}. Edit the member's profile to add this information.`,
     },
   ]
 

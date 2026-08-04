@@ -5,6 +5,7 @@ import { queryClient } from "@/lib/query-client"
 import { AuthProvider } from "@/contexts/AuthContext"
 import { ThemeProvider } from "@/contexts/ThemeContext"
 import { AppRoutes } from "@/routes/AppRoutes"
+import { DocumentTitleSync } from "@/components/shared/DocumentTitleSync"
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
       <ThemeProvider>
         <BrowserRouter>
           <AuthProvider>
+            <DocumentTitleSync />
             <AppRoutes />
             <Toaster position="top-right" richColors closeButton />
           </AuthProvider>

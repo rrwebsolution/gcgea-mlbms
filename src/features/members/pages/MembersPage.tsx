@@ -1,8 +1,8 @@
 import * as React from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { ColumnDef, RowSelectionState, SortingState } from "@tanstack/react-table"
-import { Archive, ArchiveRestore, Eye, PencilLine, Plus, UploadCloud, X } from "lucide-react"
+import type { ColumnDef, SortingState } from "@tanstack/react-table"
+import { Archive, ArchiveRestore, Eye, PencilLine, Plus, UploadCloud } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
@@ -24,13 +24,13 @@ import { Switch } from "@/components/ui/switch"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import {
   archiveMember,
-  listArchivedMembers,
-  listMembers,
+  listAllMembersForBrowse,
   profileCompleteness,
   restoreMember,
   updateMemberMembershipStatus,
 } from "@/services/members.service"
 import { calculateAge, calculateDurationLabel, formatDateShort, initialsFromName } from "@/utils/format"
+import { paginate, sortBy as applySortBy } from "@/utils/paginate"
 import type { Member } from "@/types"
 
 interface MembersPageProps {
@@ -53,7 +53,6 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
   const [sorting, setSorting] = React.useState<SortingState>([])
-  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
   const [archiveTarget, setArchiveTarget] = React.useState<Member | null>(null)
   const [restoreTarget, setRestoreTarget] = React.useState<Member | null>(null)
   const [deactivateTarget, setDeactivateTarget] = React.useState<Member | null>(null)
@@ -61,25 +60,45 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   const sortBy = sorting[0]?.id
   const sortDir = sorting[0] ? (sorting[0].desc ? "desc" : "asc") : undefined
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["members", { archived, incompleteOnly, draftsOnly, search, office, sex, membershipStatus, retireeStatus, page, perPage, sortBy, sortDir }],
-    queryFn: () =>
-      archived
-        ? listArchivedMembers({ search, page, perPage, sortBy, sortDir })
-        : listMembers({
-            search,
-            office: office || undefined,
-            sex: sex || undefined,
-            membershipStatus: membershipStatus || undefined,
-            retireeStatus: retireeStatus || undefined,
-            incompleteOnly: incompleteOnly || undefined,
-            draftsOnly: draftsOnly || undefined,
-            page,
-            perPage,
-            sortBy,
-            sortDir,
-          }),
+  // Fetches this view's full dataset once (browse/archived/drafts are three different
+  // underlying queries server-side — see MemberController::all()) and searches/filters/
+  // sorts/paginates entirely client-side, mirroring index()/archived()'s rules so results
+  // match what the equivalent server query used to return.
+  const { data: allMembers = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["members", "all", archived ? "archived" : draftsOnly ? "drafts" : "browse"],
+    queryFn: () => listAllMembersForBrowse({ archived, draftsOnly }),
   })
+
+  const filteredMembers = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allMembers.filter((m) => {
+      // Fields typed as required strings can still come back null for legacy/incomplete
+      // records (position/cellphoneNumber/etc. are exactly what "Incomplete Profiles"
+      // looks for) — guard every field before .toLowerCase() or a single bad row throws
+      // and blanks the whole page.
+      const matchesSearch = !q
+        || (m.fullName ?? "").toLowerCase().includes(q)
+        || (m.memberNumber ?? "").toLowerCase().includes(q)
+        || (m.position ?? "").toLowerCase().includes(q)
+        || (m.cellphoneNumber ?? "").toLowerCase().includes(q)
+        || (m.officeName ?? "").toLowerCase().includes(q)
+      if (archived || draftsOnly) return matchesSearch
+      const matchesOffice = !office || m.officeName === office
+      const matchesSex = !sex || m.sex === sex
+      const matchesMembershipStatus = !membershipStatus || m.membershipStatus === membershipStatus
+      const matchesRetiree = !retireeStatus || m.retireeStatus === retireeStatus
+      const matchesIncomplete = !incompleteOnly || (
+        !m.email || !m.cellphoneNumber || !m.permanentAddress
+        || (m.beneficiaries?.length ?? 0) === 0 || (m.documents?.length ?? 0) === 0
+      )
+      return matchesSearch && matchesOffice && matchesSex && matchesMembershipStatus && matchesRetiree && matchesIncomplete
+    })
+  }, [allMembers, search, archived, draftsOnly, office, sex, membershipStatus, retireeStatus, incompleteOnly])
+
+  // Sorted globally across the full filtered set (not just the current page) to match the
+  // server-side ORDER BY this page used to rely on.
+  const sortedMembers = React.useMemo(() => applySortBy(filteredMembers, sortBy, sortDir), [filteredMembers, sortBy, sortDir])
+  const { data: pagedMembers, meta } = paginate(sortedMembers, page, perPage)
 
   const archiveMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => archiveMember(id, reason),
@@ -125,6 +144,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
     {
       accessorKey: "memberNumber",
       header: draftsOnly ? "Draft Reference" : "Member Number",
+      meta: { sticky: "left" },
       cell: ({ row }) =>
         draftsOnly ? (
           <div className="flex items-center gap-2">
@@ -142,6 +162,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
     {
       accessorKey: "fullName",
       header: "Full Name",
+      meta: { sticky: "left" },
       cell: ({ row }) => (
         <span className="flex items-center gap-2">
           <Avatar size="sm">
@@ -240,8 +261,6 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
     },
   ]
 
-  const selectedCount = Object.values(rowSelection).filter(Boolean).length
-
   return (
     <div className="space-y-5">
       <PageHeader
@@ -325,34 +344,18 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
               />
             </>
           )}
-          {selectedCount > 0 && (
-            <span className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-              {selectedCount} selected
-              <button
-                type="button"
-                onClick={() => setRowSelection({})}
-                className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Clear selection"
-              >
-                <X className="size-3.5" />
-              </button>
-              <ExportButtons permission="members.export" label={`${selectedCount} member(s)`} />
-            </span>
-          )}
         </div>
 
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={pagedMembers}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
           sorting={sorting}
           onSortingChange={setSorting}
-          enableRowSelection
-          rowSelection={rowSelection}
-          onRowSelectionChange={setRowSelection}
           getRowId={(m) => m.id}
+          enableColumnVisibility={false}
           emptyTitle={archived ? "No archived members" : draftsOnly ? "No member drafts" : incompleteOnly ? "All profiles complete" : "No members found"}
           emptyDescription={
             draftsOnly
@@ -362,7 +365,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
                 : "Try adjusting your search or filters."
           }
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
 
       <DeleteOrArchiveDialog

@@ -4,7 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { ArrowLeft, Landmark, Wallet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/shared/PageHeader"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { StatCard } from "@/components/shared/StatCard"
 import { getFundAllocationReport, type FundAllocationReportRow } from "@/services/contribution-funds.service"
 import { formatCurrency } from "@/utils/format"
@@ -33,7 +33,7 @@ export default function FundAllocationReportPage() {
         <StatCard label="Current Year" value={formatCurrency(annualTotal)} icon={Wallet} tone="gold" isLoading={isLoading} />
       </div>
       <div className="rounded-xl border bg-card">
-        <DataTable columns={columns} data={rows} getRowId={(row) => row.fundId} emptyTitle="No fund allocations found" />
+        <ReportDataTable columns={columns} data={rows} getRowId={(row) => row.fundId} emptyTitle="No fund allocations found" />
       </div>
     </div>
   )

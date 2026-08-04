@@ -7,7 +7,7 @@ import { AlertTriangle, ArrowLeft, Banknote, Download, Hash, RotateCcw } from "l
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { OfficeSelect } from "@/components/shared/OfficeSelect"
-import { DataTable } from "@/components/shared/DataTable"
+import { ReportDataTable } from "@/features/reports/components/ReportDataTable"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { getAllLoans } from "@/services/loans.service"
 import { formatCurrency } from "@/utils/format"
 import { downloadCsv } from "@/utils/csv"
+import { ReportGenerateButton } from "@/features/reports/components/ReportGenerateButton"
 
 const BUCKET_LABELS = ["Current", "1-30 Days", "31-60 Days", "61-90 Days", "90+ Days"] as const
 type BucketLabel = (typeof BUCKET_LABELS)[number]
@@ -49,7 +50,7 @@ function bucketFor(days: number): BucketLabel {
 
 export default function LoanAgingReportPage() {
   const [draft, setDraft] = React.useState<Filters>(EMPTY_FILTERS)
-  const [applied, setApplied] = React.useState<Filters | null>(null)
+  const [applied, setApplied] = React.useState<Filters | null>(EMPTY_FILTERS)
 
   const rows = React.useMemo<AgingRow[]>(() => {
     if (!applied) return []
@@ -87,7 +88,7 @@ export default function LoanAgingReportPage() {
 
   function handleReset() {
     setDraft(EMPTY_FILTERS)
-    setApplied(null)
+    setApplied(EMPTY_FILTERS)
   }
 
   function handleExportCsv() {
@@ -121,7 +122,7 @@ export default function LoanAgingReportPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleGenerate}>Generate</Button>
+          <ReportGenerateButton onGenerate={handleGenerate} />
           <Button size="sm" variant="outline" onClick={handleReset}><RotateCcw /> Reset Filters</Button>
           <PermissionButton permission="loans.export" size="sm" variant="outline" disabled={!applied} onClick={handleExportCsv}>
             <Download /> Export CSV
@@ -160,7 +161,7 @@ export default function LoanAgingReportPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card shadow-sm">
-            <DataTable
+            <ReportDataTable
               columns={columns}
               data={rows}
               emptyTitle="No aging data"

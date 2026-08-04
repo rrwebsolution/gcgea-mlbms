@@ -51,25 +51,42 @@ export default function DashboardPage() {
   const [chartTab, setChartTab] = useState<"financial" | "membership">("financial")
   const [activityTab, setActivityTab] = useState<"all" | "loans" | "alerts" | "members">("all")
 
-  // React Query Hooks
-  const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ["dashboard", "summary"],
-    queryFn: dashboardService.getDashboardSummary,
+  // React Query Hooks — one request for the whole page instead of 13 (see
+  // DashboardController::overview() on the backend).
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ["dashboard", "overview"],
+    queryFn: () => dashboardService.getDashboardOverview(),
   })
-  const { data: monthlyReleases = [], isLoading: monthlyReleasesLoading } = useQuery({ queryKey: ["dashboard", "monthly-releases"], queryFn: dashboardService.getMonthlyLoanReleases })
-  const { data: monthlyCollections = [], isLoading: monthlyCollectionsLoading } = useQuery({ queryKey: ["dashboard", "monthly-collections"], queryFn: dashboardService.getMonthlyCollections })
-  const { data: loanStatusDist = [], isLoading: loanStatusDistLoading } = useQuery({ queryKey: ["dashboard", "loan-status"], queryFn: dashboardService.getLoanStatusDistribution })
-  const { data: benefitDist = [], isLoading: benefitDistLoading } = useQuery({ queryKey: ["dashboard", "benefit-dist"], queryFn: dashboardService.getBenefitDistributionByType })
-  const { data: membersPerOffice = [], isLoading: membersPerOfficeLoading } = useQuery({ queryKey: ["dashboard", "members-office"], queryFn: dashboardService.getMembersPerOffice })
-  const { data: membershipGrowth = [], isLoading: membershipGrowthLoading } = useQuery({ queryKey: ["dashboard", "growth"], queryFn: dashboardService.getMembershipGrowthByYear })
 
-  const { data: recentLoans = [], isLoading: recentLoansLoading } = useQuery({ queryKey: ["dashboard", "recent-loans"], queryFn: () => dashboardService.getRecentLoanApplications() })
-  const { data: recentPayments = [], isLoading: recentPaymentsLoading } = useQuery({ queryKey: ["dashboard", "recent-payments"], queryFn: () => dashboardService.getRecentPayments() })
-  const { data: upcomingDue = [], isLoading: upcomingDueLoading } = useQuery({ queryKey: ["dashboard", "upcoming-due"], queryFn: () => dashboardService.getUpcomingDueLoans() })
-  const { data: overdueLoans = [], isLoading: overdueLoading } = useQuery({ queryKey: ["dashboard", "overdue"], queryFn: () => dashboardService.getOverdueLoans() })
-  const { data: recentBenefits = [], isLoading: recentBenefitsLoading } = useQuery({ queryKey: ["dashboard", "recent-benefits"], queryFn: () => dashboardService.getRecentBenefitApplications() })
-  const { data: recentMembers = [], isLoading: recentMembersLoading } = useQuery({ queryKey: ["dashboard", "recent-members"], queryFn: () => dashboardService.getRecentlyAddedMembers() })
-  const { data: incompleteProfiles = [], isLoading: incompleteLoading } = useQuery({ queryKey: ["dashboard", "incomplete"], queryFn: () => dashboardService.getIncompleteProfiles() })
+  const summary = overview?.summary
+  const summaryLoading = overviewLoading
+  const monthlyReleases = overview?.monthlyReleases ?? []
+  const monthlyReleasesLoading = overviewLoading
+  const monthlyCollections = overview?.monthlyCollections ?? []
+  const monthlyCollectionsLoading = overviewLoading
+  const loanStatusDist = overview?.loanStatus ?? []
+  const loanStatusDistLoading = overviewLoading
+  const benefitDist = overview?.benefitDistribution ?? []
+  const benefitDistLoading = overviewLoading
+  const membersPerOffice = overview?.membersPerOffice ?? []
+  const membersPerOfficeLoading = overviewLoading
+  const membershipGrowth = overview?.membershipGrowth ?? []
+  const membershipGrowthLoading = overviewLoading
+
+  const recentLoans = overview?.recentLoans ?? []
+  const recentLoansLoading = overviewLoading
+  const recentPayments = overview?.recentPayments ?? []
+  const recentPaymentsLoading = overviewLoading
+  const upcomingDue = overview?.upcomingDue ?? []
+  const upcomingDueLoading = overviewLoading
+  const overdueLoans = overview?.overdueLoans ?? []
+  const overdueLoading = overviewLoading
+  const recentBenefits = overview?.recentBenefits ?? []
+  const recentBenefitsLoading = overviewLoading
+  const recentMembers = overview?.recentMembers ?? []
+  const recentMembersLoading = overviewLoading
+  const incompleteProfiles = overview?.incompleteProfiles ?? []
+  const incompleteLoading = overviewLoading
 
   const { data: pendingApprovals, isLoading: pendingApprovalsLoading } = useQuery({
     queryKey: ["my-approvals", "dashboard-pending"],
@@ -114,7 +131,7 @@ export default function DashboardPage() {
               <Banknote className="size-5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Collections</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Collections in the system</p>
               <p className="text-base font-bold text-foreground">
                 {summaryLoading ? "..." : formatCurrency(summary?.totalLoanCollections ?? 0)}
               </p>

@@ -21,10 +21,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { effectivePermissionCountFor, listUsers, resetUserPassword, toggleUserStatus } from "@/services/users.service"
+import { effectivePermissionCountFor, listAllUsersIncludingInactive, resetUserPassword, toggleUserStatus } from "@/services/users.service"
 import { listAllRoles } from "@/services/roles.service"
 import { USER_STATUS_TONE } from "@/constants/status"
 import { formatDateTime, initialsFromName } from "@/utils/format"
+import { paginate } from "@/utils/paginate"
 import type { SystemUser } from "@/types"
 import { LoginHistoryDialog } from "@/features/users/components/LoginHistoryDialog"
 
@@ -36,12 +37,29 @@ export default function UsersPage() {
   const [perPage, setPerPage] = React.useState(10)
   const [historyUser, setHistoryUser] = React.useState<SystemUser | null>(null)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["users", { search, status, page, perPage }],
-    queryFn: () => listUsers({ search, status: status || undefined, page, perPage }),
+  // Fetches every user (all statuses) once and pages/searches/filters entirely
+  // client-side, mirroring UserController::applyFilters()'s rules so results match what
+  // the equivalent server query used to return.
+  const { data: allUsers = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ["users", "all-including-inactive"],
+    queryFn: listAllUsersIncludingInactive,
   })
   const { data: allRoles = [] } = useQuery({ queryKey: ["roles", "all"], queryFn: listAllRoles })
   const roleNameById = React.useMemo(() => new Map(allRoles.map((r) => [r.id, r.name])), [allRoles])
+
+  const filteredUsers = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allUsers.filter((u) => {
+      const matchesSearch = !q
+        || (u.fullName ?? "").toLowerCase().includes(q)
+        || (u.username ?? "").toLowerCase().includes(q)
+        || (u.email ?? "").toLowerCase().includes(q)
+      const matchesStatus = !status || u.status === status
+      return matchesSearch && matchesStatus
+    })
+  }, [allUsers, search, status])
+
+  const { data: pagedUsers, meta } = paginate(filteredUsers, page, perPage)
 
   const toggleMutation = useMutation({
     mutationFn: toggleUserStatus,
@@ -54,7 +72,7 @@ export default function UsersPage() {
   const resetPasswordMutation = useMutation({
     mutationFn: resetUserPassword,
     onSuccess: (_data, id) => {
-      const user = data?.data.find((u) => u.id === id)
+      const user = allUsers.find((u) => u.id === id)
       toast.success(`Password reset link sent to ${user?.email ?? "the user"}.`)
     },
   })
@@ -190,14 +208,14 @@ export default function UsersPage() {
         </div>
         <DataTable
           columns={columns}
-          data={data?.data ?? []}
+          data={pagedUsers}
           isLoading={isLoading}
           isError={isError}
           onRetry={refetch}
           emptyTitle="No users found"
           emptyDescription="Try a different search term."
         />
-        {data && <Pagination meta={data.meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
       </div>
 
       <LoginHistoryDialog open={!!historyUser} onOpenChange={(open) => !open && setHistoryUser(null)} user={historyUser} />

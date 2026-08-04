@@ -1,5 +1,7 @@
 import type { DeductionType } from "@/types"
 import { api } from "@/lib/api"
+import { queryClient } from "@/lib/query-client"
+import { getLookups } from "@/services/lookups.service"
 
 let cachedDeductionTypes: DeductionType[] = []
 const deductionTypesChannel = typeof BroadcastChannel !== "undefined"
@@ -21,7 +23,7 @@ if (deductionTypesChannel) {
 }
 
 export async function listDeductionTypes(): Promise<DeductionType[]> {
-  const { data } = await api.get<DeductionType[]>("/deduction-types")
+  const data = (await queryClient.fetchQuery({ queryKey: ["lookups"], queryFn: getLookups, staleTime: Infinity })).deductionTypes
   cachedDeductionTypes = data
   return data
 }

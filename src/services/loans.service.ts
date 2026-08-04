@@ -12,6 +12,8 @@ import type {
   PaymentMethod,
 } from "@/types"
 import { api, getPaginated } from "@/lib/api"
+import { queryClient } from "@/lib/query-client"
+import { getLookups } from "@/services/lookups.service"
 
 type LoanTypeInput = Omit<LoanType, "id" | "incomeBrackets"> & { incomeBrackets: LoanTypeIncomeBracketInput[] }
 
@@ -82,7 +84,7 @@ export async function releaseLoan(id: string, input: ReleaseLoanInput): Promise<
 let cachedLoanTypes: LoanType[] = []
 
 export async function listLoanTypes(): Promise<LoanType[]> {
-  const { data } = await api.get<LoanType[]>("/loan-types")
+  const data = (await queryClient.fetchQuery({ queryKey: ["lookups"], queryFn: getLookups, staleTime: Infinity })).loanTypes
   cachedLoanTypes = data
   return data
 }
@@ -139,8 +141,8 @@ export interface CreateLoanApplicationInput {
   boardResolutionDocumentPath?: string
 }
 
-export async function createLoanApplication(input: CreateLoanApplicationInput): Promise<LoanApplication> {
-  const { data } = await api.post<LoanApplication>("/loans", input)
+export async function createLoanApplication(input: CreateLoanApplicationInput, options?: { silent?: boolean }): Promise<LoanApplication> {
+  const { data } = await api.post<LoanApplication>("/loans", input, { silent: options?.silent })
   cachedLoans = [data, ...cachedLoans]
   return data
 }
@@ -156,8 +158,8 @@ export async function uploadLoanDocument(loanId: string, requirementLabel: strin
 }
 
 /** Edits a draft loan in place — only allowed while the loan is still status "Draft". */
-export async function updateLoanApplication(id: string, input: CreateLoanApplicationInput): Promise<LoanApplication> {
-  const { data } = await api.put<LoanApplication>(`/loans/${id}`, input)
+export async function updateLoanApplication(id: string, input: CreateLoanApplicationInput, options?: { silent?: boolean }): Promise<LoanApplication> {
+  const { data } = await api.put<LoanApplication>(`/loans/${id}`, input, { silent: options?.silent })
   cachedLoans = cachedLoans.map((l) => (l.id === data.id ? data : l))
   return data
 }
