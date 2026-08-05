@@ -24,11 +24,13 @@ const MAX_ZOOM = 3
 export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 0 }: ImagePreviewDialogProps) {
   const [index, setIndex] = React.useState(initialIndex)
   const [zoom, setZoom] = React.useState(1)
+  const [zoomOrigin, setZoomOrigin] = React.useState("50% 50%")
 
   React.useEffect(() => {
     if (open) {
       setIndex(initialIndex)
       setZoom(1)
+      setZoomOrigin("50% 50%")
     }
   }, [open, initialIndex])
 
@@ -37,11 +39,31 @@ export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 
 
   function goPrev() {
     setZoom(1)
+    setZoomOrigin("50% 50%")
     setIndex((i) => (i - 1 + images.length) % images.length)
   }
   function goNext() {
     setZoom(1)
+    setZoomOrigin("50% 50%")
     setIndex((i) => (i + 1) % images.length)
+  }
+
+  function focusAtPointer(event: React.MouseEvent<HTMLImageElement> | React.WheelEvent<HTMLImageElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = ((event.clientX - bounds.left) / bounds.width) * 100
+    const y = ((event.clientY - bounds.top) / bounds.height) * 100
+    setZoomOrigin(`${Math.max(0, Math.min(100, x))}% ${Math.max(0, Math.min(100, y))}%`)
+  }
+
+  function handleWheel(event: React.WheelEvent<HTMLImageElement>) {
+    event.preventDefault()
+    focusAtPointer(event)
+    setZoom((currentZoom) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP))))
+  }
+
+  function handleImageClick(event: React.MouseEvent<HTMLImageElement>) {
+    focusAtPointer(event)
+    setZoom((currentZoom) => Math.min(MAX_ZOOM, currentZoom + ZOOM_STEP))
   }
 
   if (!current) return null
@@ -56,8 +78,10 @@ export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 
             src={current.url}
             alt={current.name}
             containerClassName="h-full w-full flex items-center justify-center"
-            className={cn("max-h-full max-w-full object-contain transition-transform duration-150", zoom > 1 && "cursor-move")}
-            style={{ transform: `scale(${zoom})` }}
+            className={cn("max-h-full max-w-full object-contain transition-transform duration-150", zoom < MAX_ZOOM ? "cursor-zoom-in" : "cursor-move")}
+            style={{ transform: `scale(${zoom})`, transformOrigin: zoomOrigin }}
+            onWheel={handleWheel}
+            onClick={handleImageClick}
           />
           {hasMultiple && (
             <>
@@ -95,11 +119,12 @@ export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 
               <ZoomIn />
               <span className="sr-only">Zoom in</span>
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setZoom(1)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => { setZoom(1); setZoomOrigin("50% 50%") }}>
               <Maximize2 />
               Fit Screen
             </Button>
           </div>
+          <span className="hidden text-[11px] text-muted-foreground md:inline">Scroll to zoom · Click a point to focus</span>
           {hasMultiple && (
             <span className="text-xs text-muted-foreground">
               {index + 1} / {images.length}
