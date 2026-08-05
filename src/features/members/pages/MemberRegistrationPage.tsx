@@ -10,7 +10,6 @@ import { FormSection } from "@/components/shared/FormSection"
 import { OfficeCommandSelect } from "@/components/shared/OfficeCommandSelect"
 import { FileUploader } from "@/components/shared/FileUploader"
 import { DocumentGallery, type DocumentGalleryItem } from "@/components/shared/DocumentGallery"
-import { DocumentCard } from "@/components/shared/DocumentCard"
 import { ImagePreviewDialog } from "@/components/shared/ImagePreviewDialog"
 import { PDFPreviewDialog } from "@/components/shared/PDFPreviewDialog"
 import { AddressCommandSelect } from "@/components/shared/AddressCommandSelect"
@@ -928,29 +927,6 @@ export default function MemberRegistrationPage() {
           description="Upload scanned copies of supporting documents."
         >
           <div className="rounded-xl border border-border bg-muted/15 p-4 sm:p-6 shadow-sm">
-            {isEdit && existingMember && existingMember.documents.length > 0 && (
-              <div className="mb-6 space-y-3">
-                <div>
-                  <h4 className="text-sm font-semibold text-foreground">Existing Uploaded Documents</h4>
-                  <p className="text-xs text-muted-foreground">All documents currently saved on this member's profile.</p>
-                </div>
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  {existingMember.documents.map((document) => (
-                    <DocumentCard
-                      key={document.id}
-                      title={document.category === "Payslip" ? "Net Take Home Pay" : document.category}
-                      fileName={document.fileName}
-                      fileUrl={document.fileUrl}
-                      fileSize={document.fileSize}
-                      uploadedAt={formatDateShort(document.uploadedAt)}
-                      uploadedBy={document.uploadedBy}
-                      onReplace={(file) => handleDocumentUpload(document.category, file, document.id)}
-                      onRemove={() => setRemoveTarget({ kind: "document", category: document.category, documentId: document.id })}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
             {validIdError && (
               <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
                 Valid ID is required. Upload a PDF or image before saving the member.
