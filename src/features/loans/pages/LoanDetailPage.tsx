@@ -20,6 +20,7 @@ import {
   RotateCw,
   LayoutGrid,
   Wallet,
+  Printer,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { DataTable } from "@/components/shared/DataTable"
@@ -158,6 +159,17 @@ export default function LoanDetailPage() {
             <StatusBadge label={loan.status} tone={LOAN_STATUS_TONE[loan.status]} className="h-9 px-3.5 text-xs font-semibold rounded-xl" />
             {loan.applicationType === "reloan" && (
               <StatusBadge label={`Reloan #${loan.reloanSequence ?? 1}`} tone="gold" className="h-9 px-3.5 text-xs font-semibold rounded-xl" />
+            )}
+            {loan.releaseDate && loan.releaseMethod === "Check" && (
+              <PermissionButton
+                permission="loans.print"
+                size="sm"
+                variant="outline"
+                className="h-9 gap-1.5 rounded-xl text-xs"
+                render={<Link to={`/loans/${loan.id}/check`} />}
+              >
+                <Printer className="size-3.5" /> Print Check
+              </PermissionButton>
             )}
             <ReloanButton loan={loan} eligible={reloanEligible} blockedReason={reloanBlockedReason} />
             {["Released", "Active", "Overdue", "Restructured"].includes(loan.status) && loan.outstandingBalance > 0 && (

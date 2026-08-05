@@ -158,6 +158,7 @@ function makeLoanEntry(overrides?: Partial<LoanEntry>): LoanEntry {
 interface EntryDerived {
   loanType?: LoanType
   isBracketedLoanType: boolean
+  isFirstSolidarityLoan: boolean
   effectiveAmount: number | undefined
   eligibilityItems: EligibilityCheckItem[]
   eligibilityResult: EligibilityResult
@@ -351,7 +352,11 @@ export default function CreateLoanApplicationPage() {
   function deriveEntry(entry: LoanEntry, memberForEval: Member | undefined): EntryDerived {
     const loanType = loanTypes.find((lt) => lt.id === entry.loanTypeId)
     const isBracketedLoanType = Boolean(loanType && loanType.incomeBrackets.length > 0)
-    const effectiveAmount = entry.requestedAmount
+    const isFirstSolidarityLoan = Boolean(
+      loanType?.name.toLowerCase().includes("solidarity")
+      && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
+    )
+    const effectiveAmount = isFirstSolidarityLoan ? 20_000 : entry.requestedAmount
     const paidMonthlyDues: PaidMonthlyDuesSummary = {
       paidMonths: paidMonthlyDuesPeriods.length,
       consecutivePaidMonths,
@@ -382,7 +387,7 @@ export default function CreateLoanApplicationPage() {
       })
     }
 
-    return { loanType, isBracketedLoanType, effectiveAmount, eligibilityItems, eligibilityResult, isBlocked, computation }
+    return { loanType, isBracketedLoanType, isFirstSolidarityLoan, effectiveAmount, eligibilityItems, eligibilityResult, isBlocked, computation }
   }
 
   const derivedByKey = React.useMemo(() => {
@@ -528,6 +533,9 @@ export default function CreateLoanApplicationPage() {
       queryClient.setQueryData(["members", member.id], updatedMember)
       setEntries((current) => current.map((entry) => {
         const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
+        const isFirstSolidarityLoan = loanType?.name.toLowerCase().includes("solidarity")
+          && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
+        if (isFirstSolidarityLoan) return { ...entry, requestedAmount: 20_000 }
         const bracket = loanType?.incomeBrackets.length
           ? bracketForNetPay(loanType.incomeBrackets, updatedMember.netPay ?? 0)
           : null
@@ -542,6 +550,8 @@ export default function CreateLoanApplicationPage() {
 
   function handleLoanTypeChange(key: string, loanTypeId: string) {
     const loanType = loanTypes.find((lt) => lt.id === loanTypeId)
+    const isFirstSolidarityLoan = loanType?.name.toLowerCase().includes("solidarity")
+      && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
     const incomeBracket = loanType && loanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
       ? bracketForNetPay(loanType.incomeBrackets, effectiveMemberNetPay)
       : null
@@ -554,7 +564,9 @@ export default function CreateLoanApplicationPage() {
               // The selected loan type is maintained from Loan Settings.
               // Use its configured term instead of the old hardcoded 12 months.
               termMonths: loanType?.maxTermMonths ?? e.termMonths,
-              requestedAmount: loanType?.incomeBrackets.length
+              requestedAmount: isFirstSolidarityLoan
+                ? 20_000
+                : loanType?.incomeBrackets.length
                 ? incomeBracket?.loanableAmount
                 : loanType?.maxAmount ?? e.requestedAmount,
             }
@@ -568,10 +580,12 @@ export default function CreateLoanApplicationPage() {
     if (s === 2) return entries.length > 0 && entries.every((e) => {
       const monthlyDuesCheck = derivedFor(e.key).eligibilityItems.find((item) => item.label === "Fully Paid Monthly Dues")
       const selectedLoanType = loanTypes.find((loanType) => loanType.id === e.loanTypeId)
+      const isFirstSolidarityLoan = selectedLoanType?.name.toLowerCase().includes("solidarity")
+        && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
       const bracket = selectedLoanType && selectedLoanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
         ? bracketForNetPay(selectedLoanType.incomeBrackets, effectiveMemberNetPay)
         : null
-      const amountWithinBracket = !selectedLoanType?.incomeBrackets.length || (
+      const amountWithinBracket = isFirstSolidarityLoan ? e.requestedAmount === 20_000 : !selectedLoanType?.incomeBrackets.length || (
         bracket !== null
         && e.requestedAmount != null
         && e.requestedAmount >= selectedLoanType.minAmount
@@ -879,10 +893,17 @@ export default function CreateLoanApplicationPage() {
                         placeholder="Select loan type"
                       />
                     </div>
-                    {entry.loanTypeId && (!derived.isBracketedLoanType || hasMemberNetPay) && (
+                    {entry.loanTypeId && (derived.isFirstSolidarityLoan || !derived.isBracketedLoanType || hasMemberNetPay) && (
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Requested Amount <span className="text-destructive">*</span></Label>
-                      {derived.isBracketedLoanType ? (
+                      {derived.isFirstSolidarityLoan ? (
+                        <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/5 p-4">
+                          <CurrencyInput value={20_000} onChange={() => undefined} disabled />
+                          <p className="text-[11px] font-medium text-primary">
+                            First Solidarity loan is fixed at {formatCurrency(20_000)} after six qualified ₱100 monthly contributions, per resolution.
+                          </p>
+                        </div>
+                      ) : derived.isBracketedLoanType ? (
                         <div className="space-y-2 bg-muted/20 border border-border/60 rounded-xl p-4 shadow-inner">
                           <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Loanable Amount Range</span>
                           <div className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-semibold text-foreground">

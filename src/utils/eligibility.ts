@@ -122,6 +122,8 @@ export function evaluateLoanEligibility(
     ? paidMonthlyDues.consecutivePaidMonths
     : paidMonthlyDues.paidMonths
   const paidDuesPassed = !paidMonthlyDues.requirePaidContributions || verifiedPaidMonths >= paidMonthlyDues.requiredMonths
+  const isFirstSolidarityLoan = loanType.name.toLowerCase().includes("solidarity")
+    && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
 
   const items: EligibilityCheckItem[] = [
     {
@@ -181,7 +183,13 @@ export function evaluateLoanEligibility(
       passed: overdueLoans.length === 0,
       detail: overdueLoans.length === 0 ? "No overdue accounts on record." : `Member has ${overdueLoans.length} overdue loan(s).`,
     },
-    loanType.incomeBrackets.length > 0
+    isFirstSolidarityLoan
+      ? {
+          label: "First Solidarity Loan Fixed Amount",
+          passed: requestedAmount === 20_000,
+          detail: "A first-time Solidarity borrower is loanable for exactly ₱20,000 under the resolution.",
+        }
+      : loanType.incomeBrackets.length > 0
       ? {
           label: "Net Pay On File",
           passed: member.netPay != null,
