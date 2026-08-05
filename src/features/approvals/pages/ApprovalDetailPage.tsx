@@ -254,11 +254,11 @@ export default function ApprovalDetailPage() {
             }
           />
           <ApprovalRecordLinks detailPath={`/loans/${loan.id}`} />
+          <DetailBody historyLoading={isLoadingHistory} history={history} detailPath={`/loans/${loan.id}`} showLinks={false} />
           <LoanMemberProfileCard member={loanMember} />
           <LoanApplicationDetails loan={loan} />
           <LoanDocumentsCard documents={loan.documents ?? []} />
           <LoanAmortizationScheduleCard schedule={loanSchedule} isLoading={isLoadingLoanSchedule} />
-          <DetailBody historyLoading={isLoadingHistory} history={history} detailPath={`/loans/${loan.id}`} showLinks={false} />
         </div>
         {hasReachedApproval && <LoanApprovalPrintSheet loan={loan} />}
         <ReasonDialog open={rejectOpen} onOpenChange={setRejectOpen} title="Reject Loan Application" reasonLabel="Rejection Reason" confirmLabel="Reject Loan" destructive isLoading={rejectMutation.isPending} onConfirm={(reason) => rejectMutation.mutate(reason)} />
@@ -295,10 +295,10 @@ export default function ApprovalDetailPage() {
           />}
         />
         <ApprovalRecordLinks detailPath={`/benefits/${benefit.id}`} />
+        <DetailBody historyLoading={isLoadingHistory} history={history} detailPath={`/benefits/${benefit.id}`} showLinks={false} />
         <BenefitMemberProfileCard member={benefitMember} />
         <BenefitApplicationDetails benefit={benefit} />
         <BenefitDocumentsCard documents={benefit.documents ?? []} />
-        <DetailBody historyLoading={isLoadingHistory} history={history} detailPath={`/benefits/${benefit.id}`} showLinks={false} />
         <ReasonDialog open={rejectOpen} onOpenChange={setRejectOpen} title="Reject Benefit Application" reasonLabel="Rejection Reason" confirmLabel="Reject Application" destructive isLoading={rejectMutation.isPending} onConfirm={(reason) => rejectMutation.mutate(reason)} />
         <ReasonDialog open={returnOpen} onOpenChange={setReturnOpen} title="Return for Revision" reasonLabel="Return Remarks" confirmLabel="Return Application" isLoading={returnMutation.isPending} onConfirm={(reason) => returnMutation.mutate(reason)} />
         <ConfirmDialog open={releaseOpen} onOpenChange={setReleaseOpen} title="Release Benefit" description="Confirm this benefit has been released to the member/beneficiary." confirmLabel="Release Benefit" isLoading={releaseBenefitMutation.isPending} onConfirm={() => releaseBenefitMutation.mutate()}>
@@ -354,13 +354,13 @@ export default function ApprovalDetailPage() {
           }
         />
         <ApprovalRecordLinks detailPath={`/financial/annual-budgets/${annualBudget.fiscalYear}`} />
-        <AnnualBudgetDetails budget={annualBudget} />
         <DetailBody
           historyLoading={isLoadingHistory}
           history={history}
           detailPath={`/financial/annual-budgets/${annualBudget.fiscalYear}`}
           showLinks={false}
         />
+        <AnnualBudgetDetails budget={annualBudget} />
         <ReasonDialog open={rejectOpen} onOpenChange={setRejectOpen} title="Reject Annual Budget" reasonLabel="Rejection Reason" confirmLabel="Reject Budget" destructive isLoading={rejectMutation.isPending} onConfirm={(reason) => rejectMutation.mutate(reason)} />
         <ReasonDialog open={returnOpen} onOpenChange={setReturnOpen} title="Return Annual Budget for Revision" reasonLabel="Return Remarks" confirmLabel="Return Budget" isLoading={returnMutation.isPending} onConfirm={(reason) => returnMutation.mutate(reason)} />
       </div>
@@ -1081,6 +1081,8 @@ function DetailBody({
 }) {
   return (
     <div className="space-y-6">
+      {showLinks && <ApprovalRecordLinks detailPath={detailPath} />}
+
       <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-xs space-y-4">
         <div className="flex items-center gap-2 pb-3 border-b border-border/40">
           <Clock className="size-4 text-primary" />
@@ -1092,8 +1094,6 @@ function DetailBody({
           <ApprovalTimeline history={history} />
         )}
       </div>
-
-      {showLinks && <ApprovalRecordLinks detailPath={detailPath} />}
     </div>
   )
 }

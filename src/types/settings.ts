@@ -251,7 +251,7 @@ export interface AppearanceSettings {
   progressDarkColorEnd: string
   baseFontSize: number
   fontWeight: 400 | 500 | 600 | 700
-  fontFamily: "century-gothic" | "arial" | "calibri" | "verdana" | "geist" | "system" | "serif" | "monospace"
+  fontFamily: "century-gothic" | "arial" | "calibri" | "verdana" | "geist" | "poppins" | "roboto" | "inter" | "times-new-roman" | "system" | "serif" | "monospace"
   fontStyle: "normal" | "italic"
   borderRadius: number
   compactMode: boolean
