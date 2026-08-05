@@ -1186,7 +1186,13 @@ export default function SettingsPage() {
                   </Button>
                 </div>
                 <div className="overflow-x-auto rounded-lg border bg-muted/30 p-3">
-                  <div className="settings-check-preview relative origin-top-left overflow-hidden border bg-white text-black shadow-sm">
+                  <div
+                    className="settings-check-preview relative origin-top-left overflow-hidden border text-black shadow-sm"
+                    style={{
+                      backgroundColor: checkTemplate.backgroundColor,
+                      backgroundImage: "repeating-linear-gradient(135deg, transparent 0, transparent 9px, rgba(22,101,52,.045) 10px, transparent 11px), repeating-linear-gradient(45deg, transparent 0, transparent 17px, rgba(30,64,175,.035) 18px, transparent 19px)",
+                    }}
+                  >
                     <div className="absolute" style={{ left: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.headerTop}in` }}>
                       <p className="text-[10px] font-bold uppercase tracking-[0.16em]">{checkTemplate.heading}</p>
                       <p className="text-[8px]">{checkTemplate.subheading}</p>
@@ -1209,6 +1215,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <ColorField label="Check Background Color" value={checkTemplate.backgroundColor} onChange={(value) => patchCheckTemplate({ backgroundColor: value })} />
                   <Field label="Check Heading"><Input value={checkTemplate.heading} onChange={(event) => patchCheckTemplate({ heading: event.target.value })} /></Field>
                   <Field label="Check Subheading"><Input value={checkTemplate.subheading} onChange={(event) => patchCheckTemplate({ subheading: event.target.value })} /></Field>
                   <Field label="Payee Label"><Input value={checkTemplate.payeeLabel} onChange={(event) => patchCheckTemplate({ payeeLabel: event.target.value })} /></Field>
@@ -1230,7 +1237,7 @@ export default function SettingsPage() {
                     html, body { width: 8.5in; height: 3.5in; background: white !important; }
                     body * { visibility: hidden; }
                     .settings-check-preview, .settings-check-preview * { visibility: visible; }
-                    .settings-check-preview { position: fixed; inset: 0; transform: none; border: 0; box-shadow: none; }
+                    .settings-check-preview { position: fixed; inset: 0; transform: none; border: 0; box-shadow: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                   }
                 `}</style>
               </div>

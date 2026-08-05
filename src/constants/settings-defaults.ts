@@ -172,6 +172,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     rightLogo: "/city-seal-logo.png",
     showGeneratedDate: true,
     checkTemplate: {
+      backgroundColor: "#E8F3E8",
       heading: "GCGEA",
       subheading: "Loan Disbursement Check",
       payeeLabel: "Pay to the order of",

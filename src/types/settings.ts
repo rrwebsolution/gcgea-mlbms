@@ -173,6 +173,7 @@ export interface ReportTemplateSettings {
 }
 
 export interface CheckTemplateSettings {
+  backgroundColor: string
   heading: string
   subheading: string
   payeeLabel: string

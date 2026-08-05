@@ -55,7 +55,13 @@ export default function LoanCheckPrintPage() {
         <Button onClick={() => window.print()}><Printer /> Print Check</Button>
       </div>
 
-      <div className="check-sheet relative mx-auto overflow-hidden border bg-white text-black shadow-sm print:border-0 print:shadow-none">
+      <div
+        className="check-sheet relative mx-auto overflow-hidden border text-black shadow-sm print:border-0 print:shadow-none"
+        style={{
+          backgroundColor: template.backgroundColor,
+          backgroundImage: "repeating-linear-gradient(135deg, transparent 0, transparent 9px, rgba(22,101,52,.045) 10px, transparent 11px), repeating-linear-gradient(45deg, transparent 0, transparent 17px, rgba(30,64,175,.035) 18px, transparent 19px)",
+        }}
+      >
         <div className="absolute" style={{ left: `${template.horizontalMargin}in`, top: `${template.headerTop}in` }}>
           <p className="text-[10px] font-bold uppercase tracking-[0.16em]">{template.heading}</p>
           <p className="text-[8px]">{template.subheading}</p>
@@ -92,6 +98,7 @@ export default function LoanCheckPrintPage() {
         @page { size: 8.5in 3.5in; margin: 0; }
         @media print {
           html, body { width: 8.5in; height: 3.5in; background: white !important; }
+          .check-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body * { visibility: hidden; }
           .check-sheet, .check-sheet * { visibility: visible; }
           .check-sheet { position: fixed; inset: 0; }
