@@ -25,6 +25,10 @@ export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 
   const [index, setIndex] = React.useState(initialIndex)
   const [zoom, setZoom] = React.useState(1)
   const [zoomOrigin, setZoomOrigin] = React.useState("50% 50%")
+  const [isDragging, setIsDragging] = React.useState(false)
+  const viewportRef = React.useRef<HTMLDivElement>(null)
+  const dragStartRef = React.useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 })
+  const draggedRef = React.useRef(false)
 
   React.useEffect(() => {
     if (open) {
@@ -62,8 +66,39 @@ export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 
   }
 
   function handleImageClick(event: React.MouseEvent<HTMLImageElement>) {
+    if (draggedRef.current) {
+      draggedRef.current = false
+      return
+    }
     focusAtPointer(event)
     setZoom((currentZoom) => Math.min(MAX_ZOOM, currentZoom + ZOOM_STEP))
+  }
+
+  function handlePointerDown(event: React.PointerEvent<HTMLImageElement>) {
+    if (zoom <= MIN_ZOOM || !viewportRef.current) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: viewportRef.current.scrollLeft,
+      scrollTop: viewportRef.current.scrollTop,
+    }
+    draggedRef.current = false
+    setIsDragging(true)
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLImageElement>) {
+    if (!isDragging || !viewportRef.current) return
+    const deltaX = event.clientX - dragStartRef.current.x
+    const deltaY = event.clientY - dragStartRef.current.y
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) draggedRef.current = true
+    viewportRef.current.scrollLeft = dragStartRef.current.scrollLeft - deltaX
+    viewportRef.current.scrollTop = dragStartRef.current.scrollTop - deltaY
+  }
+
+  function handlePointerUp(event: React.PointerEvent<HTMLImageElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    setIsDragging(false)
   }
 
   if (!current) return null
@@ -72,16 +107,21 @@ export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[85vh] max-w-[calc(100%-2rem)] flex-col gap-3 sm:max-w-3xl">
         <DialogTitle className="truncate pr-8">{current.name}</DialogTitle>
-        <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg bg-muted/40">
+        <div ref={viewportRef} className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg bg-muted/40">
           <ImageWithSkeleton
             key={current.url}
             src={current.url}
             alt={current.name}
             containerClassName="h-full w-full flex items-center justify-center"
-            className={cn("max-h-full max-w-full object-contain transition-transform duration-150", zoom < MAX_ZOOM ? "cursor-zoom-in" : "cursor-move")}
+            className={cn("max-h-full max-w-full select-none object-contain transition-transform duration-150", isDragging ? "cursor-grabbing" : zoom > MIN_ZOOM ? "cursor-grab" : "cursor-zoom-in")}
             style={{ transform: `scale(${zoom})`, transformOrigin: zoomOrigin }}
             onWheel={handleWheel}
             onClick={handleImageClick}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            draggable={false}
           />
           {hasMultiple && (
             <>
@@ -124,7 +164,7 @@ export function ImagePreviewDialog({ open, onOpenChange, images, initialIndex = 
               Fit Screen
             </Button>
           </div>
-          <span className="hidden text-[11px] text-muted-foreground md:inline">Scroll to zoom · Click a point to focus</span>
+          <span className="hidden text-[11px] text-muted-foreground md:inline">Scroll to zoom · Click to focus · Hold and drag to pan</span>
           {hasMultiple && (
             <span className="text-xs text-muted-foreground">
               {index + 1} / {images.length}
