@@ -37,10 +37,11 @@ const TABS: { value: MyApprovalTab; label: string }[] = [
 const FETCH_SIZE = 1000
 
 function statusTone(status: string): StatusTone {
-  if (status === "approved" || status === "released") return "success"
-  if (status === "rejected") return "danger"
-  if (status === "returned") return "warning"
-  if (status === "pending") return "info"
+  const normalized = status.trim().toLowerCase()
+  if (["approve", "approved", "release", "released", "auto_approved"].includes(normalized)) return "success"
+  if (["reject", "rejected"].includes(normalized)) return "danger"
+  if (["return", "returned", "returned_for_revision"].includes(normalized)) return "warning"
+  if (["pending", "submitted", "resubmitted"].includes(normalized)) return "info"
   return "neutral"
 }
 
