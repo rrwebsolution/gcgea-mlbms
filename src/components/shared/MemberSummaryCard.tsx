@@ -11,13 +11,14 @@ import type { Member } from "@/types"
 interface MemberSummaryCardProps {
   member: Member
   totalContributions: number
+  paidContributionMonths?: number
   outstandingLoanBalance: number
   activeLoanCount: number
   overdueLoanCount: number
   onChangeMember?: () => void
 }
 
-export function MemberSummaryCard({ member, totalContributions, outstandingLoanBalance, activeLoanCount, overdueLoanCount, onChangeMember }: MemberSummaryCardProps) {
+export function MemberSummaryCard({ member, totalContributions, paidContributionMonths, outstandingLoanBalance, activeLoanCount, overdueLoanCount, onChangeMember }: MemberSummaryCardProps) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -68,6 +69,14 @@ export function MemberSummaryCard({ member, totalContributions, outstandingLoanB
           <dt className="text-xs text-muted-foreground">Total Contributions</dt>
           <dd className="text-sm font-medium text-foreground">{formatCurrency(totalContributions)}</dd>
         </div>
+        {paidContributionMonths !== undefined && (
+          <div>
+            <dt className="text-xs text-muted-foreground">Paid Contribution Months</dt>
+            <dd className="text-sm font-medium text-foreground">
+              {paidContributionMonths} {paidContributionMonths === 1 ? "month" : "months"}
+            </dd>
+          </div>
+        )}
         <div>
           <dt className="text-xs text-muted-foreground">Active Loans</dt>
           <dd className="text-sm font-medium text-foreground">{activeLoanCount}</dd>

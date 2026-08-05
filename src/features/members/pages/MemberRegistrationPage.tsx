@@ -44,8 +44,7 @@ import {
   uploadMemberPhoto,
   type MemberDraftInput,
 } from "@/services/members.service"
-import { calculateAge, calculateDurationLabel, formatCurrency, formatDateShort } from "@/utils/format"
-import { getSettings } from "@/services/settings.service"
+import { calculateAge, calculateDurationLabel, formatDateShort } from "@/utils/format"
 import { listEmploymentStatuses } from "@/services/employment-statuses.service"
 import { DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, IMAGE_EXTENSIONS, IMAGE_MIME_TYPES, isImageFile, isPdfFile, type UploadStatus } from "@/lib/upload-validation"
 import { cn } from "@/lib/utils"
@@ -529,7 +528,7 @@ export default function MemberRegistrationPage() {
     setMembershipFormError(false)
     if (requiresPayslip && !hasPayslip) {
       setPayslipError(true)
-      toast.error("Payslip is required when Monthly Net Pay is provided.")
+      toast.error("Net Take Home Pay is required when Monthly Net Pay is provided.")
       return
     }
     setPayslipError(false)
@@ -563,7 +562,7 @@ export default function MemberRegistrationPage() {
         <div className="rounded-xl border border-border/60 bg-card p-1 transition-all hover:border-border hover:shadow-xs">
           <FileUploader
             key={`${category}-${docResetKeys[category]}`}
-            label={category}
+            label={category === "Payslip" ? "Net Take Home Pay" : category}
             required={
               category === "Valid ID"
               || category === "Appointment Document"
@@ -888,31 +887,6 @@ export default function MemberRegistrationPage() {
             <Field label="Monthly Net Pay" error={errors.netPay?.message}>
               <CurrencyInput value={watch("netPay")} onChange={(v) => setValue("netPay", v, { shouldDirty: true })} placeholder="Optional — used for income-tiered loan products" />
             </Field>
-            <div className="sm:col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Membership / Registration Fee" isCalculated>
-                    <Input value={formatCurrency(existingMember?.membershipFeePayment?.amount ?? getSettings().general.membershipRegistrationFee)} readOnly className="bg-background font-semibold text-foreground" />
-                  </Field>
-                  <Field label="Payment Method" isCalculated>
-                    <Input value={existingMember?.membershipFeePayment?.paymentMethod ?? "Cash"} readOnly className="bg-background font-medium text-foreground" />
-                  </Field>
-                  {existingMember?.membershipFeePayment && (
-                    <Field label="Payment Reference" isCalculated>
-                      <Input value={existingMember.membershipFeePayment.referenceNumber} readOnly className="bg-background font-medium text-foreground" />
-                    </Field>
-                  )}
-                  {isEdit && (
-                    <Field label="Payment Status" isCalculated>
-                      <Input value={existingMember?.membershipFeePayment?.status ?? (existingMember?.isDraft ? "Not posted — draft" : "No payment record")} readOnly className="bg-background font-medium text-foreground" />
-                    </Field>
-                  )}
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {existingMember?.membershipFeePayment
-                    ? `Posted on ${formatDateShort(existingMember.membershipFeePayment.paymentDate)} and received by ${existingMember.membershipFeePayment.receivedBy}.`
-                    : "This one-time fee will be posted automatically when the member registration is submitted. It is not recorded while saved as draft."}
-                </p>
-              </div>
             <Field label="Remarks" className="sm:col-span-2">
               <Textarea rows={2} placeholder="Additional notes about this member (optional)" {...register("remarks")} className="bg-background" />
             </Field>
@@ -956,7 +930,7 @@ export default function MemberRegistrationPage() {
             )}
             {payslipError && hasMonthlyNetPay && (
               <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
-                Payslip is required because Monthly Net Pay has been provided.
+                Net Take Home Pay is required because Monthly Net Pay has been provided.
               </p>
             )}
             <DocumentGallery items={documentGalleryItems} />

@@ -52,12 +52,14 @@ function NavLink({
   item, 
   collapsed, 
   isActive, 
-  isChild = false 
+  isChild = false,
+  onNavigate,
 }: { 
   item: NavItem 
   collapsed: boolean 
   isActive: boolean 
   isChild?: boolean 
+  onNavigate?: () => void
 }) {
   const Icon = item.icon
   const showBadge = item.path === "/my-approvals"
@@ -65,6 +67,7 @@ function NavLink({
   const link = (
     <Link
       to={item.path}
+      onClick={onNavigate}
       className={cn(
         "group/link relative flex items-center gap-2.5 rounded-xl py-2 transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         isChild ? "px-3 text-[13px]" : "px-3 text-sm",
@@ -106,7 +109,7 @@ function NavLink({
   )
 }
 
-function NavGroup({ item, collapsed, pathname }: { item: NavItem; collapsed: boolean; pathname: string }) {
+function NavGroup({ item, collapsed, pathname, onNavigate }: { item: NavItem; collapsed: boolean; pathname: string; onNavigate?: () => void }) {
   const { hasPermission, hasAnyPermission } = useAuth()
   const visibleChildren = (item.children ?? []).filter((child) => isItemVisible(child, hasPermission, hasAnyPermission))
   const isGroupActive = pathname.startsWith(item.path === "/admin" ? "/admin" : item.path)
@@ -123,12 +126,12 @@ function NavGroup({ item, collapsed, pathname }: { item: NavItem; collapsed: boo
       return (
         <div className="space-y-1">
           {visibleChildren.map((child) => (
-            <NavLink key={child.path} item={child} collapsed={collapsed} isActive={pathname === child.path} isChild />
+            <NavLink key={child.path} item={child} collapsed={collapsed} isActive={pathname === child.path} isChild onNavigate={onNavigate} />
           ))}
         </div>
       )
     }
-    return <NavLink item={item} collapsed={collapsed} isActive={isGroupActive} />
+    return <NavLink item={item} collapsed={collapsed} isActive={isGroupActive} onNavigate={onNavigate} />
   }
 
   const Icon = item.icon
@@ -158,7 +161,7 @@ function NavGroup({ item, collapsed, pathname }: { item: NavItem; collapsed: boo
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapse-up data-[state=open]:animate-collapse-down my-1 space-y-1 ml-4 border-l border-sidebar-border/50 pl-2.5">
         {visibleChildren.map((child) => (
-          <NavLink key={child.path} item={child} collapsed={collapsed} isActive={pathname === child.path} isChild />
+          <NavLink key={child.path} item={child} collapsed={collapsed} isActive={pathname === child.path} isChild onNavigate={onNavigate} />
         ))}
       </CollapsibleContent>
     </Collapsible>
@@ -171,12 +174,12 @@ export function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: bool
   const visibleItems = NAV_ITEMS.filter((item) => isItemVisible(item, hasPermission, hasAnyPermission))
 
   return (
-    <nav className="flex flex-col gap-1.5 px-2" onClick={onNavigate}>
+    <nav className="flex flex-col gap-1.5 px-2">
       {visibleItems.map((item) =>
         item.children ? (
-          <NavGroup key={item.path} item={item} collapsed={collapsed} pathname={location.pathname} />
+          <NavGroup key={item.path} item={item} collapsed={collapsed} pathname={location.pathname} onNavigate={onNavigate} />
         ) : (
-          <NavLink key={item.path} item={item} collapsed={collapsed} isActive={location.pathname === item.path} />
+          <NavLink key={item.path} item={item} collapsed={collapsed} isActive={location.pathname === item.path} onNavigate={onNavigate} />
         )
       )}
     </nav>

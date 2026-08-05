@@ -110,6 +110,17 @@ export async function updateMemberMembershipStatus(
   return data
 }
 
+/** Saves the net pay and its supporting document from the loan wizard to the member profile. */
+export async function updateMemberLoanFinancialProfile(id: string, netPay: number, file?: File): Promise<Member> {
+  const form = new FormData()
+  form.append("netPay", String(netPay))
+  if (file) form.append("file", file)
+  const { data } = await api.post<Member>(`/members/${id}/loan-financial-profile`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  })
+  return data
+}
+
 /**
  * Draft payloads may omit almost everything (see MemberRequest's lenient
  * `asDraft` rules) — only `asDraft`/`draftCurrentStep` are guaranteed.
@@ -144,6 +155,18 @@ export async function restoreMember(id: string): Promise<Member> {
 
 export async function approveMemberRegistration(id: string, remarks?: string): Promise<Member> {
   const { data } = await api.post<Member>(`/members/${id}/approve`, { remarks })
+  return data
+}
+
+export interface PayMembershipFeeInput {
+  amount?: number
+  paymentDate: string
+  paymentMethod: string
+}
+
+/** Posts the membership registration fee owed since registration — see MemberController::payMembershipFee(). Contributions, loans, and benefit claims are blocked until this is Posted. */
+export async function payMembershipFee(id: string, input: PayMembershipFeeInput): Promise<Member> {
+  const { data } = await api.post<Member>(`/members/${id}/membership-fee/pay`, input)
   return data
 }
 

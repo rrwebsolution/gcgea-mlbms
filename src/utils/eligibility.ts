@@ -130,6 +130,13 @@ export function evaluateLoanEligibility(
       detail: isRegistrationApproved(member) ? "Member registration has been approved." : "Member registration is not yet approved.",
     },
     {
+      label: "Membership Registration Fee Paid",
+      passed: member.membershipFeePayment?.status === "Posted",
+      detail: member.membershipFeePayment?.status === "Posted"
+        ? "Membership registration fee has been paid."
+        : "Membership registration fee has not been paid yet — post it under Treasury > Payments before this member can apply for a loan.",
+    },
+    {
       label: "Active Member",
       passed: member.membershipStatus === "Active",
       detail: member.membershipStatus === "Active" ? "Member status is Active." : `Member status is ${member.membershipStatus}, not Active.`,
@@ -228,6 +235,13 @@ export function evaluateBenefitEligibility(
           : `Member status is ${member.membershipStatus}, not Active.`,
     },
     {
+      label: "Membership Registration Fee Paid",
+      passed: member.membershipFeePayment?.status === "Posted",
+      detail: member.membershipFeePayment?.status === "Posted"
+        ? "Membership registration fee has been paid."
+        : "Membership registration fee has not been paid yet — post it under Treasury > Payments before this member can claim a benefit.",
+    },
+    {
       label: "Minimum Membership Duration Met",
       passed: membershipMonths >= benefitType.requiredMembershipMonths,
       detail: `Requires ${benefitType.requiredMembershipMonths} month(s) of membership; member has ${membershipMonths} month(s).`,
@@ -278,6 +292,7 @@ export function resultFor(items: EligibilityCheckItem[]): EligibilityResult {
   if (failed.length === 0) return "Eligible"
   const criticalLabels = [
     "Registration Approved",
+    "Membership Registration Fee Paid",
     "Active Member",
     "Minimum Membership Duration Met",
     "Fully Paid Monthly Dues",
@@ -336,6 +351,13 @@ export function evaluateReloanEligibility(
       label: "Registration Approved",
       passed: isRegistrationApproved(member),
       detail: isRegistrationApproved(member) ? "Member registration has been approved." : "Member registration is not yet approved.",
+    },
+    {
+      label: "Membership Registration Fee Paid",
+      passed: member.membershipFeePayment?.status === "Posted",
+      detail: member.membershipFeePayment?.status === "Posted"
+        ? "Membership registration fee has been paid."
+        : "Membership registration fee has not been paid yet — post it under Treasury > Payments before this member can apply for a loan.",
     },
     {
       label: "Active Member",

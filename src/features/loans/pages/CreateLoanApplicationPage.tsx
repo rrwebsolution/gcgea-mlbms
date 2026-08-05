@@ -44,7 +44,7 @@ import { CommandSelect } from "@/components/shared/CommandSelect"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { DataTable } from "@/components/shared/DataTable"
 import { UserSearch } from "lucide-react"
-import { getMember } from "@/services/members.service"
+import { getMember, updateMemberLoanFinancialProfile } from "@/services/members.service"
 import { listAllContributions } from "@/services/contributions.service"
 import { listAllDeductions } from "@/services/deductions.service"
 import { getLoanSettings } from "@/services/loan-settings.service"
@@ -63,7 +63,7 @@ const STEPS = ["Select Member", "Loan Details", "Eligibility Check", "Loan Compu
 
 const REQUIREMENT_LABELS = [
   "Accomplished Loan Application Form",
-  "Latest Payslip",
+  "Latest Net Take Home Pay",
   "Valid Government ID",
   "Authorization for Salary Deduction",
   "Promissory Note",
@@ -230,10 +230,16 @@ export default function CreateLoanApplicationPage() {
 
   const [agree, setAgree] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [memberNetPay, setMemberNetPay] = React.useState<number | undefined>()
+  const [netPayDocument, setNetPayDocument] = React.useState<File | null>(null)
+  const [isSavingMemberFinancials, setIsSavingMemberFinancials] = React.useState(false)
   const [isAutosaving, setIsAutosaving] = React.useState(false)
   const [successDialog, setSuccessDialog] = React.useState<{ created: LoanApplication[] } | null>(null)
 
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
+  const hasMemberNetPay = Number(member?.netPay ?? 0) > 0
+  const hasMemberNetPayDocument = member?.documents.some((document) => document.category === "Payslip") ?? false
+  const hasCompleteMemberFinancialInfo = hasMemberNetPay && hasMemberNetPayDocument
   const { data: loanTypes = [] } = useQuery({ queryKey: ["loan-types"], queryFn: listLoanTypes })
   const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
   const appliedConfiguredTermsRef = React.useRef(new Set<string>())
@@ -502,6 +508,31 @@ export default function CreateLoanApplicationPage() {
     setEntries((prev) => prev.map((e) => (e.key === key ? { ...e, ...patch } : e)))
   }
 
+  async function saveMemberFinancialProfile() {
+    const netPay = memberNetPay ?? member?.netPay
+    if (!member || !netPay || netPay <= 0 || (!hasMemberNetPayDocument && !netPayDocument)) {
+      toast.error("Enter the Monthly Net Pay and attach the Net Take Home Pay document.")
+      return
+    }
+
+    setIsSavingMemberFinancials(true)
+    try {
+      const updatedMember = await updateMemberLoanFinancialProfile(member.id, netPay, netPayDocument ?? undefined)
+      queryClient.setQueryData(["members", member.id], updatedMember)
+      setEntries((current) => current.map((entry) => {
+        const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
+        const bracket = loanType?.incomeBrackets.length
+          ? bracketForNetPay(loanType.incomeBrackets, updatedMember.netPay ?? 0)
+          : null
+        return bracket ? { ...entry, requestedAmount: bracket.loanableAmount } : entry
+      }))
+      setNetPayDocument(null)
+      toast.success("Monthly Net Pay and Net Take Home Pay were saved to the member profile.")
+    } finally {
+      setIsSavingMemberFinancials(false)
+    }
+  }
+
   function handleLoanTypeChange(key: string, loanTypeId: string) {
     const loanType = loanTypes.find((lt) => lt.id === loanTypeId)
     const incomeBracket = loanType && loanType.incomeBrackets.length > 0 && member?.netPay != null
@@ -717,6 +748,7 @@ export default function CreateLoanApplicationPage() {
                 <MemberSummaryCard
                   member={member}
                   totalContributions={totalContributions}
+                  paidContributionMonths={paidMonthlyDuesPeriods.length}
                   outstandingLoanBalance={outstandingLoanBalance}
                   activeLoanCount={activeLoans.length}
                   overdueLoanCount={overdueLoans.length}
@@ -751,15 +783,59 @@ export default function CreateLoanApplicationPage() {
           description="Enter one loan type and one requested amount for this application."
         >
           {member && (
-            <div className="mb-5">
+            <div className="mb-5 space-y-3">
               <MemberSummaryCard
                 member={member}
                 totalContributions={totalContributions}
+                paidContributionMonths={paidMonthlyDuesPeriods.length}
                 outstandingLoanBalance={outstandingLoanBalance}
                 activeLoanCount={activeLoans.length}
                 overdueLoanCount={overdueLoans.length}
                 onChangeMember={() => setStep(1)}
               />
+              <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+                <p className="text-xs text-muted-foreground">Monthly Net Pay</p>
+                <p className={cn("mt-0.5 text-base font-semibold", hasMemberNetPay ? "text-foreground" : "text-destructive")}>
+                  {hasMemberNetPay ? formatCurrency(member.netPay ?? 0) : "Not yet recorded"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {member && !hasCompleteMemberFinancialInfo && (
+            <div className="mb-5 rounded-xl border border-warning/40 bg-warning/5 p-4 space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Complete Member Financial Information</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Save these details directly to the member profile to calculate the correct loanable limit.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Monthly Net Pay <span className="text-destructive">*</span></Label>
+                  <CurrencyInput value={memberNetPay ?? member.netPay ?? undefined} onChange={setMemberNetPay} />
+                </div>
+                {!hasMemberNetPayDocument && (
+                  <FileUploader
+                    label="Net Take Home Pay"
+                    description="Upload the member's PDF or image supporting document."
+                    required
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    fileName={netPayDocument?.name}
+                    onFileSelect={setNetPayDocument}
+                  />
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  onClick={() => void saveMemberFinancialProfile()}
+                  disabled={isSavingMemberFinancials || !(memberNetPay ?? member.netPay) || (!hasMemberNetPayDocument && !netPayDocument)}
+                >
+                  {isSavingMemberFinancials && <Loader2 className="animate-spin" />}
+                  Save to Member Profile
+                </Button>
+              </div>
             </div>
           )}
 

@@ -96,7 +96,7 @@ const FEATURE_SEARCH_ENTRIES: SystemSearchEntry[] = [
   { label: "Contribution Fund Allocation", category: "Contributions", path: "/reports/contributions/fund-allocation", keywords: "mortuary fund emergency fund operational fund retirement fund loan investment monthly dues allocation" },
   { label: "Monthly Dues Eligibility", category: "Loans", path: "/loans/new", keywords: "fully paid consecutive missing unpaid skipped month eligibility check cash pabaon" },
   { label: "Loan Computation", category: "Loans", path: "/loans/new", keywords: "principal interest processing fee service charge net proceeds total payable amortization payment months formula" },
-  { label: "Member Payslip and Net Pay", category: "Members", path: "/members", keywords: "payslip document monthly net pay loanable limit member profile" },
+  { label: "Member Net Take Home Pay", category: "Members", path: "/members", keywords: "payslip net take home pay document monthly net pay loanable limit member profile" },
   { label: "Contribution Allocation Funds", category: "Contributions", path: "/contributions", keywords: "mortuary emergency operational retirement loan investment cash pabaon monthly dues" },
 ]
 

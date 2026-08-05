@@ -34,7 +34,7 @@ import type { LoanApplication, LoanRequirementItem, PaymentMethod } from "@/type
 const STEPS = ["Previous Loan Summary", "Member & Eligibility", "Current Financial Info", "New Loan Details", "Computation", "Requirements", "Review & Submit"]
 
 const REQUIREMENT_LABELS = [
-  "Updated Payslip",
+  "Updated Net Take Home Pay",
   "New Authorization for Salary Deduction",
   "New Promissory Note",
   "Valid Government ID",
@@ -399,8 +399,8 @@ export default function ReloanWizardPage() {
           </div>
           <div className="mt-4">
             <FileUploader
-              label="Current Payslip"
-              description="Attach the member's current payslip supporting the net take-home pay above."
+              label="Current Net Take Home Pay"
+              description="Attach the member's current net take-home pay document supporting the amount above."
               fileName={fileMeta?.fileName}
               onFileSelect={(file) => setFileMeta(file ? { fileName: file.name, fileSize: `${Math.max(1, Math.round(file.size / 1024))} KB` } : undefined)}
             />

@@ -7,7 +7,7 @@ const OFFICERS = ["Erwin S. Cabahug", "Precious Joy M. Utlang"]
 
 const STANDARD_REQUIREMENTS: LoanRequirementItem[] = [
   { label: "Loan Application Form", completed: true },
-  { label: "Latest Payslip", completed: true },
+  { label: "Latest Net Take Home Pay", completed: true },
   { label: "Valid ID", completed: true },
   { label: "Authorization for Salary Deduction", completed: true },
   { label: "Promissory Note", completed: false },

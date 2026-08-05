@@ -916,7 +916,7 @@ export default function SettingsPage() {
                     onCheckedChange={(v) => patchReloanPolicy({ reloanDeductPreviousBalance: v })}
                     disabled
                   />
-                  <ToggleField label="Require New Payslip" checked={settings.loan.reloanPolicy.reloanRequireNewPayslip} onCheckedChange={(v) => patchReloanPolicy({ reloanRequireNewPayslip: v })} />
+                  <ToggleField label="Require New Net Take Home Pay" checked={settings.loan.reloanPolicy.reloanRequireNewPayslip} onCheckedChange={(v) => patchReloanPolicy({ reloanRequireNewPayslip: v })} />
                   <ToggleField label="Require New Authorization" checked={settings.loan.reloanPolicy.reloanRequireNewAuthorization} onCheckedChange={(v) => patchReloanPolicy({ reloanRequireNewAuthorization: v })} />
                   <ToggleField label="Require New Promissory Note" checked={settings.loan.reloanPolicy.reloanRequireNewPromissoryNote} onCheckedChange={(v) => patchReloanPolicy({ reloanRequireNewPromissoryNote: v })} />
                   <ToggleField label="Require Final Approval" checked={settings.loan.reloanPolicy.reloanRequireFinalApproval} onCheckedChange={(v) => patchReloanPolicy({ reloanRequireFinalApproval: v })} />

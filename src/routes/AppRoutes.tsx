@@ -237,7 +237,7 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission="loan_payments.create" />}>
             <Route path="/loan-payments/new" element={<CreateLoanPaymentPage />} />
           </Route>
-          <Route element={<ProtectedRoute anyOf={["contributions.create", "loan_payments.create"]} />}>
+          <Route element={<ProtectedRoute anyOf={["contributions.create", "loan_payments.create", "benefits.release", "members.create"]} />}>
             <Route path="/financial/direct-payments" element={<DirectPaymentsPage />} />
           </Route>
 

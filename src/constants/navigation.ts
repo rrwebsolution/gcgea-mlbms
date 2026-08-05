@@ -148,7 +148,7 @@ export const NAV_ITEMS: NavItem[] = [
         label: "Payments",
         path: "/financial/direct-payments",
         icon: ReceiptText,
-        anyOf: ["contributions.create", "loan_payments.create"],
+        anyOf: ["contributions.create", "loan_payments.create", "benefits.release", "members.create"],
       },
       {
         label: "Annual Budgets",
