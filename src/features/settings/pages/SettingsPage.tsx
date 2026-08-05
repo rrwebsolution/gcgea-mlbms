@@ -1149,6 +1149,52 @@ export default function SettingsPage() {
 
           {active === "reportTemplate" && (
             <SectionShell title="Report Template" description="Choose and customize a complete report layout for each report category." onSave={() => handleSave("reportTemplate")} onReset={() => setResetConfirm("reportTemplate")} isSaving={isSaving}>
+              <div className="mb-5 rounded-xl border border-border bg-muted/10 p-4">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold">Check Template</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">Preview the standard Treasurer check layout using sample data.</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
+                    <Printer className="size-3.5" /> Test Print Check
+                  </Button>
+                </div>
+                <div className="overflow-x-auto rounded-lg border bg-muted/30 p-3">
+                  <div className="settings-check-preview relative origin-top-left overflow-hidden border bg-white text-black shadow-sm">
+                    <div className="absolute left-[0.45in] top-[0.25in]">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em]">GCGEA</p>
+                      <p className="text-[8px]">Loan Disbursement Check</p>
+                    </div>
+                    <div className="absolute right-[0.45in] top-[0.3in] text-right text-[11px]">
+                      <p><span className="text-[8px] uppercase">Date</span> <span className="ml-3 border-b border-black px-3 font-semibold">08/05/2026</span></p>
+                      <p className="mt-2 text-[8px]">CHECK NO. SAMPLE-0001</p>
+                    </div>
+                    <div className="absolute left-[0.45in] right-[0.45in] top-[1.05in] flex items-end gap-3">
+                      <span className="whitespace-nowrap text-[9px] uppercase">Pay to the order of</span>
+                      <span className="min-w-0 flex-1 border-b border-black px-2 pb-1 text-sm font-bold uppercase">JUAN DELA CRUZ</span>
+                      <span className="border border-black px-3 py-1.5 text-sm font-bold">₱20,000.00</span>
+                    </div>
+                    <div className="absolute left-[0.45in] right-[0.45in] top-[1.65in] flex items-end gap-3">
+                      <span className="flex-1 border-b border-black px-2 pb-1 text-[11px] font-semibold uppercase">Twenty Thousand Pesos and 00/100 Only</span>
+                      <span className="text-[9px] uppercase">Pesos</span>
+                    </div>
+                    <div className="absolute bottom-[0.35in] left-[0.45in] text-[9px]">Memo: LN-SAMPLE-0001 · Solidarity Cash Assistance Loan</div>
+                    <div className="absolute bottom-[0.32in] right-[0.45in] w-[2.15in] border-t border-black pt-1 text-center text-[8px] uppercase">Authorized Signature / Treasurer</div>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">Actual check values come from the released loan. Print using 100% / Actual Size.</p>
+                <style>{`
+                  .settings-check-preview { width: 8.5in; height: 3.5in; }
+                  @media (max-width: 1000px) { .settings-check-preview { transform: scale(.75); margin-bottom: -0.875in; } }
+                  @page { size: 8.5in 3.5in; margin: 0; }
+                  @media print {
+                    html, body { width: 8.5in; height: 3.5in; background: white !important; }
+                    body * { visibility: hidden; }
+                    .settings-check-preview, .settings-check-preview * { visibility: visible; }
+                    .settings-check-preview { position: fixed; inset: 0; transform: none; border: 0; box-shadow: none; }
+                  }
+                `}</style>
+              </div>
               <AlertBanner tone="info" title="Category-specific report layouts" description="The organization header is shared, while the title, table body, colors, density, borders, and orientation can be configured separately per report category." className="mb-4" />
 
               <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-border bg-muted/20 p-1">
