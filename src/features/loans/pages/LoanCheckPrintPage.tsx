@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { getLoan } from "@/services/loans.service"
+import { getSettings } from "@/services/settings.service"
 import { formatCurrency } from "@/utils/format"
 
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
@@ -43,6 +44,7 @@ export default function LoanCheckPrintPage() {
   if (!loan) return <EmptyState icon={Landmark} title="Loan not found" description="The check source record is unavailable." />
 
   const amount = loan.actualReleasedAmount ?? loan.netProceeds
+  const template = getSettings().reportTemplate.checkTemplate
   const checkDate = loan.releaseDate ? new Date(loan.releaseDate) : new Date()
   const formattedDate = checkDate.toLocaleDateString("en-PH", { month: "2-digit", day: "2-digit", year: "numeric" })
 
@@ -54,31 +56,31 @@ export default function LoanCheckPrintPage() {
       </div>
 
       <div className="check-sheet relative mx-auto overflow-hidden border bg-white text-black shadow-sm print:border-0 print:shadow-none">
-        <div className="absolute left-[0.45in] top-[0.25in]">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em]">GCGEA</p>
-          <p className="text-[8px]">Loan Disbursement Check</p>
+        <div className="absolute" style={{ left: `${template.horizontalMargin}in`, top: `${template.headerTop}in` }}>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em]">{template.heading}</p>
+          <p className="text-[8px]">{template.subheading}</p>
         </div>
-        <div className="absolute right-[0.45in] top-[0.3in] text-right text-[11px]">
+        <div className="absolute text-right text-[11px]" style={{ right: `${template.horizontalMargin}in`, top: `${template.headerTop + 0.05}in` }}>
           <p><span className="text-[8px] uppercase">Date</span> <span className="ml-3 border-b border-black px-3 font-semibold">{formattedDate}</span></p>
           <p className="mt-2 text-[8px]">CHECK NO. {loan.releaseReferenceNumber || "________________"}</p>
         </div>
 
-        <div className="absolute left-[0.45in] right-[0.45in] top-[1.05in] flex items-end gap-3">
-          <span className="whitespace-nowrap text-[9px] uppercase">Pay to the order of</span>
+        <div className="absolute flex items-end gap-3" style={{ left: `${template.horizontalMargin}in`, right: `${template.horizontalMargin}in`, top: `${template.payeeTop}in` }}>
+          <span className="whitespace-nowrap text-[9px] uppercase">{template.payeeLabel}</span>
           <span className="min-w-0 flex-1 border-b border-black px-2 pb-1 text-sm font-bold uppercase">{loan.memberName}</span>
           <span className="border border-black px-3 py-1.5 text-sm font-bold">{formatCurrency(amount)}</span>
         </div>
 
-        <div className="absolute left-[0.45in] right-[0.45in] top-[1.65in] flex items-end gap-3">
+        <div className="absolute flex items-end gap-3" style={{ left: `${template.horizontalMargin}in`, right: `${template.horizontalMargin}in`, top: `${template.wordsTop}in` }}>
           <span className="flex-1 border-b border-black px-2 pb-1 text-[11px] font-semibold uppercase">{amountInWords(amount)}</span>
-          <span className="text-[9px] uppercase">Pesos</span>
+          <span className="text-[9px] uppercase">{template.currencyLabel}</span>
         </div>
 
-        <div className="absolute bottom-[0.35in] left-[0.45in] text-[9px]">
-          <p>Memo: {loan.applicationNumber} · {loan.loanTypeName}</p>
+        <div className="absolute text-[9px]" style={{ bottom: `${template.footerBottom + 0.03}in`, left: `${template.horizontalMargin}in` }}>
+          <p>{template.memoPrefix} {loan.applicationNumber} · {loan.loanTypeName}</p>
         </div>
-        <div className="absolute bottom-[0.32in] right-[0.45in] w-[2.15in] border-t border-black pt-1 text-center text-[8px] uppercase">
-          Authorized Signature / Treasurer
+        <div className="absolute w-[2.15in] border-t border-black pt-1 text-center text-[8px] uppercase" style={{ bottom: `${template.footerBottom}in`, right: `${template.horizontalMargin}in` }}>
+          {template.signatoryLabel}
         </div>
       </div>
 

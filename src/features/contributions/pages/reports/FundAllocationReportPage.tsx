@@ -12,6 +12,7 @@ import { formatCurrency } from "@/utils/format"
 const columns: ColumnDef<FundAllocationReportRow, unknown>[] = [
   { accessorKey: "fundName", header: "Fund Name" },
   { accessorKey: "allocatedAmount", header: "Allocated Amount", cell: ({ row }) => formatCurrency(row.original.allocatedAmount) },
+  { accessorKey: "disbursedAmount", header: "Released / Disbursed", cell: ({ row }) => formatCurrency(row.original.disbursedAmount) },
   { accessorKey: "currentBalance", header: "Current Balance", cell: ({ row }) => formatCurrency(row.original.currentBalance) },
   { accessorKey: "monthlyTotal", header: "Monthly Total", cell: ({ row }) => formatCurrency(row.original.monthlyTotal) },
   { accessorKey: "annualTotal", header: "Annual Total", cell: ({ row }) => formatCurrency(row.original.annualTotal) },
@@ -20,15 +21,17 @@ const columns: ColumnDef<FundAllocationReportRow, unknown>[] = [
 export default function FundAllocationReportPage() {
   const { data: rows = [], isLoading } = useQuery({ queryKey: ["reports", "fund-allocations"], queryFn: getFundAllocationReport })
   const currentBalance = rows.reduce((sum, row) => sum + row.currentBalance, 0)
+  const totalDisbursed = rows.reduce((sum, row) => sum + row.disbursedAmount, 0)
   const monthlyTotal = rows.reduce((sum, row) => sum + row.monthlyTotal, 0)
   const annualTotal = rows.reduce((sum, row) => sum + row.annualTotal, 0)
 
   return (
     <div className="space-y-5">
       <Button variant="ghost" size="sm" className="-ml-2" render={<Link to="/reports" />}><ArrowLeft /> Back to Report Center</Button>
-      <PageHeader title="Fund Allocation Report" description="Dynamic balances generated from all configured Monthly Dues funds." />
+      <PageHeader title="Fund Allocation Report" description="Credits from posted contributions less recorded loan and benefit releases." />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Current Fund Balance" value={formatCurrency(currentBalance)} icon={Landmark} tone="primary" isLoading={isLoading} />
+        <StatCard label="Total Released / Disbursed" value={formatCurrency(totalDisbursed)} icon={Landmark} tone="warning" isLoading={isLoading} />
         <StatCard label="Current Month" value={formatCurrency(monthlyTotal)} icon={Wallet} tone="success" isLoading={isLoading} />
         <StatCard label="Current Year" value={formatCurrency(annualTotal)} icon={Wallet} tone="gold" isLoading={isLoading} />
       </div>

@@ -37,6 +37,10 @@ function mergeReportTemplate(value?: Partial<SystemSettings["reportTemplate"]>):
   return {
     ...defaults,
     ...value,
+    checkTemplate: {
+      ...defaults.checkTemplate,
+      ...value?.checkTemplate,
+    },
     categoryTemplates: {
       member: category("member"),
       contribution: category("contribution"),

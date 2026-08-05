@@ -72,6 +72,8 @@ export interface LoanSettings {
   requiredMonthlyDuesAmount: number
   requireConsecutiveContributionMonths: boolean
   applyContributionRuleToReloan: boolean
+  lockFirstSolidarityLoan: boolean
+  firstSolidarityLoanAmount: number
   defaultInterestMethod: string
   defaultInterestRate: number
   defaultProcessingFee: number
@@ -166,7 +168,22 @@ export interface ReportTemplateSettings {
   leftLogo: string
   rightLogo: string
   showGeneratedDate: boolean
+  checkTemplate: CheckTemplateSettings
   categoryTemplates: Record<ReportTemplateCategory, ReportCategoryTemplate>
+}
+
+export interface CheckTemplateSettings {
+  heading: string
+  subheading: string
+  payeeLabel: string
+  currencyLabel: string
+  memoPrefix: string
+  signatoryLabel: string
+  horizontalMargin: number
+  headerTop: number
+  payeeTop: number
+  wordsTop: number
+  footerBottom: number
 }
 
 export type ReportTemplateCategory = "member" | "contribution" | "loan" | "benefit" | "financial"

@@ -37,6 +37,7 @@ export interface FundAllocationReportRow {
   fundId: string
   fundName: string
   allocatedAmount: number
+  disbursedAmount: number
   currentBalance: number
   monthlyTotal: number
   annualTotal: number

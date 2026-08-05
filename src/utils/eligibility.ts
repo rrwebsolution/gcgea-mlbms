@@ -84,6 +84,8 @@ export interface PaidMonthlyDuesSummary {
   requiredAmount: number
   requirePaidContributions: boolean
   requireConsecutiveMonths: boolean
+  lockFirstSolidarityLoan: boolean
+  firstSolidarityLoanAmount: number
 }
 
 /**
@@ -122,7 +124,8 @@ export function evaluateLoanEligibility(
     ? paidMonthlyDues.consecutivePaidMonths
     : paidMonthlyDues.paidMonths
   const paidDuesPassed = !paidMonthlyDues.requirePaidContributions || verifiedPaidMonths >= paidMonthlyDues.requiredMonths
-  const isFirstSolidarityLoan = loanType.name.toLowerCase().includes("solidarity")
+  const isFirstSolidarityLoan = paidMonthlyDues.lockFirstSolidarityLoan
+    && loanType.name.toLowerCase().includes("solidarity")
     && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
 
   const items: EligibilityCheckItem[] = [
@@ -186,8 +189,8 @@ export function evaluateLoanEligibility(
     isFirstSolidarityLoan
       ? {
           label: "First Solidarity Loan Fixed Amount",
-          passed: requestedAmount === 20_000,
-          detail: "A first-time Solidarity borrower is loanable for exactly ₱20,000 under the resolution.",
+          passed: requestedAmount === paidMonthlyDues.firstSolidarityLoanAmount,
+          detail: `A first-time Solidarity borrower is loanable for exactly ₱${paidMonthlyDues.firstSolidarityLoanAmount.toLocaleString()} under the current settings.`,
         }
       : loanType.incomeBrackets.length > 0
       ? {

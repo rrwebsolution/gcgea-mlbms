@@ -353,10 +353,12 @@ export default function CreateLoanApplicationPage() {
     const loanType = loanTypes.find((lt) => lt.id === entry.loanTypeId)
     const isBracketedLoanType = Boolean(loanType && loanType.incomeBrackets.length > 0)
     const isFirstSolidarityLoan = Boolean(
-      loanType?.name.toLowerCase().includes("solidarity")
+      (loanSettings?.lockFirstSolidarityLoan ?? true)
+      && loanType?.name.toLowerCase().includes("solidarity")
       && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
     )
-    const effectiveAmount = isFirstSolidarityLoan ? 20_000 : entry.requestedAmount
+    const firstSolidarityLoanAmount = loanSettings?.firstSolidarityLoanAmount ?? 20_000
+    const effectiveAmount = isFirstSolidarityLoan ? firstSolidarityLoanAmount : entry.requestedAmount
     const paidMonthlyDues: PaidMonthlyDuesSummary = {
       paidMonths: paidMonthlyDuesPeriods.length,
       consecutivePaidMonths,
@@ -364,6 +366,8 @@ export default function CreateLoanApplicationPage() {
       requiredAmount: requiredMonthlyDuesAmount,
       requirePaidContributions: loanSettings?.requirePaidContributions ?? true,
       requireConsecutiveMonths: loanSettings?.requireConsecutiveContributionMonths ?? true,
+      lockFirstSolidarityLoan: loanSettings?.lockFirstSolidarityLoan ?? true,
+      firstSolidarityLoanAmount,
     }
 
     const eligibilityItems = memberForEval && loanType
@@ -533,9 +537,9 @@ export default function CreateLoanApplicationPage() {
       queryClient.setQueryData(["members", member.id], updatedMember)
       setEntries((current) => current.map((entry) => {
         const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
-        const isFirstSolidarityLoan = loanType?.name.toLowerCase().includes("solidarity")
+        const isFirstSolidarityLoan = (loanSettings?.lockFirstSolidarityLoan ?? true) && loanType?.name.toLowerCase().includes("solidarity")
           && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
-        if (isFirstSolidarityLoan) return { ...entry, requestedAmount: 20_000 }
+        if (isFirstSolidarityLoan) return { ...entry, requestedAmount: loanSettings?.firstSolidarityLoanAmount ?? 20_000 }
         const bracket = loanType?.incomeBrackets.length
           ? bracketForNetPay(loanType.incomeBrackets, updatedMember.netPay ?? 0)
           : null
@@ -550,7 +554,7 @@ export default function CreateLoanApplicationPage() {
 
   function handleLoanTypeChange(key: string, loanTypeId: string) {
     const loanType = loanTypes.find((lt) => lt.id === loanTypeId)
-    const isFirstSolidarityLoan = loanType?.name.toLowerCase().includes("solidarity")
+    const isFirstSolidarityLoan = (loanSettings?.lockFirstSolidarityLoan ?? true) && loanType?.name.toLowerCase().includes("solidarity")
       && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
     const incomeBracket = loanType && loanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
       ? bracketForNetPay(loanType.incomeBrackets, effectiveMemberNetPay)
@@ -565,7 +569,7 @@ export default function CreateLoanApplicationPage() {
               // Use its configured term instead of the old hardcoded 12 months.
               termMonths: loanType?.maxTermMonths ?? e.termMonths,
               requestedAmount: isFirstSolidarityLoan
-                ? 20_000
+                ? loanSettings?.firstSolidarityLoanAmount ?? 20_000
                 : loanType?.incomeBrackets.length
                 ? incomeBracket?.loanableAmount
                 : loanType?.maxAmount ?? e.requestedAmount,
@@ -577,15 +581,15 @@ export default function CreateLoanApplicationPage() {
 
   function canProceedFromStep(s: number): boolean {
     if (s === 1) return !!member && hasAnyFullyPaidMonthlyDues
-    if (s === 2) return entries.length > 0 && entries.every((e) => {
+    if (s === 2) return hasCompleteMemberFinancialInfo && entries.length > 0 && entries.every((e) => {
       const monthlyDuesCheck = derivedFor(e.key).eligibilityItems.find((item) => item.label === "Fully Paid Monthly Dues")
       const selectedLoanType = loanTypes.find((loanType) => loanType.id === e.loanTypeId)
-      const isFirstSolidarityLoan = selectedLoanType?.name.toLowerCase().includes("solidarity")
+      const isFirstSolidarityLoan = (loanSettings?.lockFirstSolidarityLoan ?? true) && selectedLoanType?.name.toLowerCase().includes("solidarity")
         && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
       const bracket = selectedLoanType && selectedLoanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
         ? bracketForNetPay(selectedLoanType.incomeBrackets, effectiveMemberNetPay)
         : null
-      const amountWithinBracket = isFirstSolidarityLoan ? e.requestedAmount === 20_000 : !selectedLoanType?.incomeBrackets.length || (
+      const amountWithinBracket = isFirstSolidarityLoan ? e.requestedAmount === (loanSettings?.firstSolidarityLoanAmount ?? 20_000) : !selectedLoanType?.incomeBrackets.length || (
         bracket !== null
         && e.requestedAmount != null
         && e.requestedAmount >= selectedLoanType.minAmount
@@ -606,6 +610,10 @@ export default function CreateLoanApplicationPage() {
 
   function goNext() {
     if (!canProceedFromStep(step)) {
+      if (step === 2 && !hasCompleteMemberFinancialInfo) {
+        toast.error("Monthly Net Pay and Net Take Home Pay document are required. Save them to the member profile before continuing.")
+        return
+      }
       toast.error("Please complete the required fields before continuing.")
       return
     }
@@ -826,11 +834,11 @@ export default function CreateLoanApplicationPage() {
           )}
 
           {member && !hasCompleteMemberFinancialInfo && (
-            <div className="mb-5 rounded-xl border border-warning/40 bg-warning/5 p-4 space-y-4">
+            <div className="mb-5 rounded-xl border border-destructive/40 bg-destructive/5 p-4 space-y-4">
               <div>
-                <p className="text-sm font-semibold text-foreground">Complete Member Financial Information</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Save these details directly to the member profile to calculate the correct loanable limit.
+                <p className="text-sm font-semibold text-destructive">Complete Member Financial Information · Required</p>
+                <p className="mt-1 text-xs font-medium text-destructive/90">
+                  Monthly Net Pay and the Net Take Home Pay document must be saved to the member profile before you can proceed to the next step.
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -898,9 +906,9 @@ export default function CreateLoanApplicationPage() {
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Requested Amount <span className="text-destructive">*</span></Label>
                       {derived.isFirstSolidarityLoan ? (
                         <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/5 p-4">
-                          <CurrencyInput value={20_000} onChange={() => undefined} disabled />
+                          <CurrencyInput value={loanSettings?.firstSolidarityLoanAmount ?? 20_000} onChange={() => undefined} disabled />
                           <p className="text-[11px] font-medium text-primary">
-                            First Solidarity loan is fixed at {formatCurrency(20_000)} after six qualified ₱100 monthly contributions, per resolution.
+                            First Solidarity loan is fixed at {formatCurrency(loanSettings?.firstSolidarityLoanAmount ?? 20_000)} after the configured qualified monthly contributions, per resolution.
                           </p>
                         </div>
                       ) : derived.isBracketedLoanType ? (

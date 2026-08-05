@@ -211,6 +211,7 @@ export default function SettingsPage() {
   const currentReportDesign = reportFormat === "pdf"
     ? settings.reportTemplate.categoryTemplates[reportCategory]
     : settings.reportTemplate.categoryTemplates[reportCategory].excelTemplate
+  const checkTemplate = settings.reportTemplate.checkTemplate
   const activeTextStyle: ReportTextStyle = editorRegion === "caption"
     ? currentReportDesign.captionStyle
     : editorRegion === "note"
@@ -264,6 +265,10 @@ export default function SettingsPage() {
 
   function patch<K extends keyof SystemSettings>(key: K, value: Partial<SystemSettings[K]>) {
     setSettings((prev) => ({ ...prev, [key]: { ...prev[key], ...value } }))
+  }
+
+  function patchCheckTemplate(value: Partial<SystemSettings["reportTemplate"]["checkTemplate"]>) {
+    patch("reportTemplate", { checkTemplate: { ...checkTemplate, ...value } })
   }
 
   function patchReloanPolicy(value: Partial<SystemSettings["loan"]["reloanPolicy"]>) {
@@ -828,6 +833,27 @@ export default function SettingsPage() {
               </div>
 
               <div className="mt-6 border-t border-border/30 pt-5">
+                <h3 className="mb-1 font-heading text-sm font-bold tracking-tight text-foreground">First-Time Solidarity Loan Lock</h3>
+                <p className="mb-4 text-xs font-medium text-muted-foreground">
+                  Lock a member's first-ever Solidarity Cash Assistance Loan to the amount authorized by the current resolution.
+                </p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <ToggleField
+                    label="Lock First-Time Borrower Amount"
+                    checked={settings.loan.lockFirstSolidarityLoan}
+                    onCheckedChange={(value) => patch("loan", { lockFirstSolidarityLoan: value })}
+                  />
+                  <Field label="Locked First Loan Amount (₱)">
+                    <CurrencyInput
+                      value={settings.loan.firstSolidarityLoanAmount}
+                      onChange={(value) => patch("loan", { firstSolidarityLoanAmount: value ?? 0 })}
+                      disabled={!settings.loan.lockFirstSolidarityLoan}
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              <div className="mt-6 border-t border-border/30 pt-5">
                 <h3 className="mb-1 font-heading text-sm font-bold tracking-tight text-foreground">Monthly Dues Loan Eligibility</h3>
                 <p className="mb-4 text-xs font-medium text-muted-foreground">
                   Only distinct Posted Monthly Dues periods that meet the required full monthly amount are counted. Cash Pabaon and other contribution types are excluded.
@@ -1161,26 +1187,39 @@ export default function SettingsPage() {
                 </div>
                 <div className="overflow-x-auto rounded-lg border bg-muted/30 p-3">
                   <div className="settings-check-preview relative origin-top-left overflow-hidden border bg-white text-black shadow-sm">
-                    <div className="absolute left-[0.45in] top-[0.25in]">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.16em]">GCGEA</p>
-                      <p className="text-[8px]">Loan Disbursement Check</p>
+                    <div className="absolute" style={{ left: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.headerTop}in` }}>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em]">{checkTemplate.heading}</p>
+                      <p className="text-[8px]">{checkTemplate.subheading}</p>
                     </div>
-                    <div className="absolute right-[0.45in] top-[0.3in] text-right text-[11px]">
+                    <div className="absolute text-right text-[11px]" style={{ right: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.headerTop + 0.05}in` }}>
                       <p><span className="text-[8px] uppercase">Date</span> <span className="ml-3 border-b border-black px-3 font-semibold">08/05/2026</span></p>
                       <p className="mt-2 text-[8px]">CHECK NO. SAMPLE-0001</p>
                     </div>
-                    <div className="absolute left-[0.45in] right-[0.45in] top-[1.05in] flex items-end gap-3">
-                      <span className="whitespace-nowrap text-[9px] uppercase">Pay to the order of</span>
+                    <div className="absolute flex items-end gap-3" style={{ left: `${checkTemplate.horizontalMargin}in`, right: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.payeeTop}in` }}>
+                      <span className="whitespace-nowrap text-[9px] uppercase">{checkTemplate.payeeLabel}</span>
                       <span className="min-w-0 flex-1 border-b border-black px-2 pb-1 text-sm font-bold uppercase">JUAN DELA CRUZ</span>
                       <span className="border border-black px-3 py-1.5 text-sm font-bold">₱20,000.00</span>
                     </div>
-                    <div className="absolute left-[0.45in] right-[0.45in] top-[1.65in] flex items-end gap-3">
+                    <div className="absolute flex items-end gap-3" style={{ left: `${checkTemplate.horizontalMargin}in`, right: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.wordsTop}in` }}>
                       <span className="flex-1 border-b border-black px-2 pb-1 text-[11px] font-semibold uppercase">Twenty Thousand Pesos and 00/100 Only</span>
-                      <span className="text-[9px] uppercase">Pesos</span>
+                      <span className="text-[9px] uppercase">{checkTemplate.currencyLabel}</span>
                     </div>
-                    <div className="absolute bottom-[0.35in] left-[0.45in] text-[9px]">Memo: LN-SAMPLE-0001 · Solidarity Cash Assistance Loan</div>
-                    <div className="absolute bottom-[0.32in] right-[0.45in] w-[2.15in] border-t border-black pt-1 text-center text-[8px] uppercase">Authorized Signature / Treasurer</div>
+                    <div className="absolute text-[9px]" style={{ bottom: `${checkTemplate.footerBottom + 0.03}in`, left: `${checkTemplate.horizontalMargin}in` }}>{checkTemplate.memoPrefix} LN-SAMPLE-0001 · Solidarity Cash Assistance Loan</div>
+                    <div className="absolute w-[2.15in] border-t border-black pt-1 text-center text-[8px] uppercase" style={{ bottom: `${checkTemplate.footerBottom}in`, right: `${checkTemplate.horizontalMargin}in` }}>{checkTemplate.signatoryLabel}</div>
                   </div>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Check Heading"><Input value={checkTemplate.heading} onChange={(event) => patchCheckTemplate({ heading: event.target.value })} /></Field>
+                  <Field label="Check Subheading"><Input value={checkTemplate.subheading} onChange={(event) => patchCheckTemplate({ subheading: event.target.value })} /></Field>
+                  <Field label="Payee Label"><Input value={checkTemplate.payeeLabel} onChange={(event) => patchCheckTemplate({ payeeLabel: event.target.value })} /></Field>
+                  <Field label="Currency Label"><Input value={checkTemplate.currencyLabel} onChange={(event) => patchCheckTemplate({ currencyLabel: event.target.value })} /></Field>
+                  <Field label="Memo Prefix"><Input value={checkTemplate.memoPrefix} onChange={(event) => patchCheckTemplate({ memoPrefix: event.target.value })} /></Field>
+                  <Field label="Signature Label"><Input value={checkTemplate.signatoryLabel} onChange={(event) => patchCheckTemplate({ signatoryLabel: event.target.value })} /></Field>
+                  <Field label="Horizontal Margin (in)"><Input type="number" min={0} max={1.5} step={0.05} value={checkTemplate.horizontalMargin} onChange={(event) => patchCheckTemplate({ horizontalMargin: Number(event.target.value) })} /></Field>
+                  <Field label="Header Top (in)"><Input type="number" min={0} max={2} step={0.05} value={checkTemplate.headerTop} onChange={(event) => patchCheckTemplate({ headerTop: Number(event.target.value) })} /></Field>
+                  <Field label="Payee Top (in)"><Input type="number" min={0} max={3} step={0.05} value={checkTemplate.payeeTop} onChange={(event) => patchCheckTemplate({ payeeTop: Number(event.target.value) })} /></Field>
+                  <Field label="Amount Words Top (in)"><Input type="number" min={0} max={3} step={0.05} value={checkTemplate.wordsTop} onChange={(event) => patchCheckTemplate({ wordsTop: Number(event.target.value) })} /></Field>
+                  <Field label="Footer Bottom (in)"><Input type="number" min={0} max={2} step={0.05} value={checkTemplate.footerBottom} onChange={(event) => patchCheckTemplate({ footerBottom: Number(event.target.value) })} /></Field>
                 </div>
                 <p className="mt-2 text-[11px] text-muted-foreground">Actual check values come from the released loan. Print using 100% / Actual Size.</p>
                 <style>{`
