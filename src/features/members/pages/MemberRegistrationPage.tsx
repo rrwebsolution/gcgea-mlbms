@@ -555,7 +555,13 @@ export default function MemberRegistrationPage() {
   const photoDisplayStatus: UploadStatus = photoSlot.status !== "idle" ? photoSlot.status : photoHasFile ? "uploaded" : "idle"
 
   const hasMonthlyNetPay = Number(watch("netPay") ?? 0) > 0
-  const visibleDocumentCategories = DOCUMENT_CATEGORIES.filter((category) => category !== "Payslip" || hasMonthlyNetPay)
+  const hasNetTakeHomePayDocument = Boolean(
+    documents.Payslip
+    || existingMember?.documents.some((document) => document.category === "Payslip")
+  )
+  const visibleDocumentCategories = DOCUMENT_CATEGORIES.filter(
+    (category) => category !== "Payslip" || hasMonthlyNetPay || hasNetTakeHomePayDocument
+  )
   const documentGalleryItems: DocumentGalleryItem[] = visibleDocumentCategories.filter((category) => category !== "Other Supporting Document").map((category) => {
     const existingDoc = existingMember?.documents.find((d) => d.category === category)
     const hasFile = Boolean(documents[category] || existingDoc)

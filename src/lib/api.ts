@@ -133,8 +133,28 @@ function dataDomainForUrl(url?: string): string {
   return aliases[firstSegment] ?? (firstSegment || "system")
 }
 
+/**
+ * Stored document URLs may contain an old localhost/Railway APP_URL. Route
+ * every public-storage asset through the frontend's same-origin /storage
+ * proxy so images and PDFs work consistently in local and Vercel builds.
+ */
+function normalizeStorageUrls(value: unknown): unknown {
+  if (typeof value === "string") {
+    const storageIndex = value.indexOf("/storage/")
+    return storageIndex >= 0 ? value.slice(storageIndex) : value
+  }
+  if (Array.isArray(value)) return value.map(normalizeStorageUrls)
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [key, normalizeStorageUrls(nested)])
+    )
+  }
+  return value
+}
+
 api.interceptors.response.use(
   (response) => {
+    response.data = normalizeStorageUrls(response.data)
     const method = response.config.method?.toLowerCase()
     if (method && ["post", "put", "patch", "delete"].includes(method) && !response.config.silent) {
       notifySystemDataChanged(dataDomainForUrl(response.config.url))

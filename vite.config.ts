@@ -18,6 +18,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
+      "/storage": {
+        target: "https://gcgea-mlbms-backend-production.up.railway.app",
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
   resolve: {

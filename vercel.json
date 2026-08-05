@@ -12,6 +12,10 @@
       "destination": "https://gcgea-mlbms-backend-production.up.railway.app/sanctum/:path*"
     },
     {
+      "source": "/storage/:path*",
+      "destination": "https://gcgea-mlbms-backend-production.up.railway.app/storage/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
