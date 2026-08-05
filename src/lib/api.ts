@@ -145,9 +145,21 @@ function normalizeStorageUrls(value: unknown): unknown {
   }
   if (Array.isArray(value)) return value.map(normalizeStorageUrls)
   if (value && typeof value === "object") {
-    return Object.fromEntries(
+    const normalized = Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, nested]) => [key, normalizeStorageUrls(nested)])
     )
+    // Older backend deployments return member document fileUrl values as
+    // /storage paths. The document object already contains everything needed
+    // to use the authenticated file endpoint, so force that stable URL here.
+    if (
+      typeof normalized.id === "string"
+      && typeof normalized.memberId === "string"
+      && typeof normalized.fileUrl === "string"
+      && normalized.fileUrl.includes("/storage/")
+    ) {
+      normalized.fileUrl = `/api/members/${normalized.memberId}/documents/${normalized.id}/file`
+    }
+    return normalized
   }
   return value
 }
