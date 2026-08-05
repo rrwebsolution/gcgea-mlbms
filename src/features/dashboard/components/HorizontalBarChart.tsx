@@ -1,6 +1,7 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
 import { usePageRefresh } from "@/contexts/PageRefreshContext"
+import { ChartEmptyState } from "@/features/dashboard/components/ChartEmptyState"
 
 interface HorizontalBarChartProps {
   data: { label: string; value: number }[]
@@ -14,6 +15,7 @@ export function HorizontalBarChart({ data, valueLabel = "Count", color = "var(--
   const sorted = [...data].sort((a, b) => b.value - a.value)
 
   if (isLoading || isRefreshing) return <ChartSkeleton variant="bars-horizontal" height={Math.max(220, sorted.length * 32)} />
+  if (sorted.length === 0 || sorted.every((item) => item.value === 0)) return <ChartEmptyState label={`No ${valueLabel.toLowerCase()} data available`} />
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(220, sorted.length * 32)}>

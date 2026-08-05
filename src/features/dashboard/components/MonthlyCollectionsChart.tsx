@@ -3,6 +3,7 @@ import { format, parseISO } from "date-fns"
 import { formatCurrency } from "@/utils/format"
 import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
 import { usePageRefresh } from "@/contexts/PageRefreshContext"
+import { ChartEmptyState } from "@/features/dashboard/components/ChartEmptyState"
 
 interface MonthlyCollectionsChartProps {
   data: { month: string; contributions: number; loanPayments: number }[]
@@ -20,6 +21,7 @@ function MonthTick(value: string) {
 export function MonthlyCollectionsChart({ data, isLoading }: MonthlyCollectionsChartProps) {
   const { isRefreshing } = usePageRefresh()
   if (isLoading || isRefreshing) return <ChartSkeleton variant="area" height={260} />
+  if (data.length === 0 || data.every((item) => item.contributions === 0 && item.loanPayments === 0)) return <ChartEmptyState label="No collection data available" />
 
   return (
     <ResponsiveContainer width="100%" height={260}>

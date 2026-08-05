@@ -1,6 +1,7 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
 import { usePageRefresh } from "@/contexts/PageRefreshContext"
+import { ChartEmptyState } from "@/features/dashboard/components/ChartEmptyState"
 
 interface MembershipGrowthChartProps {
   data: { year: string; count: number }[]
@@ -10,6 +11,7 @@ interface MembershipGrowthChartProps {
 export function MembershipGrowthChart({ data, isLoading }: MembershipGrowthChartProps) {
   const { isRefreshing } = usePageRefresh()
   if (isLoading || isRefreshing) return <ChartSkeleton variant="area" height={260} />
+  if (data.length === 0 || data.every((item) => item.count === 0)) return <ChartEmptyState label="No membership growth data available" />
 
   return (
     <ResponsiveContainer width="100%" height={260}>

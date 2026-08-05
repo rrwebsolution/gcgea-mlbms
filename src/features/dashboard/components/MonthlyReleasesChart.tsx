@@ -3,6 +3,7 @@ import { format, parseISO } from "date-fns"
 import { formatCurrency } from "@/utils/format"
 import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
 import { usePageRefresh } from "@/contexts/PageRefreshContext"
+import { ChartEmptyState } from "@/features/dashboard/components/ChartEmptyState"
 
 interface MonthlyReleasesChartProps {
   data: { month: string; amount: number }[]
@@ -20,6 +21,7 @@ function MonthTick(value: string) {
 export function MonthlyReleasesChart({ data, isLoading }: MonthlyReleasesChartProps) {
   const { isRefreshing } = usePageRefresh()
   if (isLoading || isRefreshing) return <ChartSkeleton variant="bars" height={260} />
+  if (data.length === 0 || data.every((item) => item.amount === 0)) return <ChartEmptyState label="No loan release data available" />
 
   return (
     <ResponsiveContainer width="100%" height={260}>

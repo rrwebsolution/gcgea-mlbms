@@ -2,6 +2,7 @@ import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 
 import { LOAN_STATUS_TONE, type StatusTone } from "@/constants/status"
 import { ChartSkeleton } from "@/components/shared/loaders/ChartSkeleton"
 import { usePageRefresh } from "@/contexts/PageRefreshContext"
+import { ChartEmptyState } from "@/features/dashboard/components/ChartEmptyState"
 
 interface LoanStatusChartProps {
   data: { status: string; count: number }[]
@@ -22,6 +23,7 @@ export function LoanStatusChart({ data, isLoading }: LoanStatusChartProps) {
   const sorted = [...data].sort((a, b) => b.count - a.count)
 
   if (isLoading || isRefreshing) return <ChartSkeleton variant="bars-horizontal" height={Math.max(220, sorted.length * 32)} />
+  if (sorted.length === 0 || sorted.every((item) => item.count === 0)) return <ChartEmptyState label="No loan status data available" />
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(220, sorted.length * 32)}>
