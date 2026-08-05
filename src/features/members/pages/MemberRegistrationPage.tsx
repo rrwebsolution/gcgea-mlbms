@@ -180,6 +180,12 @@ export default function MemberRegistrationPage() {
         retireeStatus: existingMember.retireeStatus ?? "Not Retired",
         remarks: existingMember.remarks ?? "",
         beneficiaries: existingMember.beneficiaries,
+      }, {
+        // Live photo/document uploads refresh the member query. Preserve
+        // fields the user has already changed (especially Monthly Net Pay)
+        // so that refresh cannot replace unsaved form input with the older
+        // value still stored on the server.
+        keepDirtyValues: true,
       })
       setCompletionPercentage(existingMember.draftCompletionPercentage)
     }

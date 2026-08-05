@@ -233,12 +233,15 @@ export default function CreateLoanApplicationPage() {
   const [memberNetPay, setMemberNetPay] = React.useState<number | undefined>()
   const [netPayDocument, setNetPayDocument] = React.useState<File | null>(null)
   const [isSavingMemberFinancials, setIsSavingMemberFinancials] = React.useState(false)
+  const [confirmedSavedNetPay, setConfirmedSavedNetPay] = React.useState<number | null>(null)
+  const [confirmedFinancialDocument, setConfirmedFinancialDocument] = React.useState(false)
   const [isAutosaving, setIsAutosaving] = React.useState(false)
   const [successDialog, setSuccessDialog] = React.useState<{ created: LoanApplication[] } | null>(null)
 
   const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
-  const hasMemberNetPay = Number(member?.netPay ?? 0) > 0
-  const hasMemberNetPayDocument = member?.documents.some((document) => document.category === "Payslip") ?? false
+  const effectiveMemberNetPay = confirmedSavedNetPay ?? member?.netPay
+  const hasMemberNetPay = Number(effectiveMemberNetPay ?? 0) > 0
+  const hasMemberNetPayDocument = confirmedFinancialDocument || (member?.documents.some((document) => document.category === "Payslip") ?? false)
   const hasCompleteMemberFinancialInfo = hasMemberNetPay && hasMemberNetPayDocument
   const { data: loanTypes = [] } = useQuery({ queryKey: ["loan-types"], queryFn: listLoanTypes })
   const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
@@ -325,6 +328,8 @@ export default function CreateLoanApplicationPage() {
 
   function handleMemberSelect(selectedMemberId: string) {
     setMemberId(selectedMemberId)
+    setConfirmedSavedNetPay(null)
+    setConfirmedFinancialDocument(false)
     if (loanSettings?.requirePaidContributions === false) return
 
     const qualifyingPeriods = new Set(
@@ -518,6 +523,8 @@ export default function CreateLoanApplicationPage() {
     setIsSavingMemberFinancials(true)
     try {
       const updatedMember = await updateMemberLoanFinancialProfile(member.id, netPay, netPayDocument ?? undefined)
+      setConfirmedSavedNetPay(netPay)
+      setConfirmedFinancialDocument(true)
       queryClient.setQueryData(["members", member.id], updatedMember)
       setEntries((current) => current.map((entry) => {
         const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
@@ -535,8 +542,8 @@ export default function CreateLoanApplicationPage() {
 
   function handleLoanTypeChange(key: string, loanTypeId: string) {
     const loanType = loanTypes.find((lt) => lt.id === loanTypeId)
-    const incomeBracket = loanType && loanType.incomeBrackets.length > 0 && member?.netPay != null
-      ? bracketForNetPay(loanType.incomeBrackets, member.netPay)
+    const incomeBracket = loanType && loanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
+      ? bracketForNetPay(loanType.incomeBrackets, effectiveMemberNetPay)
       : null
     setEntries((prev) =>
       prev.map((e) =>
@@ -547,7 +554,9 @@ export default function CreateLoanApplicationPage() {
               // The selected loan type is maintained from Loan Settings.
               // Use its configured term instead of the old hardcoded 12 months.
               termMonths: loanType?.maxTermMonths ?? e.termMonths,
-              requestedAmount: incomeBracket?.loanableAmount ?? loanType?.maxAmount ?? e.requestedAmount,
+              requestedAmount: loanType?.incomeBrackets.length
+                ? incomeBracket?.loanableAmount
+                : loanType?.maxAmount ?? e.requestedAmount,
             }
           : e
       )
@@ -559,8 +568,8 @@ export default function CreateLoanApplicationPage() {
     if (s === 2) return entries.length > 0 && entries.every((e) => {
       const monthlyDuesCheck = derivedFor(e.key).eligibilityItems.find((item) => item.label === "Fully Paid Monthly Dues")
       const selectedLoanType = loanTypes.find((loanType) => loanType.id === e.loanTypeId)
-      const bracket = selectedLoanType && selectedLoanType.incomeBrackets.length > 0 && member?.netPay != null
-        ? bracketForNetPay(selectedLoanType.incomeBrackets, member.netPay)
+      const bracket = selectedLoanType && selectedLoanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
+        ? bracketForNetPay(selectedLoanType.incomeBrackets, effectiveMemberNetPay)
         : null
       const amountWithinBracket = !selectedLoanType?.incomeBrackets.length || (
         bracket !== null
@@ -796,7 +805,7 @@ export default function CreateLoanApplicationPage() {
               <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
                 <p className="text-xs text-muted-foreground">Monthly Net Pay</p>
                 <p className={cn("mt-0.5 text-base font-semibold", hasMemberNetPay ? "text-foreground" : "text-destructive")}>
-                  {hasMemberNetPay ? formatCurrency(member.netPay ?? 0) : "Not yet recorded"}
+                  {hasMemberNetPay ? formatCurrency(effectiveMemberNetPay ?? 0) : "Not yet recorded"}
                 </p>
               </div>
             </div>
@@ -870,29 +879,30 @@ export default function CreateLoanApplicationPage() {
                         placeholder="Select loan type"
                       />
                     </div>
+                    {entry.loanTypeId && (!derived.isBracketedLoanType || hasMemberNetPay) && (
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Requested Amount <span className="text-destructive">*</span></Label>
                       {derived.isBracketedLoanType ? (
                         <div className="space-y-2 bg-muted/20 border border-border/60 rounded-xl p-4 shadow-inner">
                           <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Loanable Amount Range</span>
                           <div className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-semibold text-foreground">
-                            {member?.netPay == null
+                            {effectiveMemberNetPay == null
                               ? "Unavailable"
                               : `${formatCurrency(derived.loanType?.minAmount ?? 0)} – ${formatCurrency(
-                                  bracketForNetPay(derived.loanType?.incomeBrackets ?? [], member.netPay)?.loanableAmount ?? 0
+                                  bracketForNetPay(derived.loanType?.incomeBrackets ?? [], effectiveMemberNetPay)?.loanableAmount ?? 0
                                 )}`}
                           </div>
                           <Label className="block pt-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
                             Requested Amount <span className="text-destructive">*</span>
                           </Label>
                           <CurrencyInput value={entry.requestedAmount} onChange={(value) => updateEntry(entry.key, { requestedAmount: value })} />
-                          <p className={cn("mt-1 text-[11px] leading-relaxed", member?.netPay == null ? "font-medium text-destructive" : "text-muted-foreground")}>
-                            {member?.netPay == null
+                          <p className={cn("mt-1 text-[11px] leading-relaxed", effectiveMemberNetPay == null ? "font-medium text-destructive" : "text-muted-foreground")}>
+                            {effectiveMemberNetPay == null
                               ? "Member has no net pay on file — set it on the member's profile to compute the correct loanable limit."
                               : "Enter the actual amount the member wants to borrow within the calculated range above."}
                           </p>
-                          {member?.netPay != null && entry.requestedAmount != null && (() => {
-                            const bracket = bracketForNetPay(derived.loanType?.incomeBrackets ?? [], member.netPay)
+                          {effectiveMemberNetPay != null && entry.requestedAmount != null && (() => {
+                            const bracket = bracketForNetPay(derived.loanType?.incomeBrackets ?? [], effectiveMemberNetPay)
                             return bracket && (entry.requestedAmount < (derived.loanType?.minAmount ?? 0) || entry.requestedAmount > bracket.loanableAmount) ? (
                               <p className="flex items-center gap-1.5 text-xs font-medium text-destructive">
                                 <AlertTriangle className="size-3.5" /> Enter an amount within the allowed net-pay range.
@@ -904,6 +914,7 @@ export default function CreateLoanApplicationPage() {
                         <CurrencyInput value={entry.requestedAmount} onChange={(v) => updateEntry(entry.key, { requestedAmount: v })} />
                       )}
                     </div>
+                    )}
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Loan Term (Months) <span className="text-destructive">*</span></Label>
                       <Input
@@ -942,6 +953,23 @@ export default function CreateLoanApplicationPage() {
                     <div className="space-y-1.5 sm:col-span-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Remarks</Label>
                       <Textarea rows={2} placeholder="Additional notes about this application (optional)" value={entry.remarks} onChange={(e) => updateEntry(entry.key, { remarks: e.target.value })} className="text-sm bg-background resize-none" />
+                    </div>
+                    <div className="sm:col-span-2 rounded-xl border border-border/60 bg-card p-4">
+                      <FileUploader
+                        label="Other Documents (Optional)"
+                        description="You may upload an updated Net Take Home Pay or another supporting document."
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                        fileName={requirementFiles["Other Supporting Documents"]?.name ?? existingDocumentsByLabel.get("Other Supporting Documents")?.fileName}
+                        fileUrl={requirementFiles["Other Supporting Documents"] ? undefined : existingDocumentsByLabel.get("Other Supporting Documents")?.fileUrl}
+                        onFileSelect={(file) => {
+                          setRequirementFiles((current) => {
+                            const next = { ...current }
+                            if (file) next["Other Supporting Documents"] = file
+                            else delete next["Other Supporting Documents"]
+                            return next
+                          })
+                        }}
+                      />
                     </div>
                   </div>
 
