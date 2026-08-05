@@ -319,8 +319,8 @@ export function FileUploader({
           <div className="w-full space-y-2 text-left">
             <div className="flex items-start gap-3">
               {isImage && displayUrl ? (
-                <button type="button" onClick={() => preview && setPreviewOpen(true)} className="shrink-0">
-                  <img src={displayUrl} alt={displayName} className="size-12 rounded-md border border-border object-cover" />
+                <button type="button" onClick={() => preview && setPreviewOpen(true)} className="shrink-0 overflow-hidden rounded-lg border border-border bg-background">
+                  <img src={displayUrl} alt={displayName} className="h-28 w-36 object-contain sm:h-36 sm:w-48" />
                 </button>
               ) : (
                 <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">

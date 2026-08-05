@@ -64,8 +64,8 @@ export function DocumentCard({
           <ImageWithSkeleton
             src={fileUrl}
             alt={fileName}
-            containerClassName="size-11 overflow-hidden rounded-lg border border-border"
-            className="size-11 object-cover"
+            containerClassName="h-24 w-32 overflow-hidden rounded-lg border border-border bg-muted/20"
+            className="h-24 w-32 object-contain"
           />
         </button>
       ) : (

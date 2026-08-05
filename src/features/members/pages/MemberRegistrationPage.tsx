@@ -338,13 +338,15 @@ export default function MemberRegistrationPage() {
     }
   }
 
-  function handleDocumentUpload(category: DocumentCategory, file: File) {
+  function handleDocumentUpload(category: DocumentCategory, file: File, existingDocumentId?: string) {
     if (category === "Valid ID") setValidIdError(false)
     if (category === "Appointment Document") setAppointmentDocumentError(false)
     if (category === "Membership Form") setMembershipFormError(false)
     if (category === "Payslip") setPayslipError(false)
     if (isEdit) {
-      const existingDoc = existingMember?.documents.find((d) => d.category === category)
+      const existingDoc = existingDocumentId
+        ? existingMember?.documents.find((document) => document.id === existingDocumentId)
+        : existingMember?.documents.find((document) => document.category === category)
       documentUploadMutation.mutate({ category, file, existingDocId: existingDoc?.id })
     } else {
       setDocuments((prev) => ({ ...prev, [category]: file }))
@@ -942,7 +944,7 @@ export default function MemberRegistrationPage() {
                       fileSize={document.fileSize}
                       uploadedAt={formatDateShort(document.uploadedAt)}
                       uploadedBy={document.uploadedBy}
-                      onReplace={(file) => handleDocumentUpload(document.category, file)}
+                      onReplace={(file) => handleDocumentUpload(document.category, file, document.id)}
                       onRemove={() => setRemoveTarget({ kind: "document", category: document.category, documentId: document.id })}
                     />
                   ))}
