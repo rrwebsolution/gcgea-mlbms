@@ -37,8 +37,8 @@ export function CheckSheet({
   const payeeTop = template.payeeTop ?? 1.15
   const wordsTop = template.wordsTop ?? 1.6
   const footerBottom = template.footerBottom ?? 0.45
-  const signatoryBottom = Math.max(footerBottom, 0.62)
-  const memoBottom = signatoryBottom + 0.36
+  const signatoryBottom = Math.max(footerBottom, 0.92)
+  const memoBottom = signatoryBottom + 0.32
 
   return (
     <div
@@ -286,7 +286,7 @@ export function CheckSheet({
       </div>
 
       {/* ── MICR LINE ── */}
-      <div className="absolute left-0 right-0 bottom-[0.02in] text-center font-mono text-[9px] tracking-[0.18em] text-slate-500/65 pointer-events-none select-none">
+      <div className="absolute left-0 right-0 bottom-[0.02in] text-center font-mono text-[8px] tracking-[0.16em] text-slate-500/55 pointer-events-none select-none print:hidden">
         ⑈{checkNo ? checkNo.padStart(6, "0") : "000000"}⑈ ⑆012345678⑆ 1234567890⑈
       </div>
     </div>
