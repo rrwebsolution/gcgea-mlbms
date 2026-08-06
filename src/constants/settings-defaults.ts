@@ -173,8 +173,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     showGeneratedDate: true,
     checkTemplate: {
       backgroundColor: "#E8F3E8",
-      heading: "GCGEA",
-      subheading: "Loan Disbursement Check",
+      heading: "",
+      subheading: "",
       payeeLabel: "Pay to the order of",
       currencyLabel: "Pesos",
       memoPrefix: "Memo:",
@@ -186,7 +186,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       headerTop: 0.25,
       payeeTop: 1.05,
       wordsTop: 1.65,
-      footerBottom: 0.32,
+      footerBottom: 0.42,
     },
     categoryTemplates: {
       member: reportCategory({ preset: "classic", primaryColor: "#1E3A8A", headerBackground: "#E8EDF3", bodyFontSize: 9, bodyFontFamily: "Arial", bodyFontWeight: "normal", bodyFontStyle: "normal", bodyTextDecoration: "none", bodyTextColor: "#111111", bodyTextAlignment: "left", stripedRows: false, showBorders: true, titleAlignment: "center", orientation: "auto", paperSize: "a4", captionText: "", noteText: "" }),

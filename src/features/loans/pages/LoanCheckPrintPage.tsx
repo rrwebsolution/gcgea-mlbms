@@ -22,7 +22,7 @@ export default function LoanCheckPrintPage() {
   const formattedDate = checkDate.toLocaleDateString("en-PH", { month: "2-digit", day: "2-digit", year: "numeric" })
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 py-6 print:max-w-none print:p-0">
+    <div className="mx-auto max-w-5xl space-y-4 py-6 print:max-w-none print:space-y-0 print:p-0">
       <div className="flex items-center justify-between print:hidden">
         <Button variant="ghost" render={<Link to={`/loans/${loan.id}`} />}><ArrowLeft /> Back</Button>
         <Button onClick={() => window.print()}><Printer /> Print Check</Button>
@@ -46,11 +46,11 @@ export default function LoanCheckPrintPage() {
         .check-sheet { width: 8.5in; height: 3.5in; }
         @page { size: 8.5in 3.5in; margin: 0; }
         @media print {
-          html, body { width: 8.5in; height: 3.5in; background: white !important; }
+          html, body { width: 8.5in; height: 3.5in; margin: 0; background: white !important; }
           .check-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body * { visibility: hidden; }
           .check-sheet, .check-sheet * { visibility: visible; }
-          .check-sheet { position: fixed; inset: 0; }
+          .check-sheet { position: fixed; inset: 0; break-inside: avoid; page-break-inside: avoid; overflow: hidden; }
         }
       `}</style>
     </div>

@@ -1221,10 +1221,10 @@ export default function SettingsPage() {
                   @media (max-width: 1000px) { .settings-check-preview { transform: scale(.75); margin-bottom: -0.875in; } }
                   @page { size: 8.5in 3.5in; margin: 0; }
                   @media print {
-                    html, body { width: 8.5in; height: 3.5in; background: white !important; }
+                    html, body { width: 8.5in; height: 3.5in; margin: 0; background: white !important; }
                     body * { visibility: hidden; }
                     .settings-check-preview, .settings-check-preview * { visibility: visible; }
-                    .settings-check-preview { position: fixed; inset: 0; transform: none; border: 0; box-shadow: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    .settings-check-preview { position: fixed; inset: 0; transform: none; border: 0; box-shadow: none; break-inside: avoid; page-break-inside: avoid; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                   }
                 `}</style>
               </div>
