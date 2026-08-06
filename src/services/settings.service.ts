@@ -286,10 +286,13 @@ export async function loadSystemSettings(): Promise<{ settings: SystemSettings; 
 }
 
 export async function saveSettingsSection<K extends keyof SystemSettings>(section: K, value: SystemSettings[K]): Promise<SystemSettings> {
-  await api.put(`/system-settings/${section}`, { value })
-  settings = { ...settings, [section]: value }
+  const { data } = await api.put<SystemSettings[K]>(`/system-settings/${section}`, { value })
+  const savedValue = section === "reportTemplate"
+    ? mergeReportTemplate(data as Partial<SystemSettings["reportTemplate"]>) as SystemSettings[K]
+    : data
+  settings = { ...settings, [section]: savedValue }
   persistSettings()
-  publishSettingsChanged(section, value)
+  publishSettingsChanged(section, savedValue)
   return settings
 }
 
@@ -301,8 +304,11 @@ export async function saveAppearance(value: AppearanceSettings): Promise<Appeara
 }
 
 export async function resetSettingsSection<K extends keyof SystemSettings>(section: K): Promise<SystemSettings> {
-  await api.put(`/system-settings/${section}`, { value: DEFAULT_SYSTEM_SETTINGS[section] })
-  settings = { ...settings, [section]: DEFAULT_SYSTEM_SETTINGS[section] }
+  const { data } = await api.put<SystemSettings[K]>(`/system-settings/${section}`, { value: DEFAULT_SYSTEM_SETTINGS[section] })
+  const resetValue = section === "reportTemplate"
+    ? mergeReportTemplate(data as Partial<SystemSettings["reportTemplate"]>) as SystemSettings[K]
+    : data
+  settings = { ...settings, [section]: resetValue }
   persistSettings()
   publishSettingsChanged(section, settings[section])
   return settings

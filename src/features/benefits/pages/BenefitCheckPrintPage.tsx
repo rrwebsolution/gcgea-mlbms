@@ -46,11 +46,22 @@ export default function BenefitCheckPrintPage() {
         .check-sheet { width: 8.5in; height: 3.5in; }
         @page { size: 8.5in 3.5in; margin: 0; }
         @media print {
-          html, body { width: 8.5in; height: 3.5in; margin: 0; background: white !important; }
+          html, body { width: 8.5in; height: 3.5in; margin: 0; background: white !important; overflow: hidden; }
           .check-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body * { visibility: hidden; }
           .check-sheet, .check-sheet * { visibility: visible; }
-          .check-sheet { position: fixed; inset: 0; break-inside: avoid; page-break-inside: avoid; overflow: hidden; }
+          .check-sheet {
+            position: fixed;
+            left: 0.12in;
+            top: 0.1in;
+            width: 8.5in;
+            height: 3.5in;
+            transform: scale(0.94);
+            transform-origin: top left;
+            break-inside: avoid;
+            page-break-inside: avoid;
+            overflow: hidden;
+          }
         }
       `}</style>
     </div>

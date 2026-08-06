@@ -574,7 +574,7 @@ export default function SettingsPage() {
         applyAppearance(reset)
       } else {
         const reset = await resetSettingsSection(key)
-        setSettings(reset)
+        setSettings((current) => ({ ...current, [key]: reset[key] }))
         if (key === "loan") {
           await updateLoanSettings(reset.loan)
         }
@@ -1221,10 +1221,25 @@ export default function SettingsPage() {
                   @media (max-width: 1000px) { .settings-check-preview { transform: scale(.75); margin-bottom: -0.875in; } }
                   @page { size: 8.5in 3.5in; margin: 0; }
                   @media print {
-                    html, body { width: 8.5in; height: 3.5in; margin: 0; background: white !important; }
+                    html, body { width: 8.5in; height: 3.5in; margin: 0; background: white !important; overflow: hidden; }
                     body * { visibility: hidden; }
                     .settings-check-preview, .settings-check-preview * { visibility: visible; }
-                    .settings-check-preview { position: fixed; inset: 0; transform: none; border: 0; box-shadow: none; break-inside: avoid; page-break-inside: avoid; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    .settings-check-preview {
+                      position: fixed;
+                      left: 0.12in;
+                      top: 0.1in;
+                      width: 8.5in;
+                      height: 3.5in;
+                      transform: scale(0.94);
+                      transform-origin: top left;
+                      border: 0;
+                      box-shadow: none;
+                      break-inside: avoid;
+                      page-break-inside: avoid;
+                      overflow: hidden;
+                      -webkit-print-color-adjust: exact;
+                      print-color-adjust: exact;
+                    }
                   }
                 `}</style>
               </div>
@@ -1902,10 +1917,12 @@ export default function SettingsPage() {
 
       <ConfirmDialog
         open={!!resetConfirm}
-        onOpenChange={(open) => !open && setResetConfirm(null)}
+        onOpenChange={(open) => !isSaving && !open && setResetConfirm(null)}
         title="Reset section to default?"
         description="All values in this section will revert to their system defaults."
         confirmLabel="Reset to Default"
+        confirmingLabel="Resetting..."
+        isLoading={isSaving}
         destructive
         onConfirm={() => resetConfirm && handleReset(resetConfirm)}
       />

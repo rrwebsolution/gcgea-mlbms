@@ -37,6 +37,8 @@ export function CheckSheet({
   const payeeTop = template.payeeTop ?? 1.15
   const wordsTop = template.wordsTop ?? 1.6
   const footerBottom = template.footerBottom ?? 0.45
+  const signatoryBottom = Math.max(footerBottom, 0.62)
+  const memoBottom = signatoryBottom + 0.36
 
   return (
     <div
@@ -134,7 +136,7 @@ export function CheckSheet({
       <div className="absolute top-4 left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none">
         ORIGINAL DOCUMENT • SECURITY FEATURES INCLUDED • UNAUTHORIZED REPRODUCTION PROHIBITED
       </div>
-      <div className="absolute bottom-4 left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none">
+      <div className="absolute bottom-[0.08in] left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none">
         THIS CHECK CONTAINS ADVANCED SECURITY FEATURES • VERIFY AUTHENTICITY BEFORE PROCESSING
       </div>
 
@@ -144,7 +146,7 @@ export function CheckSheet({
       </div>
 
       {/* ── Holographic Stripe ── */}
-      <div className="absolute right-[42px] top-[110px] w-1 h-[90px] rounded-sm pointer-events-none bg-[repeating-linear-gradient(180deg,rgba(148,163,184,0.25)_0px,rgba(203,213,225,0.4)_8px,rgba(148,163,184,0.25)_16px)]" />
+      <div className="absolute right-[42px] top-[104px] w-1 h-[82px] rounded-sm pointer-events-none bg-[repeating-linear-gradient(180deg,rgba(148,163,184,0.25)_0px,rgba(203,213,225,0.4)_8px,rgba(148,163,184,0.25)_16px)]" />
 
       {/* ── HEADER LEFT: Company Branding ── */}
       {(template.heading || template.subheading) && (
@@ -238,7 +240,7 @@ export function CheckSheet({
         <div
           className="absolute z-10 flex items-center gap-1.5"
           style={{
-            bottom: `${footerBottom + 0.5}in`,
+            bottom: `${memoBottom}in`,
             left: `${hMargin}in`,
           }}
         >
@@ -255,14 +257,14 @@ export function CheckSheet({
       <div
         className="absolute z-10 flex justify-between"
         style={{
-          bottom: `${footerBottom}in`,
+          bottom: `${signatoryBottom}in`,
           left: `${hMargin}in`,
           right: `${hMargin}in`,
         }}
       >
         {/* Primary Signatory */}
         <div className="w-[2.15in] text-center">
-          <div className="border-t-2 border-slate-900 pt-1 mb-0.5" />
+          <div className="border-t-2 border-slate-900 pt-0.5 mb-0.5" />
           <p className="text-[8px] font-black text-slate-900 uppercase tracking-wide">
             {template.primarySignatoryName}
           </p>
@@ -273,7 +275,7 @@ export function CheckSheet({
 
         {/* Secondary Signatory */}
         <div className="w-[2.15in] text-center">
-          <div className="border-t-2 border-slate-900 pt-1 mb-0.5" />
+          <div className="border-t-2 border-slate-900 pt-0.5 mb-0.5" />
           <p className="text-[8px] font-black text-slate-900 uppercase tracking-wide">
             {template.secondarySignatoryName}
           </p>
@@ -284,7 +286,7 @@ export function CheckSheet({
       </div>
 
       {/* ── MICR LINE ── */}
-      <div className="absolute left-0 right-0 bottom-[0.12in] text-center font-mono text-[11px] tracking-[0.2em] text-slate-500/75 pointer-events-none select-none">
+      <div className="absolute left-0 right-0 bottom-[0.02in] text-center font-mono text-[9px] tracking-[0.18em] text-slate-500/65 pointer-events-none select-none">
         ⑈{checkNo ? checkNo.padStart(6, "0") : "000000"}⑈ ⑆012345678⑆ 1234567890⑈
       </div>
     </div>
