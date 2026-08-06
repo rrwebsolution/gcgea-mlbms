@@ -52,18 +52,19 @@ export default function LoanCheckPrintPage() {
       </p>
       <style>{`
         .check-sheet { width: 8.5in; height: 3.5in; }
-        @page { size: 8.5in 3.5in; margin: 0; }
+        @page { size: Letter; margin: 0; }
         @media print {
-          html, body { width: 8.5in; height: 3.5in; margin: 0; background: white !important; overflow: hidden; }
+          html, body { width: 8.5in !important; min-width: 8.5in !important; height: 11in !important; min-height: 11in !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background: white !important; }
           .check-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          body * { visibility: hidden; }
-          .check-sheet, .check-sheet * { visibility: visible; }
+          body * { visibility: hidden !important; }
+          .check-sheet, .check-sheet * { visibility: visible !important; }
           .check-sheet {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 8.5in;
-            height: 3.5in;
+            position: absolute;
+            left: 0 !important;
+            top: 0 !important;
+            width: 8.5in !important;
+            height: 3.5in !important;
+            box-sizing: border-box;
             transform: none;
             break-inside: avoid;
             page-break-inside: avoid;

@@ -1228,20 +1228,21 @@ export default function SettingsPage() {
                 <style>{`
                   .settings-check-preview { width: 8.5in; height: 3.5in; }
                   @media (max-width: 1000px) { .settings-check-preview { transform: scale(.75); margin-bottom: -0.875in; } }
-                  @page { size: 8.5in 3.5in; margin: 0; }
+                  @page { size: Letter; margin: 0; }
                   @media print {
-                    html, body { width: 8.5in; height: 3.5in; margin: 0; background: white !important; overflow: hidden; }
-                    body * { visibility: hidden; }
-                    .settings-check-preview, .settings-check-preview * { visibility: visible; }
+                    html, body { width: 8.5in !important; min-width: 8.5in !important; height: 11in !important; min-height: 11in !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background: white !important; }
+                    body * { visibility: hidden !important; }
+                    .settings-check-preview, .settings-check-preview * { visibility: visible !important; }
                     .settings-check-preview {
-                      position: fixed;
-                      left: 0;
-                      top: 0;
-                      width: 8.5in;
-                      height: 3.5in;
+                      position: absolute;
+                      left: 0 !important;
+                      top: 0 !important;
+                      width: 8.5in !important;
+                      height: 3.5in !important;
                       transform: none;
                       border: 0;
                       box-shadow: none;
+                      box-sizing: border-box;
                       break-inside: avoid;
                       page-break-inside: avoid;
                       overflow: hidden;
