@@ -1,42 +1,41 @@
 import { Link, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { ArrowLeft, Landmark, Printer } from "lucide-react"
+import { ArrowLeft, Printer, WalletCards } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CheckSheet } from "@/components/shared/CheckSheet"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
-import { getLoan } from "@/services/loans.service"
+import { getDisbursement } from "@/services/disbursements.service"
 import { getSettings } from "@/services/settings.service"
 import { amountInWords } from "@/utils/format"
 
-export default function LoanCheckPrintPage() {
+export default function DisbursementCheckPrintPage() {
   const { id = "" } = useParams()
-  const { data: loan, isLoading } = useQuery({ queryKey: ["loans", id], queryFn: () => getLoan(id) })
+  const { data: disbursement, isLoading } = useQuery({ queryKey: ["disbursements", id], queryFn: () => getDisbursement(id) })
 
   if (isLoading) return <ProfileSkeleton cards={1} />
-  if (!loan) return <EmptyState icon={Landmark} title="Loan not found" description="The check source record is unavailable." />
+  if (!disbursement) return <EmptyState icon={WalletCards} title="Disbursement not found" description="The check source record is unavailable." />
 
-  const amount = loan.actualReleasedAmount ?? loan.netProceeds
   const template = getSettings().reportTemplate.checkTemplate
-  const checkDate = loan.releaseDate ? new Date(loan.releaseDate) : new Date()
+  const checkDate = disbursement.disbursementDate ? new Date(disbursement.disbursementDate) : new Date()
   const formattedDate = checkDate.toLocaleDateString("en-PH", { month: "2-digit", day: "2-digit", year: "numeric" })
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-6 print:max-w-none print:p-0">
       <div className="flex items-center justify-between print:hidden">
-        <Button variant="ghost" render={<Link to={`/loans/${loan.id}`} />}><ArrowLeft /> Back</Button>
+        <Button variant="ghost" render={<Link to={`/financial/disbursements/${disbursement.id}`} />}><ArrowLeft /> Back</Button>
         <Button onClick={() => window.print()}><Printer /> Print Check</Button>
       </div>
 
       <CheckSheet
         className="mx-auto"
         template={template}
-        payeeName={loan.memberName}
-        amount={amount}
-        amountInWords={amountInWords(amount)}
+        payeeName={disbursement.payee}
+        amount={disbursement.amount}
+        amountInWords={amountInWords(disbursement.amount)}
         checkDate={formattedDate}
-        checkNo={loan.releaseReferenceNumber}
-        memoLine={`${template.memoPrefix} ${loan.applicationNumber} · ${loan.loanTypeName}`}
+        checkNo={disbursement.paymentReference}
+        memoLine={`${template.memoPrefix} ${disbursement.referenceNumber} · ${disbursement.accountTitle}`}
       />
 
       <p className="mx-auto max-w-[8.5in] text-xs text-muted-foreground print:hidden">

@@ -102,6 +102,7 @@ export type PermissionCode =
   | "disbursements.submit"
   | "disbursements.approve"
   | "disbursements.pay"
+  | "disbursements.print"
   | "disbursements.void"
   | "settings.view"
   | "settings.update"

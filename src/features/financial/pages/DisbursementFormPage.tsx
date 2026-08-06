@@ -2,7 +2,7 @@ import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Save, Send, WalletCards } from "lucide-react"
+import { ArrowLeft, Printer, Save, Send, WalletCards } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { AlertBanner } from "@/components/shared/AlertBanner"
 import { ReasonDialog } from "@/components/shared/ReasonDialog"
@@ -116,7 +116,18 @@ export default function DisbursementFormPage() {
       <PageHeader
         title={editing ? detailQuery.data?.referenceNumber ?? "Disbursement" : "New Disbursement"}
         description="Record an expense against an approved annual-budget account."
-        actions={detailQuery.data && <StatusBadge label={detailQuery.data.status} tone={detailQuery.data.status === "Paid" || detailQuery.data.status === "Approved" ? "success" : detailQuery.data.status === "Rejected" ? "danger" : "warning"} />}
+        actions={
+          detailQuery.data && (
+            <div className="flex flex-wrap items-center gap-2.5">
+              <StatusBadge label={detailQuery.data.status} tone={detailQuery.data.status === "Paid" || detailQuery.data.status === "Approved" ? "success" : detailQuery.data.status === "Rejected" ? "danger" : "warning"} />
+              {detailQuery.data.status === "Paid" && detailQuery.data.paymentMethod === "Check" && (
+                <PermissionButton permission="disbursements.print" size="sm" variant="outline" render={<Link to={`/financial/disbursements/${id}/check`} />}>
+                  <Printer className="size-3.5" /> Print Check
+                </PermissionButton>
+              )}
+            </div>
+          )
+        }
       />
       {detailQuery.data?.rejectionReason && <AlertBanner tone="danger" title="Disbursement rejected" description={detailQuery.data.rejectionReason} />}
       {!budgetsQuery.isLoading && (budgetsQuery.data?.data.length ?? 0) === 0 && !editing && (

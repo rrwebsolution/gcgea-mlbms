@@ -200,6 +200,7 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
       p("disbursements.submit", "Submit Disbursements", "disbursements", "Submit disbursements for approval"),
       p("disbursements.approve", "Approve Disbursements", "disbursements", "Approve, reject, or return disbursements"),
       p("disbursements.pay", "Pay Disbursements", "disbursements", "Mark approved disbursements as paid"),
+      p("disbursements.print", "Print Disbursements", "disbursements", "Print disbursement checks"),
       p("disbursements.void", "Void Disbursements", "disbursements", "Void paid disbursements"),
     ],
   },
@@ -398,15 +399,15 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "contributions.export", "contributions.print",
         "loan_payments.view", "loan_payments.create", "loan_payments.update", "loan_payments.void",
         "loan_payments.import", "loan_payments.print_receipt", "loan_payments.export",
-        "loans.view", "loans.release",
-        "benefits.view", "benefits.release",
+        "loans.view", "loans.release", "loans.print",
+        "benefits.view", "benefits.release", "benefits.print",
         "reports.view", "reports.export", "reports.print", "reports.financial", "reports.contribution",
         "payroll.manual.view", "payroll.manual.create", "payroll.manual.edit", "payroll.manual.post",
         "payroll.bulk.view", "payroll.bulk.create", "payroll.bulk.edit", "payroll.bulk.post",
         "payroll.import.view", "payroll.import.rollback", "payroll.history.view",
         "deduction_types.view", "deductions.view", "deductions.void",
         "annual_budgets.view", "annual_budgets.manage", "annual_budgets.submit",
-        "disbursements.view", "disbursements.manage", "disbursements.submit", "disbursements.pay", "disbursements.void",
+        "disbursements.view", "disbursements.manage", "disbursements.submit", "disbursements.pay", "disbursements.print", "disbursements.void",
       ]
     case "Benefits Officer":
       return [

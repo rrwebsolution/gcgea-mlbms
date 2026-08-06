@@ -16,6 +16,35 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
+const AMOUNT_WORDS_ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+const AMOUNT_WORDS_TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+function amountUnderThousandInWords(value: number): string {
+  if (value < 20) return AMOUNT_WORDS_ONES[value]
+  if (value < 100) return `${AMOUNT_WORDS_TENS[Math.floor(value / 10)]}${value % 10 ? `-${AMOUNT_WORDS_ONES[value % 10]}` : ""}`
+  return `${AMOUNT_WORDS_ONES[Math.floor(value / 100)]} Hundred${value % 100 ? ` ${amountUnderThousandInWords(value % 100)}` : ""}`
+}
+
+/** Renders a peso amount as check-writing words, e.g. 6000 -> "Six Thousand Pesos and 00/100 Only". */
+export function amountInWords(amount: number): string {
+  const pesos = Math.floor(amount)
+  const centavos = Math.round((amount - pesos) * 100)
+  const groups = [
+    { divisor: 1_000_000_000, name: "Billion" },
+    { divisor: 1_000_000, name: "Million" },
+    { divisor: 1_000, name: "Thousand" },
+  ]
+  let remainder = pesos
+  const parts: string[] = []
+  for (const group of groups) {
+    const count = Math.floor(remainder / group.divisor)
+    if (count) parts.push(`${amountUnderThousandInWords(count)} ${group.name}`)
+    remainder %= group.divisor
+  }
+  if (remainder || parts.length === 0) parts.push(amountUnderThousandInWords(remainder) || "Zero")
+  return `${parts.join(" ")} Pesos and ${String(centavos).padStart(2, "0")}/100 Only`
+}
+
 export function formatDate(dateString?: string): string {
   if (!dateString) return "—"
   const date = new Date(dateString)

@@ -179,7 +179,10 @@ export interface CheckTemplateSettings {
   payeeLabel: string
   currencyLabel: string
   memoPrefix: string
-  signatoryLabel: string
+  primarySignatoryName: string
+  primarySignatoryTitle: string
+  secondarySignatoryName: string
+  secondarySignatoryTitle: string
   horizontalMargin: number
   headerTop: number
   payeeTop: number

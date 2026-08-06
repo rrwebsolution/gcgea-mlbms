@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2, RotateCcw, Save, ShieldAlert, ShieldCheck, UserCog } from "lucide-react"
+import { Check, Loader2, RotateCcw, Save, ShieldAlert, ShieldCheck, UserCog, X } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { AlertBanner } from "@/components/shared/AlertBanner"
@@ -116,13 +116,13 @@ export default function UserPermissionsPage() {
         <SummaryStat label="Effective Permissions" value={String(effectiveCount)} />
       </div>
 
-      <Tabs defaultValue="roles">
+      <Tabs defaultValue="effective">
         <TabsList className="flex-wrap">
+          <TabsTrigger value="effective">Effective Permissions</TabsTrigger>
           <TabsTrigger value="roles">Assigned Roles</TabsTrigger>
           <TabsTrigger value="inherited">Inherited Permissions</TabsTrigger>
           <TabsTrigger value="allowed">Additional Allowed</TabsTrigger>
           <TabsTrigger value="denied">Explicitly Denied</TabsTrigger>
-          <TabsTrigger value="effective">Effective Permissions</TabsTrigger>
           <TabsTrigger value="sidebar">Sidebar Access Preview</TabsTrigger>
         </TabsList>
 
@@ -209,7 +209,10 @@ export default function UserPermissionsPage() {
                       <TableCell><StatusBadge label={sourceLabel} tone={SOURCE_TONE[sourceLabel] ?? "neutral"} /></TableCell>
                       <TableCell className="text-muted-foreground">{entry.directSetting ? (entry.directSetting === "allow" ? "Allowed" : "Denied") : "—"}</TableCell>
                       <TableCell>
-                        <StatusBadge label={entry.effective ? "Access" : "No Access"} tone={entry.effective ? "success" : "neutral"} />
+                        <span className={`inline-flex items-center gap-1.5 ${entry.effective ? "text-success" : "text-muted-foreground"}`}>
+                          {entry.effective ? <Check className="size-4" /> : <X className="size-4" />}
+                          <StatusBadge label={entry.effective ? "Access" : "No Access"} tone={entry.effective ? "success" : "neutral"} />
+                        </span>
                       </TableCell>
                     </TableRow>
                   )

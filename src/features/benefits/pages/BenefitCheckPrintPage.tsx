@@ -1,42 +1,42 @@
 import { Link, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { ArrowLeft, Landmark, Printer } from "lucide-react"
+import { ArrowLeft, HeartHandshake, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CheckSheet } from "@/components/shared/CheckSheet"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
-import { getLoan } from "@/services/loans.service"
+import { getBenefit } from "@/services/benefits.service"
 import { getSettings } from "@/services/settings.service"
 import { amountInWords } from "@/utils/format"
 
-export default function LoanCheckPrintPage() {
+export default function BenefitCheckPrintPage() {
   const { id = "" } = useParams()
-  const { data: loan, isLoading } = useQuery({ queryKey: ["loans", id], queryFn: () => getLoan(id) })
+  const { data: benefit, isLoading } = useQuery({ queryKey: ["benefits", id], queryFn: () => getBenefit(id) })
 
   if (isLoading) return <ProfileSkeleton cards={1} />
-  if (!loan) return <EmptyState icon={Landmark} title="Loan not found" description="The check source record is unavailable." />
+  if (!benefit) return <EmptyState icon={HeartHandshake} title="Benefit application not found" description="The check source record is unavailable." />
 
-  const amount = loan.actualReleasedAmount ?? loan.netProceeds
+  const amount = benefit.actualReleasedAmount ?? benefit.approvedAmount ?? benefit.requestedAmount
   const template = getSettings().reportTemplate.checkTemplate
-  const checkDate = loan.releaseDate ? new Date(loan.releaseDate) : new Date()
+  const checkDate = benefit.releaseDate ? new Date(benefit.releaseDate) : new Date()
   const formattedDate = checkDate.toLocaleDateString("en-PH", { month: "2-digit", day: "2-digit", year: "numeric" })
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-6 print:max-w-none print:p-0">
       <div className="flex items-center justify-between print:hidden">
-        <Button variant="ghost" render={<Link to={`/loans/${loan.id}`} />}><ArrowLeft /> Back</Button>
+        <Button variant="ghost" render={<Link to={`/benefits/${benefit.id}`} />}><ArrowLeft /> Back</Button>
         <Button onClick={() => window.print()}><Printer /> Print Check</Button>
       </div>
 
       <CheckSheet
         className="mx-auto"
         template={template}
-        payeeName={loan.memberName}
+        payeeName={benefit.memberName}
         amount={amount}
         amountInWords={amountInWords(amount)}
         checkDate={formattedDate}
-        checkNo={loan.releaseReferenceNumber}
-        memoLine={`${template.memoPrefix} ${loan.applicationNumber} · ${loan.loanTypeName}`}
+        checkNo={benefit.releaseReferenceNumber}
+        memoLine={`${template.memoPrefix} ${benefit.applicationNumber} · ${benefit.benefitTypeName}`}
       />
 
       <p className="mx-auto max-w-[8.5in] text-xs text-muted-foreground print:hidden">

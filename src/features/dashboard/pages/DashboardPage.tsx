@@ -126,17 +126,19 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Highlight Stats Chip */}
-          <div className="flex items-center gap-3 bg-background/80 backdrop-blur-sm p-3 rounded-xl border border-border/50 shadow-2xs">
-            <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Banknote className="size-5" />
+          <PermissionGuard permission="loan_payments.view">
+            <div className="flex items-center gap-3 bg-background/80 backdrop-blur-sm p-3 rounded-xl border border-border/50 shadow-2xs">
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <Banknote className="size-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Collections in the system</p>
+                <p className="text-base font-bold text-foreground">
+                  {summaryLoading ? "..." : formatCurrency(summary?.totalLoanCollections ?? 0)}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Collections in the system</p>
-              <p className="text-base font-bold text-foreground">
-                {summaryLoading ? "..." : formatCurrency(summary?.totalLoanCollections ?? 0)}
-              </p>
-            </div>
-          </div>
+          </PermissionGuard>
         </div>
       </div>
 
@@ -232,37 +234,55 @@ export default function DashboardPage() {
         {/* Tab 1: Overview & Members */}
         {metricTab === "overview" && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 animate-in fade-in-50 duration-200">
-            <StatCard label="Total Members" value={String(summary?.totalMembers ?? 0)} icon={Users} tone="primary" isLoading={summaryLoading} />
-            <StatCard label="Active Members" value={String(summary?.activeMembers ?? 0)} icon={UserCheck} tone="success" isLoading={summaryLoading} />
-            <StatCard label="Retired Members" value={String(summary?.retiredMembers ?? 0)} icon={UserCog} tone="gold" isLoading={summaryLoading} />
-            <StatCard label="Pending Loan Apps" value={String(summary?.pendingLoanApplications ?? 0)} icon={FileClock} tone="warning" isLoading={summaryLoading} />
-            <StatCard label="Pending Benefit Apps" value={String(summary?.pendingBenefitApplications ?? 0)} icon={FileWarning} tone="warning" isLoading={summaryLoading} />
+            <PermissionGuard permission="members.view">
+              <StatCard label="Total Members" value={String(summary?.totalMembers ?? 0)} icon={Users} tone="primary" isLoading={summaryLoading} />
+              <StatCard label="Active Members" value={String(summary?.activeMembers ?? 0)} icon={UserCheck} tone="success" isLoading={summaryLoading} />
+              <StatCard label="Retired Members" value={String(summary?.retiredMembers ?? 0)} icon={UserCog} tone="gold" isLoading={summaryLoading} />
+            </PermissionGuard>
+            <PermissionGuard permission="loans.view">
+              <StatCard label="Pending Loan Apps" value={String(summary?.pendingLoanApplications ?? 0)} icon={FileClock} tone="warning" isLoading={summaryLoading} />
+            </PermissionGuard>
+            <PermissionGuard permission="benefits.view">
+              <StatCard label="Pending Benefit Apps" value={String(summary?.pendingBenefitApplications ?? 0)} icon={FileWarning} tone="warning" isLoading={summaryLoading} />
+            </PermissionGuard>
           </div>
         )}
 
         {/* Tab 2: Financials & Collections */}
         {metricTab === "financials" && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 animate-in fade-in-50 duration-200">
-            <StatCard label="Active Loans" value={String(summary?.activeLoans ?? 0)} icon={Landmark} tone="info" isLoading={summaryLoading} />
-            <StatCard label="Outstanding Balance" value={formatCurrency(summary?.outstandingLoanBalance ?? 0)} icon={Banknote} tone="danger" isLoading={summaryLoading} />
-            <StatCard label="Total Collections" value={formatCurrency(summary?.totalLoanCollections ?? 0)} icon={PiggyBank} tone="success" isLoading={summaryLoading} />
-            <StatCard label="Benefits Released" value={String(summary?.benefitsReleased ?? 0)} icon={HeartHandshake} tone="gold" isLoading={summaryLoading} />
-            <StatCard label="Monthly Contributions" value={formatCurrency(summary?.monthlyContributionsCollected ?? 0)} icon={Wallet} tone="primary" isLoading={summaryLoading} />
-            {(summary?.fundBalances ?? []).map((fund) => (
-              <StatCard key={fund.fundId} label={`${fund.fundName} Balance`} value={formatCurrency(fund.balance)} icon={Wallet} tone="success" isLoading={summaryLoading} />
-            ))}
+            <PermissionGuard permission="loans.view">
+              <StatCard label="Active Loans" value={String(summary?.activeLoans ?? 0)} icon={Landmark} tone="info" isLoading={summaryLoading} />
+              <StatCard label="Outstanding Balance" value={formatCurrency(summary?.outstandingLoanBalance ?? 0)} icon={Banknote} tone="danger" isLoading={summaryLoading} />
+            </PermissionGuard>
+            <PermissionGuard permission="loan_payments.view">
+              <StatCard label="Total Collections" value={formatCurrency(summary?.totalLoanCollections ?? 0)} icon={PiggyBank} tone="success" isLoading={summaryLoading} />
+            </PermissionGuard>
+            <PermissionGuard permission="benefits.view">
+              <StatCard label="Benefits Released" value={String(summary?.benefitsReleased ?? 0)} icon={HeartHandshake} tone="gold" isLoading={summaryLoading} />
+            </PermissionGuard>
+            <PermissionGuard permission="contributions.view">
+              <StatCard label="Monthly Contributions" value={formatCurrency(summary?.monthlyContributionsCollected ?? 0)} icon={Wallet} tone="primary" isLoading={summaryLoading} />
+            </PermissionGuard>
+            <PermissionGuard permission="annual_budgets.view">
+              {(summary?.fundBalances ?? []).map((fund) => (
+                <StatCard key={fund.fundId} label={`${fund.fundName} Balance`} value={formatCurrency(fund.balance)} icon={Wallet} tone="success" isLoading={summaryLoading} />
+              ))}
+            </PermissionGuard>
           </div>
         )}
 
         {/* Tab 3: Reloans & Pipeline */}
         {metricTab === "reloans" && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 animate-in fade-in-50 duration-200">
-            <StatCard label="Pending Reloan Apps" value={String(summary?.pendingReloanApplications ?? 0)} icon={RotateCw} tone="warning" isLoading={summaryLoading} />
-            <StatCard label="Reloans Awaiting Review" value={String(summary?.reloansAwaitingReview ?? 0)} icon={FileClock} tone="info" isLoading={summaryLoading} />
-            <StatCard label="Approved Reloans" value={String(summary?.approvedReloans ?? 0)} icon={ClipboardCheck} tone="success" isLoading={summaryLoading} />
-            <StatCard label="Reloans Awaiting Release" value={String(summary?.reloansAwaitingRelease ?? 0)} icon={Banknote} tone="gold" isLoading={summaryLoading} />
-            <StatCard label="Eligible This Month" value={String(summary?.membersBecomingLoanEligibleThisMonth ?? 0)} icon={UserPlus} tone="primary" isLoading={summaryLoading} />
-          </div>
+          <PermissionGuard permission="loans.view">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 animate-in fade-in-50 duration-200">
+              <StatCard label="Pending Reloan Apps" value={String(summary?.pendingReloanApplications ?? 0)} icon={RotateCw} tone="warning" isLoading={summaryLoading} />
+              <StatCard label="Reloans Awaiting Review" value={String(summary?.reloansAwaitingReview ?? 0)} icon={FileClock} tone="info" isLoading={summaryLoading} />
+              <StatCard label="Approved Reloans" value={String(summary?.approvedReloans ?? 0)} icon={ClipboardCheck} tone="success" isLoading={summaryLoading} />
+              <StatCard label="Reloans Awaiting Release" value={String(summary?.reloansAwaitingRelease ?? 0)} icon={Banknote} tone="gold" isLoading={summaryLoading} />
+              <StatCard label="Eligible This Month" value={String(summary?.membersBecomingLoanEligibleThisMonth ?? 0)} icon={UserPlus} tone="primary" isLoading={summaryLoading} />
+            </div>
+          </PermissionGuard>
         )}
       </section>
 
@@ -293,58 +313,68 @@ export default function DashboardPage() {
         {/* Financial Trends View */}
         {chartTab === "financial" && (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 animate-in fade-in-50 duration-200">
-            <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md">
-              <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
-                <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Monthly Loan Releases</h4>
-                <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Releases</span>
+            <PermissionGuard permission="loans.view">
+              <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md">
+                <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
+                  <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Monthly Loan Releases</h4>
+                  <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Releases</span>
+                </div>
+                <MonthlyReleasesChart data={monthlyReleases} isLoading={monthlyReleasesLoading} />
               </div>
-              <MonthlyReleasesChart data={monthlyReleases} isLoading={monthlyReleasesLoading} />
-            </div>
+            </PermissionGuard>
 
-            <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md">
-              <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
-                <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Monthly Collections</h4>
-                <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Collections</span>
+            <PermissionGuard permission="loan_payments.view">
+              <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md">
+                <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
+                  <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Monthly Collections</h4>
+                  <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Collections</span>
+                </div>
+                <MonthlyCollectionsChart data={monthlyCollections} isLoading={monthlyCollectionsLoading} />
               </div>
-              <MonthlyCollectionsChart data={monthlyCollections} isLoading={monthlyCollectionsLoading} />
-            </div>
+            </PermissionGuard>
 
-            <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md lg:col-span-2">
-              <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
-                <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Loan Status Distribution</h4>
-                <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Distribution</span>
+            <PermissionGuard permission="loans.view">
+              <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md lg:col-span-2">
+                <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
+                  <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Loan Status Distribution</h4>
+                  <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Distribution</span>
+                </div>
+                <LoanStatusChart data={loanStatusDist} isLoading={loanStatusDistLoading} />
               </div>
-              <LoanStatusChart data={loanStatusDist} isLoading={loanStatusDistLoading} />
-            </div>
+            </PermissionGuard>
           </div>
         )}
 
         {/* Membership & Scope View */}
         {chartTab === "membership" && (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 animate-in fade-in-50 duration-200">
-            <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md">
-              <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
-                <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Benefit Distribution by Type</h4>
-                <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Benefits</span>
+            <PermissionGuard permission="benefits.view">
+              <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md">
+                <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
+                  <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Benefit Distribution by Type</h4>
+                  <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Benefits</span>
+                </div>
+                <HorizontalBarChart data={benefitDist.map((b) => ({ label: b.type, value: b.count }))} valueLabel="Applications" isLoading={benefitDistLoading} />
               </div>
-              <HorizontalBarChart data={benefitDist.map((b) => ({ label: b.type, value: b.count }))} valueLabel="Applications" isLoading={benefitDistLoading} />
-            </div>
+            </PermissionGuard>
 
-            <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md">
-              <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
-                <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Members per Office</h4>
-                <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Office Scope</span>
+            <PermissionGuard permission="members.view">
+              <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md">
+                <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
+                  <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Members per Office</h4>
+                  <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Office Scope</span>
+                </div>
+                <HorizontalBarChart data={membersPerOffice.map((o) => ({ label: o.office, value: o.count }))} valueLabel="Members" isLoading={membersPerOfficeLoading} />
               </div>
-              <HorizontalBarChart data={membersPerOffice.map((o) => ({ label: o.office, value: o.count }))} valueLabel="Members" isLoading={membersPerOfficeLoading} />
-            </div>
 
-            <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md lg:col-span-2">
-              <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
-                <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Membership Growth by Year</h4>
-                <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Historical Trend</span>
+              <div className="group rounded-2xl border border-border/60 bg-card p-5 shadow-xs transition-all duration-300 hover:border-border hover:shadow-md lg:col-span-2">
+                <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2.5">
+                  <h4 className="text-sm font-semibold tracking-tight text-foreground/90">Membership Growth by Year</h4>
+                  <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full uppercase tracking-wide">Historical Trend</span>
+                </div>
+                <MembershipGrowthChart data={membershipGrowth} isLoading={membershipGrowthLoading} />
               </div>
-              <MembershipGrowthChart data={membershipGrowth} isLoading={membershipGrowthLoading} />
-            </div>
+            </PermissionGuard>
           </div>
         )}
       </section>
@@ -391,35 +421,39 @@ export default function DashboardPage() {
           {/* Loans & Payments Cards */}
           {(activityTab === "all" || activityTab === "loans") && (
             <>
-              <DashboardListCard title="Recent Loan Applications" icon={Landmark} viewAllPath="/loans" isLoading={recentLoansLoading} isEmpty={recentLoans.length === 0} className="border-border/60 shadow-2xs">
-                {recentLoans.map((loan) => (
-                  <Link key={loan.id} to={`/loans/${loan.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{loan.memberName}</span>
-                      <span className="block text-xs text-muted-foreground mt-0.5">{loan.applicationNumber} · {formatCurrency(loan.requestedAmount)}</span>
-                    </span>
-                    <StatusBadge label={loan.status} tone={LOAN_STATUS_TONE[loan.status] ?? "neutral"} />
-                  </Link>
-                ))}
-              </DashboardListCard>
+              <PermissionGuard permission="loans.view">
+                <DashboardListCard title="Recent Loan Applications" icon={Landmark} viewAllPath="/loans" isLoading={recentLoansLoading} isEmpty={recentLoans.length === 0} className="border-border/60 shadow-2xs">
+                  {recentLoans.map((loan) => (
+                    <Link key={loan.id} to={`/loans/${loan.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{loan.memberName}</span>
+                        <span className="block text-xs text-muted-foreground mt-0.5">{loan.applicationNumber} · {formatCurrency(loan.requestedAmount)}</span>
+                      </span>
+                      <StatusBadge label={loan.status} tone={LOAN_STATUS_TONE[loan.status] ?? "neutral"} />
+                    </Link>
+                  ))}
+                </DashboardListCard>
+              </PermissionGuard>
 
-              <DashboardListCard title="Recent Payments" icon={CreditCard} viewAllPath="/loan-payments" isLoading={recentPaymentsLoading} isEmpty={recentPayments.length === 0} className="border-border/60 shadow-2xs">
-                {recentPayments.map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm">
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-foreground">{payment.memberName}</span>
-                      <span className="block text-xs text-muted-foreground mt-0.5">{payment.paymentReferenceNumber} · {formatDateShort(payment.paymentDate)}</span>
-                    </span>
-                    <span className="shrink-0 font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(payment.amountPaid)}</span>
-                  </div>
-                ))}
-              </DashboardListCard>
+              <PermissionGuard permission="loan_payments.view">
+                <DashboardListCard title="Recent Payments" icon={CreditCard} viewAllPath="/loan-payments" isLoading={recentPaymentsLoading} isEmpty={recentPayments.length === 0} className="border-border/60 shadow-2xs">
+                  {recentPayments.map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-foreground">{payment.memberName}</span>
+                        <span className="block text-xs text-muted-foreground mt-0.5">{payment.paymentReferenceNumber} · {formatDateShort(payment.paymentDate)}</span>
+                      </span>
+                      <span className="shrink-0 font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(payment.amountPaid)}</span>
+                    </div>
+                  ))}
+                </DashboardListCard>
+              </PermissionGuard>
             </>
           )}
 
           {/* Alerts & Due Cards */}
           {(activityTab === "all" || activityTab === "alerts") && (
-            <>
+            <PermissionGuard permission="loans.view">
               <DashboardListCard title="Upcoming Loan Due Dates" icon={Clock} viewAllPath="/loans/active" isLoading={upcomingDueLoading} isEmpty={upcomingDue.length === 0} className="border-border/60 shadow-2xs">
                 {upcomingDue.map(({ loan, entry }) => (
                   <Link key={loan.id} to={`/loans/${loan.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
@@ -443,54 +477,58 @@ export default function DashboardPage() {
                   </Link>
                 ))}
               </DashboardListCard>
-            </>
+            </PermissionGuard>
           )}
 
           {/* Members & Benefits Cards */}
           {(activityTab === "all" || activityTab === "members") && (
             <>
-              <DashboardListCard title="Recent Benefit Applications" icon={Gift} viewAllPath="/benefits" isLoading={recentBenefitsLoading} isEmpty={recentBenefits.length === 0} className="border-border/60 shadow-2xs">
-                {recentBenefits.map((benefit) => (
-                  <Link key={benefit.id} to={`/benefits/${benefit.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{benefit.memberName}</span>
-                      <span className="block text-xs text-muted-foreground mt-0.5">{benefit.benefitTypeName}</span>
-                    </span>
-                    <StatusBadge label={benefit.status} tone={BENEFIT_STATUS_TONE[benefit.status] ?? "neutral"} />
-                  </Link>
-                ))}
-              </DashboardListCard>
+              <PermissionGuard permission="benefits.view">
+                <DashboardListCard title="Recent Benefit Applications" icon={Gift} viewAllPath="/benefits" isLoading={recentBenefitsLoading} isEmpty={recentBenefits.length === 0} className="border-border/60 shadow-2xs">
+                  {recentBenefits.map((benefit) => (
+                    <Link key={benefit.id} to={`/benefits/${benefit.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{benefit.memberName}</span>
+                        <span className="block text-xs text-muted-foreground mt-0.5">{benefit.benefitTypeName}</span>
+                      </span>
+                      <StatusBadge label={benefit.status} tone={BENEFIT_STATUS_TONE[benefit.status] ?? "neutral"} />
+                    </Link>
+                  ))}
+                </DashboardListCard>
+              </PermissionGuard>
 
-              <DashboardListCard title="Recently Added Members" icon={UserPlus} viewAllPath="/members" isLoading={recentMembersLoading} isEmpty={recentMembers.length === 0} className="border-border/60 shadow-2xs">
-                {recentMembers.map((member) => (
-                  <Link key={member.id} to={`/members/${member.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{member.fullName}</span>
-                      <span className="block text-xs text-muted-foreground mt-0.5">{member.memberNumber} · {member.officeName}</span>
-                    </span>
-                    <ArrowUpRight className="size-4 text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </Link>
-                ))}
-              </DashboardListCard>
+              <PermissionGuard permission="members.view">
+                <DashboardListCard title="Recently Added Members" icon={UserPlus} viewAllPath="/members" isLoading={recentMembersLoading} isEmpty={recentMembers.length === 0} className="border-border/60 shadow-2xs">
+                  {recentMembers.map((member) => (
+                    <Link key={member.id} to={`/members/${member.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{member.fullName}</span>
+                        <span className="block text-xs text-muted-foreground mt-0.5">{member.memberNumber} · {member.officeName}</span>
+                      </span>
+                      <ArrowUpRight className="size-4 text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </Link>
+                  ))}
+                </DashboardListCard>
 
-              <DashboardListCard
-                title="Incomplete Member Profiles"
-                icon={FileWarning}
-                viewAllPath="/members/incomplete"
-                isLoading={incompleteLoading}
-                isEmpty={incompleteProfiles.length === 0}
-                className="border-border/60 shadow-2xs"
-              >
-                {incompleteProfiles.map((member) => (
-                  <Link key={member.id} to={`/members/${member.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{member.fullName}</span>
-                      <span className="block text-xs text-muted-foreground mt-0.5">{member.memberNumber}</span>
-                    </span>
-                    <ProfileCompleteness percentage={profileCompleteness(member)} />
-                  </Link>
-                ))}
-              </DashboardListCard>
+                <DashboardListCard
+                  title="Incomplete Member Profiles"
+                  icon={FileWarning}
+                  viewAllPath="/members/incomplete"
+                  isLoading={incompleteLoading}
+                  isEmpty={incompleteProfiles.length === 0}
+                  className="border-border/60 shadow-2xs"
+                >
+                  {incompleteProfiles.map((member) => (
+                    <Link key={member.id} to={`/members/${member.id}`} className="group flex items-center justify-between gap-3 border-b border-border/30 last:border-0 px-4 py-3.5 text-sm hover:bg-muted/40 transition-colors">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-foreground group-hover:text-primary transition-colors">{member.fullName}</span>
+                        <span className="block text-xs text-muted-foreground mt-0.5">{member.memberNumber}</span>
+                      </span>
+                      <ProfileCompleteness percentage={profileCompleteness(member)} />
+                    </Link>
+                  ))}
+                </DashboardListCard>
+              </PermissionGuard>
             </>
           )}
 

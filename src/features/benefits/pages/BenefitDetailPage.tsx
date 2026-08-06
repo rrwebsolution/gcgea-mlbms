@@ -1,9 +1,10 @@
 import { useParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { FileText, HeartHandshake } from "lucide-react"
+import { FileText, HeartHandshake, Printer } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { PrintButton } from "@/components/shared/PrintButton"
+import { PermissionButton } from "@/components/shared/PermissionButton"
 import { ApprovalTimeline } from "@/components/shared/ApprovalTimeline"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
@@ -41,6 +42,11 @@ export default function BenefitDetailPage() {
         actions={
           <>
             <StatusBadge label={benefit.status} tone={BENEFIT_STATUS_TONE[benefit.status]} className="h-7 px-3 text-sm" />
+            {benefit.status === "Released" && (
+              <PermissionButton permission="benefits.print" size="sm" variant="outline" render={<Link to={`/benefits/${benefit.id}/check`} />}>
+                <Printer className="size-3.5" /> Print Check
+              </PermissionButton>
+            )}
             <PrintButton permission="benefits.print" label="Print Application" />
           </>
         }

@@ -87,6 +87,7 @@ import BenefitsPage from "@/features/benefits/pages/BenefitsPage"
 import ReleasedBenefitsPage from "@/features/benefits/pages/ReleasedBenefitsPage"
 import BenefitTypesPage from "@/features/benefits/pages/BenefitTypesPage"
 import BenefitDetailPage from "@/features/benefits/pages/BenefitDetailPage"
+import BenefitCheckPrintPage from "@/features/benefits/pages/BenefitCheckPrintPage"
 import CreateBenefitApplicationPage from "@/features/benefits/pages/CreateBenefitApplicationPage"
 import BenefitDraftsPage from "@/features/benefits/pages/BenefitDraftsPage"
 import BenefitApplicationsReportPage from "@/features/benefits/pages/reports/BenefitApplicationsReportPage"
@@ -104,6 +105,7 @@ import AnnualBudgetReportPage from "@/features/financial/pages/reports/AnnualBud
 import AnnualBudgetsPage from "@/features/financial/pages/AnnualBudgetsPage"
 import DisbursementsPage from "@/features/financial/pages/DisbursementsPage"
 import DisbursementFormPage from "@/features/financial/pages/DisbursementFormPage"
+import DisbursementCheckPrintPage from "@/features/financial/pages/DisbursementCheckPrintPage"
 import MonthlyDisbursementsReportPage from "@/features/financial/pages/reports/MonthlyDisbursementsReportPage"
 import AnnualCollectionReportPage from "@/features/financial/pages/reports/AnnualCollectionReportPage"
 import LoanReleaseSummaryReportPage from "@/features/financial/pages/reports/LoanReleaseSummaryReportPage"
@@ -274,6 +276,9 @@ export function AppRoutes() {
             <Route path="/benefits/drafts" element={<BenefitDraftsPage />} />
             <Route path="/benefits/:id" element={<BenefitDetailPage />} />
           </Route>
+          <Route element={<ProtectedRoute anyOf={["benefits.view", "reports.view"]} />}>
+            <Route path="/benefits/:id/check" element={<BenefitCheckPrintPage />} />
+          </Route>
           <Route element={<ProtectedRoute permission="benefits.create" />}>
             <Route path="/benefits/new" element={<CreateBenefitApplicationPage />} />
           </Route>
@@ -289,6 +294,9 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission="disbursements.view" />}>
             <Route path="/financial/disbursements" element={<DisbursementsPage />} />
             <Route path="/financial/disbursements/:id" element={<DisbursementFormPage />} />
+          </Route>
+          <Route element={<ProtectedRoute anyOf={["disbursements.view", "reports.view"]} />}>
+            <Route path="/financial/disbursements/:id/check" element={<DisbursementCheckPrintPage />} />
           </Route>
           <Route element={<ProtectedRoute permission="reports.view" />}>
             <Route path="/reports" element={<ReportsPage />} />

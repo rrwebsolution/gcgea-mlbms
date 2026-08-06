@@ -38,6 +38,7 @@ import {
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { AlertBanner } from "@/components/shared/AlertBanner"
+import { CheckSheet } from "@/components/shared/CheckSheet"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { Button } from "@/components/ui/button"
@@ -1186,33 +1187,16 @@ export default function SettingsPage() {
                   </Button>
                 </div>
                 <div className="overflow-x-auto rounded-lg border bg-muted/30 p-3">
-                  <div
-                    className="settings-check-preview relative origin-top-left overflow-hidden border text-black shadow-sm"
-                    style={{
-                      backgroundColor: checkTemplate.backgroundColor,
-                      backgroundImage: "repeating-linear-gradient(135deg, transparent 0, transparent 9px, rgba(22,101,52,.045) 10px, transparent 11px), repeating-linear-gradient(45deg, transparent 0, transparent 17px, rgba(30,64,175,.035) 18px, transparent 19px)",
-                    }}
-                  >
-                    <div className="absolute" style={{ left: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.headerTop}in` }}>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.16em]">{checkTemplate.heading}</p>
-                      <p className="text-[8px]">{checkTemplate.subheading}</p>
-                    </div>
-                    <div className="absolute text-right text-[11px]" style={{ right: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.headerTop + 0.05}in` }}>
-                      <p><span className="text-[8px] uppercase">Date</span> <span className="ml-3 border-b border-black px-3 font-semibold">08/05/2026</span></p>
-                      <p className="mt-2 text-[8px]">CHECK NO. SAMPLE-0001</p>
-                    </div>
-                    <div className="absolute flex items-end gap-3" style={{ left: `${checkTemplate.horizontalMargin}in`, right: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.payeeTop}in` }}>
-                      <span className="whitespace-nowrap text-[9px] uppercase">{checkTemplate.payeeLabel}</span>
-                      <span className="min-w-0 flex-1 border-b border-black px-2 pb-1 text-sm font-bold uppercase">JUAN DELA CRUZ</span>
-                      <span className="border border-black px-3 py-1.5 text-sm font-bold">₱20,000.00</span>
-                    </div>
-                    <div className="absolute flex items-end gap-3" style={{ left: `${checkTemplate.horizontalMargin}in`, right: `${checkTemplate.horizontalMargin}in`, top: `${checkTemplate.wordsTop}in` }}>
-                      <span className="flex-1 border-b border-black px-2 pb-1 text-[11px] font-semibold uppercase">Twenty Thousand Pesos and 00/100 Only</span>
-                      <span className="text-[9px] uppercase">{checkTemplate.currencyLabel}</span>
-                    </div>
-                    <div className="absolute text-[9px]" style={{ bottom: `${checkTemplate.footerBottom + 0.03}in`, left: `${checkTemplate.horizontalMargin}in` }}>{checkTemplate.memoPrefix} LN-SAMPLE-0001 · Solidarity Cash Assistance Loan</div>
-                    <div className="absolute w-[2.15in] border-t border-black pt-1 text-center text-[8px] uppercase" style={{ bottom: `${checkTemplate.footerBottom}in`, right: `${checkTemplate.horizontalMargin}in` }}>{checkTemplate.signatoryLabel}</div>
-                  </div>
+                  <CheckSheet
+                    className="settings-check-preview origin-top-left"
+                    template={checkTemplate}
+                    payeeName="JUAN DELA CRUZ"
+                    amount={20000}
+                    amountInWords="Twenty Thousand Pesos and 00/100 Only"
+                    checkDate="08/05/2026"
+                    checkNo="SAMPLE-0001"
+                    memoLine={`${checkTemplate.memoPrefix} LN-SAMPLE-0001 · Solidarity Cash Assistance Loan`}
+                  />
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <ColorField label="Check Background Color" value={checkTemplate.backgroundColor} onChange={(value) => patchCheckTemplate({ backgroundColor: value })} />
@@ -1221,7 +1205,10 @@ export default function SettingsPage() {
                   <Field label="Payee Label"><Input value={checkTemplate.payeeLabel} onChange={(event) => patchCheckTemplate({ payeeLabel: event.target.value })} /></Field>
                   <Field label="Currency Label"><Input value={checkTemplate.currencyLabel} onChange={(event) => patchCheckTemplate({ currencyLabel: event.target.value })} /></Field>
                   <Field label="Memo Prefix"><Input value={checkTemplate.memoPrefix} onChange={(event) => patchCheckTemplate({ memoPrefix: event.target.value })} /></Field>
-                  <Field label="Signature Label"><Input value={checkTemplate.signatoryLabel} onChange={(event) => patchCheckTemplate({ signatoryLabel: event.target.value })} /></Field>
+                  <Field label="Primary Signatory Name"><Input value={checkTemplate.primarySignatoryName} onChange={(event) => patchCheckTemplate({ primarySignatoryName: event.target.value })} /></Field>
+                  <Field label="Primary Signatory Title"><Input value={checkTemplate.primarySignatoryTitle} onChange={(event) => patchCheckTemplate({ primarySignatoryTitle: event.target.value })} /></Field>
+                  <Field label="Secondary Signatory Name"><Input value={checkTemplate.secondarySignatoryName} onChange={(event) => patchCheckTemplate({ secondarySignatoryName: event.target.value })} /></Field>
+                  <Field label="Secondary Signatory Title"><Input value={checkTemplate.secondarySignatoryTitle} onChange={(event) => patchCheckTemplate({ secondarySignatoryTitle: event.target.value })} /></Field>
                   <Field label="Horizontal Margin (in)"><Input type="number" min={0} max={1.5} step={0.05} value={checkTemplate.horizontalMargin} onChange={(event) => patchCheckTemplate({ horizontalMargin: Number(event.target.value) })} /></Field>
                   <Field label="Header Top (in)"><Input type="number" min={0} max={2} step={0.05} value={checkTemplate.headerTop} onChange={(event) => patchCheckTemplate({ headerTop: Number(event.target.value) })} /></Field>
                   <Field label="Payee Top (in)"><Input type="number" min={0} max={3} step={0.05} value={checkTemplate.payeeTop} onChange={(event) => patchCheckTemplate({ payeeTop: Number(event.target.value) })} /></Field>
