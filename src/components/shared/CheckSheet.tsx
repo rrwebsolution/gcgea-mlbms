@@ -37,10 +37,7 @@ export function CheckSheet({
   const payeeTop = template.payeeTop ?? 1.15
   const wordsTop = template.wordsTop ?? 1.6
   const footerBottom = template.footerBottom ?? 0.45
-  const safePayeeTop = Math.min(payeeTop, 0.95)
-  const safeWordsTop = Math.min(wordsTop, 1.38)
-  const signatoryBottom = Math.max(footerBottom, 1.2)
-  const memoBottom = signatoryBottom + 0.28
+  const memoBottom = footerBottom + 0.5
 
   return (
     <div
@@ -138,7 +135,7 @@ export function CheckSheet({
       <div className="absolute top-4 left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none">
         ORIGINAL DOCUMENT • SECURITY FEATURES INCLUDED • UNAUTHORIZED REPRODUCTION PROHIBITED
       </div>
-      <div className="absolute bottom-[0.04in] left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none print:hidden">
+      <div className="absolute bottom-4 left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none">
         THIS CHECK CONTAINS ADVANCED SECURITY FEATURES • VERIFY AUTHENTICITY BEFORE PROCESSING
       </div>
 
@@ -193,11 +190,11 @@ export function CheckSheet({
         </div>
 
         {/* Amount Box */}
-        <div className="mt-2.5 inline-flex items-center gap-1.5 border-2 border-slate-900 bg-white/95 px-3.5 py-1 rounded-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="mt-1.5 inline-flex items-center gap-1.5 border-2 border-slate-900 bg-white/95 px-3 py-0.5 rounded-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]">
           <span className="text-[10px] font-extrabold text-slate-500 tracking-wider">
             {template.currencyLabel || "PHP"}
           </span>
-          <span className="text-lg font-black text-slate-950 tabular-nums tracking-tight">
+          <span className="text-base font-black text-slate-950 tabular-nums tracking-tight">
             {formatCurrency(amount)}
           </span>
         </div>
@@ -209,7 +206,7 @@ export function CheckSheet({
         style={{
           left: `${hMargin}in`,
           right: `${hMargin}in`,
-          top: `${safePayeeTop}in`,
+          top: `${payeeTop}in`,
         }}
       >
         <span className="shrink-0 text-[8px] font-extrabold text-slate-500 uppercase tracking-[0.15em] pb-1">
@@ -226,7 +223,7 @@ export function CheckSheet({
         style={{
           left: `${hMargin}in`,
           right: `${hMargin}in`,
-          top: `${safeWordsTop}in`,
+          top: `${wordsTop}in`,
         }}
       >
         <div className="min-w-0 flex-1 border-b-2 border-slate-900 px-2 pb-0.5 text-[11px] font-extrabold uppercase tracking-wide text-slate-900 bg-white/30 italic leading-tight">
@@ -249,7 +246,7 @@ export function CheckSheet({
           <span className="text-[7px] font-extrabold text-slate-500 uppercase tracking-[0.15em]">
             MEMO:
           </span>
-          <span className="border-b border-slate-500 px-1 text-[9px] font-bold text-slate-900 min-w-[2.5in]">
+          <span className="border-b border-slate-500 px-1 text-[8px] font-bold text-slate-900 min-w-[2.5in]">
             {memoLine}
           </span>
         </div>
@@ -259,7 +256,7 @@ export function CheckSheet({
       <div
         className="absolute z-10 flex justify-between"
         style={{
-          bottom: `${signatoryBottom}in`,
+          bottom: `${footerBottom}in`,
           left: `${hMargin}in`,
           right: `${hMargin}in`,
         }}
@@ -267,10 +264,10 @@ export function CheckSheet({
         {/* Primary Signatory */}
         <div className="w-[2.15in] text-center">
           <div className="border-t-2 border-slate-900 pt-0.5 mb-0.5" />
-          <p className="text-[8px] font-black text-slate-900 uppercase tracking-wide">
+          <p className="text-[7px] font-black text-slate-900 uppercase tracking-wide leading-tight">
             {template.primarySignatoryName}
           </p>
-          <p className="text-[7px] font-semibold text-slate-500 uppercase tracking-wide">
+          <p className="text-[6px] font-semibold text-slate-500 uppercase tracking-wide leading-tight">
             {template.primarySignatoryTitle}
           </p>
         </div>
@@ -278,17 +275,17 @@ export function CheckSheet({
         {/* Secondary Signatory */}
         <div className="w-[2.15in] text-center">
           <div className="border-t-2 border-slate-900 pt-0.5 mb-0.5" />
-          <p className="text-[8px] font-black text-slate-900 uppercase tracking-wide">
+          <p className="text-[7px] font-black text-slate-900 uppercase tracking-wide leading-tight">
             {template.secondarySignatoryName}
           </p>
-          <p className="text-[7px] font-semibold text-slate-500 uppercase tracking-wide">
+          <p className="text-[6px] font-semibold text-slate-500 uppercase tracking-wide leading-tight">
             {template.secondarySignatoryTitle}
           </p>
         </div>
       </div>
 
       {/* ── MICR LINE ── */}
-      <div className="absolute left-0 right-0 bottom-[0.02in] text-center font-mono text-[8px] tracking-[0.16em] text-slate-500/55 pointer-events-none select-none print:hidden">
+      <div className="absolute left-0 right-0 bottom-[0.12in] text-center font-mono text-[11px] tracking-[0.2em] text-slate-500/75 pointer-events-none select-none">
         ⑈{checkNo ? checkNo.padStart(6, "0") : "000000"}⑈ ⑆012345678⑆ 1234567890⑈
       </div>
     </div>
