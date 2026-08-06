@@ -37,8 +37,10 @@ export function CheckSheet({
   const payeeTop = template.payeeTop ?? 1.15
   const wordsTop = template.wordsTop ?? 1.6
   const footerBottom = template.footerBottom ?? 0.45
-  const signatoryBottom = Math.max(footerBottom, 0.92)
-  const memoBottom = signatoryBottom + 0.32
+  const safePayeeTop = Math.min(payeeTop, 0.95)
+  const safeWordsTop = Math.min(wordsTop, 1.38)
+  const signatoryBottom = Math.max(footerBottom, 1.2)
+  const memoBottom = signatoryBottom + 0.28
 
   return (
     <div
@@ -136,7 +138,7 @@ export function CheckSheet({
       <div className="absolute top-4 left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none">
         ORIGINAL DOCUMENT • SECURITY FEATURES INCLUDED • UNAUTHORIZED REPRODUCTION PROHIBITED
       </div>
-      <div className="absolute bottom-[0.08in] left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none">
+      <div className="absolute bottom-[0.04in] left-0 right-0 text-center text-[5px] font-bold tracking-[0.15em] text-slate-400 uppercase pointer-events-none print:hidden">
         THIS CHECK CONTAINS ADVANCED SECURITY FEATURES • VERIFY AUTHENTICITY BEFORE PROCESSING
       </div>
 
@@ -207,7 +209,7 @@ export function CheckSheet({
         style={{
           left: `${hMargin}in`,
           right: `${hMargin}in`,
-          top: `${payeeTop}in`,
+          top: `${safePayeeTop}in`,
         }}
       >
         <span className="shrink-0 text-[8px] font-extrabold text-slate-500 uppercase tracking-[0.15em] pb-1">
@@ -224,7 +226,7 @@ export function CheckSheet({
         style={{
           left: `${hMargin}in`,
           right: `${hMargin}in`,
-          top: `${wordsTop}in`,
+          top: `${safeWordsTop}in`,
         }}
       >
         <div className="min-w-0 flex-1 border-b-2 border-slate-900 px-2 pb-0.5 text-[11px] font-extrabold uppercase tracking-wide text-slate-900 bg-white/30 italic leading-tight">

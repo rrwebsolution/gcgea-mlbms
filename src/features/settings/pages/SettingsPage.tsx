@@ -1235,11 +1235,10 @@ export default function SettingsPage() {
                     .settings-check-preview, .settings-check-preview * { visibility: visible; }
                     .settings-check-preview {
                       position: fixed;
-                      left: 0.12in;
-                      top: 0.1in;
+                      left: 0;
+                      top: 0;
                       width: 8.5in;
                       height: 3.5in;
-                      zoom: 0.9;
                       transform: none;
                       border: 0;
                       box-shadow: none;

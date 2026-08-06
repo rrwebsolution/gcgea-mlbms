@@ -60,11 +60,10 @@ export default function BenefitCheckPrintPage() {
           .check-sheet, .check-sheet * { visibility: visible; }
           .check-sheet {
             position: fixed;
-            left: 0.12in;
-            top: 0.1in;
+            left: 0;
+            top: 0;
             width: 8.5in;
             height: 3.5in;
-            zoom: 0.9;
             transform: none;
             break-inside: avoid;
             page-break-inside: avoid;
