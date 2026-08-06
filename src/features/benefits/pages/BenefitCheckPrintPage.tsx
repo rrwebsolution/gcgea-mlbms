@@ -20,12 +20,20 @@ export default function BenefitCheckPrintPage() {
   const template = getSettings().reportTemplate.checkTemplate
   const checkDate = benefit.releaseDate ? new Date(benefit.releaseDate) : new Date()
   const formattedDate = checkDate.toLocaleDateString("en-PH", { month: "2-digit", day: "2-digit", year: "numeric" })
+  const printCheck = () => {
+    const previousTitle = document.title
+    document.title = `GCGEA Benefit Check ${benefit.applicationNumber}`
+    window.print()
+    window.setTimeout(() => {
+      document.title = previousTitle
+    }, 1000)
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-6 print:max-w-none print:space-y-0 print:p-0">
       <div className="flex items-center justify-between print:hidden">
         <Button variant="ghost" render={<Link to={`/benefits/${benefit.id}`} />}><ArrowLeft /> Back</Button>
-        <Button onClick={() => window.print()}><Printer /> Print Check</Button>
+        <Button onClick={printCheck}><Printer /> Print Check</Button>
       </div>
 
       <CheckSheet
@@ -56,8 +64,8 @@ export default function BenefitCheckPrintPage() {
             top: 0.1in;
             width: 8.5in;
             height: 3.5in;
-            transform: scale(0.94);
-            transform-origin: top left;
+            zoom: 0.9;
+            transform: none;
             break-inside: avoid;
             page-break-inside: avoid;
             overflow: hidden;

@@ -603,6 +603,15 @@ export default function SettingsPage() {
     }
   }
 
+  function printCheckTemplate() {
+    const previousTitle = document.title
+    document.title = "GCGEA Check Template"
+    window.print()
+    window.setTimeout(() => {
+      document.title = previousTitle
+    }, 1000)
+  }
+
   React.useEffect(() => {
     if (active !== "backup") return
     void listBackups()
@@ -1182,7 +1191,7 @@ export default function SettingsPage() {
                     <h3 className="text-sm font-bold">Check Template</h3>
                     <p className="mt-1 text-xs text-muted-foreground">Preview the standard Treasurer check layout using sample data.</p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
+                  <Button type="button" variant="outline" size="sm" onClick={printCheckTemplate}>
                     <Printer className="size-3.5" /> Test Print Check
                   </Button>
                 </div>
@@ -1230,8 +1239,8 @@ export default function SettingsPage() {
                       top: 0.1in;
                       width: 8.5in;
                       height: 3.5in;
-                      transform: scale(0.94);
-                      transform-origin: top left;
+                      zoom: 0.9;
+                      transform: none;
                       border: 0;
                       box-shadow: none;
                       break-inside: avoid;
