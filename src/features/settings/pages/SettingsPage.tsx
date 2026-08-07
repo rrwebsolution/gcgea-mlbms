@@ -227,23 +227,33 @@ export default function SettingsPage() {
           textAlignment: currentReportDesign.bodyTextAlignment,
         }
 
-  // The Loan section's minimumMembershipMonths/reloanPolicy are the one slice
-  // of Settings backed by the real API (loan-settings.service.ts) instead of
-  // localStorage — overlay them once the API responds.
+  // The Loan section's minimumMembershipMonths/reloanPolicy/first-Solidarity-
+  // Loan-Lock fields are the one slice of Settings backed by the real API
+  // (loan-settings.service.ts) instead of localStorage — overlay them once
+  // the API responds. loadSystemSettings() replaces the whole settings
+  // object wholesale (it can't merge, since it doesn't know which keys the
+  // loan API owns), so it must resolve and apply first; otherwise it can
+  // race past the loan-settings merge below and clobber the authoritative
+  // values with the generic store's stale copy.
   React.useEffect(() => {
-    loadSystemSettings()
-      .then((loaded) => {
+    async function init() {
+      try {
+        const loaded = await loadSystemSettings()
         setSettings(loaded.settings)
         setAppearance(loaded.appearance)
         applyAppearanceTheme(loaded.appearance)
-      })
-      .catch(() => toast.error("Unable to load System Settings from the server."))
+      } catch {
+        toast.error("Unable to load System Settings from the server.")
+      }
 
-    getLoanSettings()
-      .then((loanSettings) => {
+      try {
+        const loanSettings = await getLoanSettings()
         setSettings((prev) => ({ ...prev, loan: { ...prev.loan, ...loanSettings } }))
-      })
-      .catch(() => toast.error("Unable to load Loan Settings from the server."))
+      } catch {
+        toast.error("Unable to load Loan Settings from the server.")
+      }
+    }
+    void init()
   }, [])
 
   React.useEffect(() => {
