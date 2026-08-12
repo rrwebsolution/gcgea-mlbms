@@ -24,6 +24,8 @@ export interface OrganizationProfileSettings {
   authorizedSignatoryName: string
   authorizedSignatoryPosition: string
   treasurerName: string
+  bookkeeperName: string
+  auditorName: string
   presidentName: string
 }
 

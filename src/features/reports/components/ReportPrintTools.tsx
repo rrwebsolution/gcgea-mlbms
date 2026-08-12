@@ -17,6 +17,15 @@ export function ReportPrintTools() {
   if (!isReport) return null
 
   function reportPayload() {
+    const financialStatement = document.querySelector<HTMLElement>("[data-financial-statement-export]")
+    if (financialStatement?.dataset.financialStatementExport) {
+      return {
+        ...JSON.parse(financialStatement.dataset.financialStatementExport),
+        title: "Unaudited Financial Statement Disclaimer",
+        reportCategory: "financial",
+        customExport: "financial-statement",
+      }
+    }
     const table = document.querySelector("main table")
     if (!table) {
       toast.error("Generate the report first before exporting to Excel.")
@@ -51,10 +60,13 @@ export function ReportPrintTools() {
 
   async function download(format: "pdf" | "excel") {
     const payload = reportPayload()
-    if (!payload || payload.headers.length === 0) return
+    if (!payload || (!("customExport" in payload) && payload.headers.length === 0)) return
     setExporting(format)
     try {
-      const response = await api.post(`/report-exports/${format}`, payload, { responseType: "blob" })
+      const endpoint = "customExport" in payload
+        ? `/reports/${payload.customExport}/${format}`
+        : `/report-exports/${format}`
+      const response = await api.post(endpoint, payload, { responseType: "blob" })
       const url = URL.createObjectURL(response.data)
       const link = document.createElement("a")
       link.href = url
@@ -62,8 +74,9 @@ export function ReportPrintTools() {
       link.click()
       URL.revokeObjectURL(url)
       toast.success(`${format === "pdf" ? "PDF" : "Excel"} report downloaded.`)
-    } catch {
-      toast.error(`Unable to export the report to ${format === "pdf" ? "PDF" : "Excel"}.`)
+    } catch (error) {
+      const fallback = `Unable to export the report to ${format === "pdf" ? "PDF" : "Excel"}.`
+      toast.error(error instanceof Error && error.message ? error.message : fallback)
     } finally {
       setExporting(null)
     }

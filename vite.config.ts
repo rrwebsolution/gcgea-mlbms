@@ -9,19 +9,19 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://gcgea-mlbms-backend-production.up.railway.app",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
       "/sanctum": {
-        target: "https://gcgea-mlbms-backend-production.up.railway.app",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
       "/storage": {
-        target: "https://gcgea-mlbms-backend-production.up.railway.app",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },

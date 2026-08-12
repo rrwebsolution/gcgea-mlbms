@@ -111,6 +111,7 @@ import AnnualCollectionReportPage from "@/features/financial/pages/reports/Annua
 import LoanReleaseSummaryReportPage from "@/features/financial/pages/reports/LoanReleaseSummaryReportPage"
 import BenefitsReleaseSummaryReportPage from "@/features/financial/pages/reports/BenefitsReleaseSummaryReportPage"
 import CashFlowSummaryReportPage from "@/features/financial/pages/reports/CashFlowSummaryReportPage"
+import FinancialStatementReportPage from "@/features/financial/pages/reports/FinancialStatementReportPage"
 
 import UsersPage from "@/features/users/pages/UsersPage"
 import UserFormPage from "@/features/users/pages/UserFormPage"
@@ -325,6 +326,7 @@ export function AppRoutes() {
             <Route path="/reports/loans/aging" element={<LoanAgingReportPage />} />
             <Route path="/reports/loans/member-ledger" element={<MemberLoanLedgerReportPage />} />
             <Route path="/reports/financial/daily-collections" element={<DailyCollectionReportPage />} />
+            <Route path="/reports/financial/financial-statement" element={<FinancialStatementReportPage />} />
             <Route path="/reports/financial/monthly-collections" element={<MonthlyCollectionReportPage />} />
             <Route path="/reports/financial/remittance-breakdown" element={<RemittanceBreakdownReportPage />} />
             <Route path="/reports/financial/annual-budget" element={<AnnualBudgetReportPage />} />

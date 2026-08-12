@@ -752,6 +752,8 @@ export default function SettingsPage() {
                 <Field label="Authorized Signatory Name"><Input value={settings.organization.authorizedSignatoryName} onChange={(e) => patch("organization", { authorizedSignatoryName: e.target.value })} className="h-10 text-sm" /></Field>
                 <Field label="Authorized Signatory Position"><Input value={settings.organization.authorizedSignatoryPosition} onChange={(e) => patch("organization", { authorizedSignatoryPosition: e.target.value })} className="h-10 text-sm" /></Field>
                 <Field label="Treasurer Name"><Input value={settings.organization.treasurerName} onChange={(e) => patch("organization", { treasurerName: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Bookkeeper Name"><Input value={settings.organization.bookkeeperName} onChange={(e) => patch("organization", { bookkeeperName: e.target.value })} className="h-10 text-sm" /></Field>
+                <Field label="Auditor Name"><Input value={settings.organization.auditorName} onChange={(e) => patch("organization", { auditorName: e.target.value })} className="h-10 text-sm" /></Field>
                 <Field label="President Name"><Input value={settings.organization.presidentName} onChange={(e) => patch("organization", { presidentName: e.target.value })} className="h-10 text-sm" /></Field>
               </div>
               <div className="mt-5 rounded-xl border border-dashed border-border/80 p-5 text-center bg-muted/10 space-y-3">

@@ -47,6 +47,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     authorizedSignatoryName: "Maria Corazon D. Santos",
     authorizedSignatoryPosition: "GCGEA President",
     treasurerName: "Danilo T. Quiñones",
+    bookkeeperName: "Arnel G. Ocampo",
+    auditorName: "Richael E. Bilictao, CPA, MGM",
     presidentName: "Maria Corazon D. Santos",
   },
   numbering: {
