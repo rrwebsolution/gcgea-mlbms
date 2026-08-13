@@ -1,13 +1,14 @@
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Eye } from "lucide-react"
+import { Eye, X } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { DataTable } from "@/components/shared/DataTable"
 import { Pagination } from "@/components/shared/Pagination"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { listAuditLogs } from "@/services/audit-logs.service"
 import { formatDateTime } from "@/utils/format"
@@ -17,11 +18,13 @@ export default function AuditLogsPage() {
   const [search, setSearch] = React.useState("")
   const [page, setPage] = React.useState(1)
   const [perPage, setPerPage] = React.useState(10)
+  const [dateFrom, setDateFrom] = React.useState("")
+  const [dateTo, setDateTo] = React.useState("")
   const [selected, setSelected] = React.useState<AuditLog | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["audit-logs", { search, page, perPage }],
-    queryFn: () => listAuditLogs({ search, page, perPage }),
+    queryKey: ["audit-logs", { search, page, perPage, dateFrom, dateTo }],
+    queryFn: () => listAuditLogs({ search, page, perPage, dateFrom, dateTo }),
   })
 
   const columns: ColumnDef<AuditLog, unknown>[] = [
@@ -52,6 +55,31 @@ export default function AuditLogsPage() {
       <div className="rounded-xl border border-border bg-card shadow-sm">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
           <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search by user or record reference…" className="max-w-sm" />
+          <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2">
+            <span className="text-xs text-muted-foreground">From</span>
+            <Input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(event) => { setDateFrom(event.target.value); setPage(1) }}
+              className="h-8 w-32 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+              aria-label="Audit log date from"
+            />
+            <span className="text-xs text-muted-foreground">To</span>
+            <Input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(event) => { setDateTo(event.target.value); setPage(1) }}
+              className="h-8 w-32 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+              aria-label="Audit log date to"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(""); setDateTo(""); setPage(1) }}>
+              <X /> Clear dates
+            </Button>
+          )}
         </div>
         <DataTable
           columns={columns}

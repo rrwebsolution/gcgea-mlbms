@@ -8,6 +8,8 @@ const auditLogs: AuditLog[] = [...MOCK_AUDIT_LOGS]
 export interface AuditLogListParams extends PaginationParams {
   module?: string
   action?: string
+  dateFrom?: string
+  dateTo?: string
 }
 
 export async function listAuditLogs(params: AuditLogListParams = {}): Promise<PaginatedResponse<AuditLog>> {
@@ -20,6 +22,8 @@ export async function listAuditLogs(params: AuditLogListParams = {}): Promise<Pa
   }
   if (params.module) items = items.filter((a) => a.module === params.module)
   if (params.action) items = items.filter((a) => a.action === params.action)
+  if (params.dateFrom) items = items.filter((a) => a.dateTime.slice(0, 10) >= params.dateFrom!)
+  if (params.dateTo) items = items.filter((a) => a.dateTime.slice(0, 10) <= params.dateTo!)
   items = sortBy(items, params.sortBy ?? "dateTime", params.sortDir ?? "desc")
   return simulateDelay(paginate(items, params.page, params.perPage))
 }
