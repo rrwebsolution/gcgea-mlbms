@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
-import { ArrowLeft, Loader2, PencilLine, Save } from "lucide-react"
+import { ArrowLeft, FileText, Loader2, PencilLine, Save } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { PermissionButton } from "@/components/shared/PermissionButton"
@@ -9,12 +9,22 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CommandSelect } from "@/components/shared/CommandSelect"
+import { EmptyState } from "@/components/shared/EmptyState"
+import { formatCurrency } from "@/utils/format"
 import { getAppearance } from "@/services/settings.service"
 import {
   getFinancialStatement,
+  generateUnauditedFinancialReport,
   saveFinancialStatement,
   type FinancialStatementDocument,
   type FinancialStatementDraft,
+  type FinancialReportingPeriod,
+  type UnauditedFinancialReport,
 } from "@/services/financial-statement.service"
 
 export default function FinancialStatementReportPage() {
@@ -25,6 +35,13 @@ export default function FinancialStatementReportPage() {
   const [draft, setDraft] = React.useState<FinancialStatementDraft | null>(null)
   const [isEditing, setIsEditing] = React.useState(false)
   const [isSaving, setIsSaving] = React.useState(false)
+  const [isGenerating, setIsGenerating] = React.useState(false)
+  const [report, setReport] = React.useState<UnauditedFinancialReport | null>(null)
+  const [reportError, setReportError] = React.useState("")
+  const [fiscalYear, setFiscalYear] = React.useState(new Date().getFullYear())
+  const [reportingPeriod, setReportingPeriod] = React.useState<FinancialReportingPeriod>("annual")
+  const [startDate, setStartDate] = React.useState("")
+  const [endDate, setEndDate] = React.useState("")
   const appearance = getAppearance()
 
   React.useEffect(() => {
@@ -69,6 +86,31 @@ export default function FinancialStatementReportPage() {
     }
   }
 
+  async function handleGenerate() {
+    if (reportingPeriod === "custom" && (!startDate || !endDate || startDate > endDate)) {
+      setReportError("Select a valid custom start and end date.")
+      return
+    }
+    setIsGenerating(true)
+    setReportError("")
+    try {
+      const result = await generateUnauditedFinancialReport({
+        fiscalYear,
+        reportingPeriod,
+        startDate: reportingPeriod === "custom" ? startDate : undefined,
+        endDate: reportingPeriod === "custom" ? endDate : undefined,
+        transactionStatus: "posted",
+      })
+      setReport(result)
+      toast.success("Unaudited financial report generated from posted transactions.")
+    } catch (error) {
+      setReport(null)
+      setReportError(error instanceof Error ? error.message : "Unable to generate the financial report.")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   if (isLoading || !data || !draft) {
     return <div className="flex min-h-64 items-center justify-center"><Loader2 className="size-6 animate-spin text-primary" /></div>
   }
@@ -77,24 +119,69 @@ export default function FinancialStatementReportPage() {
 
   return (
     <div className="space-y-5 pb-20">
-      <div data-financial-statement-export={JSON.stringify(draft)} className="hidden" />
-
       <Button variant="ghost" size="sm" className="-ml-2 w-fit" render={<Link to="/reports" />}>
         <ArrowLeft /> Back to Report Center
       </Button>
 
       <PageHeader
-        title="Financial Statement"
-        description="Edit, save, and export the official unaudited financial statement disclaimer."
-        actions={(
-          <PermissionButton permission="reports.export" variant={isEditing ? "outline" : "default"} onClick={() => setIsEditing((value) => !value)}>
-            <PencilLine /> {isEditing ? "Close Editor" : "Edit Statement"}
-          </PermissionButton>
-        )}
+        title="Unaudited Financial Report"
+        description="Generate a financial summary from actual posted system transactions. The disclaimer remains the report cover page."
       />
 
-      {isEditing && (
-        <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+      <Tabs defaultValue="financial-report" className="space-y-5">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:w-fit">
+          <TabsTrigger value="financial-report">Financial Report</TabsTrigger>
+          <TabsTrigger value="cover-signatories">Cover &amp; Signatories</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="financial-report" className="space-y-5">
+          <Card>
+        <CardHeader><CardTitle className="text-base">Report Parameters</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Fiscal Year"><Input type="number" min={1997} max={9999} value={fiscalYear} onChange={(event) => setFiscalYear(Number(event.target.value) || new Date().getFullYear())} /></Field>
+            <Field label="Reporting Period">
+              <CommandSelect
+                value={reportingPeriod}
+                onValueChange={(value) => setReportingPeriod(value as FinancialReportingPeriod)}
+                options={[
+                  { value: "monthly", label: "Monthly" },
+                  { value: "quarterly", label: "Quarterly" },
+                  { value: "semi_annual", label: "Semi-Annual" },
+                  { value: "annual", label: "Annual" },
+                  { value: "custom", label: "Custom Date Range" },
+                ]}
+                placeholder="Select reporting period"
+                searchPlaceholder="Search reporting period…"
+                emptyText="No reporting period found."
+              />
+            </Field>
+            <Field label="Start Date"><Input type="date" required={reportingPeriod === "custom"} disabled={reportingPeriod !== "custom"} value={startDate} onChange={(event) => setStartDate(event.target.value)} /></Field>
+            <Field label="End Date"><Input type="date" required={reportingPeriod === "custom"} disabled={reportingPeriod !== "custom"} value={endDate} onChange={(event) => setEndDate(event.target.value)} /></Field>
+          </div>
+          <div className="flex items-center gap-3">
+            <PermissionButton permission="reports.financial" onClick={handleGenerate} isLoading={isGenerating} loadingText="Generating…"><FileText /> Generate Report</PermissionButton>
+            <Badge variant="outline">Transaction Status: Posted</Badge>
+          </div>
+          {reportError && <p role="alert" className="text-sm text-destructive">{reportError}</p>}
+        </CardContent>
+          </Card>
+
+          {isGenerating ? <SummarySkeleton /> : report ? <FinancialSummary report={report} /> : (
+            <EmptyState title="No report generated" description="Choose a fiscal year and reporting period, then generate the report. No amounts are estimated or prefilled." />
+          )}
+        </TabsContent>
+
+        <TabsContent value="cover-signatories" className="space-y-5">
+          <div data-financial-statement-export={JSON.stringify(draft)} className="hidden" />
+          <div className="flex justify-end">
+            <PermissionButton permission="reports.export" variant={isEditing ? "outline" : "default"} onClick={() => setIsEditing((value) => !value)}>
+              <PencilLine /> {isEditing ? "Close Editor" : "Edit Cover Template"}
+            </PermissionButton>
+          </div>
+
+          {isEditing && (
+            <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div><h2 className="font-semibold">Statement Content</h2><p className="text-xs text-muted-foreground">Saved changes are used by both PDF and Excel exports.</p></div>
             <PermissionButton permission="reports.export" onClick={handleSave} isLoading={isSaving} loadingText="Saving…"><Save /> Save Changes</PermissionButton>
@@ -118,12 +205,44 @@ export default function FinancialStatementReportPage() {
               </Field>
             ))}
           </div>
-        </section>
-      )}
+            </section>
+          )}
 
-      <StatementPreview statement={statement} leftLogo={appearance.sidebarFooterLeftLogoUrl || appearance.sidebarLogoUrl} rightLogo={appearance.sidebarFooterRightLogoUrl} />
+          <StatementPreview statement={statement} leftLogo={appearance.sidebarFooterLeftLogoUrl || appearance.sidebarLogoUrl} rightLogo={appearance.sidebarFooterRightLogoUrl} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
+}
+
+const SUMMARY_ROWS: Array<[keyof UnauditedFinancialReport["summary"], string]> = [
+  ["monthlyDuesCollected", "Monthly Dues Collected"],
+  ["cashPabaonCollected", "Cash Pabaon"],
+  ["loanPrincipalCollected", "Loan Principal Collected"],
+  ["loanInterestCollected", "Loan Interest Collected"],
+  ["benefitsReleased", "Benefits Released"],
+  ["outstandingLoanBalance", "Outstanding Loan Balance"],
+]
+
+function FinancialSummary({ report }: { report: UnauditedFinancialReport }) {
+  return <Card data-unaudited-financial-report-export={JSON.stringify(report)}>
+    <CardHeader className="text-center">
+      <div className="flex justify-center"><Badge>{report.status}</Badge></div>
+      <CardTitle>FINANCIAL REPORT – FY {report.fiscalYear}</CardTitle>
+      <p className="text-sm text-muted-foreground">{report.reportingPeriodLabel}</p>
+    </CardHeader>
+    <CardContent>
+      <div className="overflow-hidden rounded-lg border">
+        <table className="w-full text-sm"><thead className="bg-muted/60"><tr><th className="px-4 py-3 text-left">Category</th><th className="px-4 py-3 text-right">Amount</th></tr></thead>
+          <tbody>{SUMMARY_ROWS.map(([key, label]) => <tr key={key} className="border-t"><td className="px-4 py-3">{label}</td><td className="px-4 py-3 text-right font-mono tabular-nums" data-report-value={report.summary[key]}>{formatCurrency(report.summary[key] ?? 0)}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </CardContent>
+  </Card>
+}
+
+function SummarySkeleton() {
+  return <Card><CardContent className="space-y-3 pt-6">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-11 w-full" />)}</CardContent></Card>
 }
 
 function StatementPreview({ statement, leftLogo, rightLogo }: { statement: FinancialStatementDocument; leftLogo: string; rightLogo: string }) {

@@ -1,12 +1,13 @@
 import { useParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { FileText, HeartHandshake, Printer } from "lucide-react"
+import { FileCheck, FileText, HeartHandshake, Printer } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { PrintButton } from "@/components/shared/PrintButton"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { ApprovalTimeline } from "@/components/shared/ApprovalTimeline"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { DocumentCard } from "@/components/shared/DocumentCard"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,6 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getBenefit, getBenefitApprovalHistory } from "@/services/benefits.service"
 import { BENEFIT_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
+import { formatFileSize } from "@/lib/upload-validation"
+import type { BenefitDocument } from "@/types"
 
 export default function BenefitDetailPage() {
   const { id = "" } = useParams()
@@ -121,17 +124,28 @@ export default function BenefitDetailPage() {
         </TabsContent>
 
         <TabsContent value="requirements" className="mt-4">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <ul className="space-y-2">
+          <div className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-semibold"><FileCheck className="size-4 text-primary" /> Submitted Requirements</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Documents uploaded with this benefit application.</p>
+            </div>
+            <ul className="space-y-3">
               {benefit.requirements.map((req) => (
-                <li key={req.label} className="flex items-center gap-2 text-sm">
-                  <span className={`flex size-5 items-center justify-center rounded-full text-xs ${req.completed ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
-                    {req.completed ? "✓" : "—"}
-                  </span>
-                  {req.label}
+                <li key={req.label} className="rounded-xl border border-border/70 p-3">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2 font-semibold"><span className={`flex size-5 items-center justify-center rounded-full text-xs ${req.completed ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>{req.completed ? "✓" : "—"}</span>{req.label}</span>
+                    <StatusBadge label={req.completed ? "Submitted" : "Missing"} tone={req.completed ? "success" : "warning"} />
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {(benefit.documents ?? []).filter((document) => document.requirementLabel === req.label).map((document) => <DocumentRow key={document.id} document={document} />)}
+                    {req.completed && !(benefit.documents ?? []).some((document) => document.requirementLabel === req.label) && <p className="text-xs text-muted-foreground">Checklist completed before document storage tracking was enabled.</p>}
+                  </div>
                 </li>
               ))}
             </ul>
+            {(benefit.documents ?? []).filter((document) => !benefit.requirements.some((requirement) => requirement.label === document.requirementLabel)).length > 0 && (
+              <div className="border-t pt-4"><h4 className="mb-2 text-xs font-bold uppercase text-muted-foreground">Additional Documents</h4><div className="space-y-2">{(benefit.documents ?? []).filter((document) => !benefit.requirements.some((requirement) => requirement.label === document.requirementLabel)).map((document) => <DocumentRow key={document.id} document={document} />)}</div></div>
+            )}
           </div>
         </TabsContent>
 
@@ -148,6 +162,17 @@ export default function BenefitDetailPage() {
       </Link>
     </div>
   )
+}
+
+function DocumentRow({ document }: { document: BenefitDocument }) {
+  return <DocumentCard
+    title={document.requirementLabel ?? "Submitted Document"}
+    fileName={document.fileName}
+    fileUrl={document.fileUrl}
+    fileSize={document.fileSizeBytes != null ? formatFileSize(document.fileSizeBytes) : document.fileSize}
+    uploadedAt={document.uploadedAt ? formatDateShort(document.uploadedAt) : undefined}
+    uploadedBy={document.uploadedBy}
+  />
 }
 
 function SummaryStat({ label, value }: { label: string; value: string }) {

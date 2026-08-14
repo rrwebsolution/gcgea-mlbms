@@ -12,12 +12,17 @@ function safeFileName(value: string) {
 export function ReportPrintTools() {
   const location = useLocation()
   const isReport = location.pathname.startsWith("/reports/") && location.pathname.split("/").length > 2
+  const hasRowExports = location.pathname === "/reports/financial/financial-statement"
   const [exporting, setExporting] = React.useState<"pdf" | "excel" | null>(null)
 
-  if (!isReport) return null
+  if (!isReport || hasRowExports) return null
 
   function reportPayload() {
-    const financialStatement = document.querySelector<HTMLElement>("[data-financial-statement-export]")
+    // Export only the currently visible report tab. This prevents the hidden
+    // cover/signatory template from replacing the financial summary export.
+    const activeTab = document.querySelector<HTMLElement>('main [role="tabpanel"]:not([hidden])')
+    const exportScope: ParentNode = activeTab ?? document.querySelector("main") ?? document
+    const financialStatement = exportScope.querySelector<HTMLElement>("[data-financial-statement-export]")
     if (financialStatement?.dataset.financialStatementExport) {
       return {
         ...JSON.parse(financialStatement.dataset.financialStatementExport),
@@ -26,7 +31,7 @@ export function ReportPrintTools() {
         customExport: "financial-statement",
       }
     }
-    const table = document.querySelector("main table")
+    const table = exportScope.querySelector("table")
     if (!table) {
       toast.error("Generate the report first before exporting to Excel.")
       return null
@@ -67,12 +72,20 @@ export function ReportPrintTools() {
         ? `/reports/${payload.customExport}/${format}`
         : `/report-exports/${format}`
       const response = await api.post(endpoint, payload, { responseType: "blob" })
-      const url = URL.createObjectURL(response.data)
+      const file = response.data instanceof Blob
+        ? response.data
+        : new Blob([response.data], {
+            type: format === "pdf"
+              ? "application/pdf"
+              : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          })
+      if (file.size === 0) throw new Error("The server returned an empty report file.")
+      const url = URL.createObjectURL(file)
       const link = document.createElement("a")
       link.href = url
       link.download = `${safeFileName(payload.title)}-${new Date().toISOString().slice(0, 10)}.${format === "pdf" ? "pdf" : "xlsx"}`
       link.click()
-      URL.revokeObjectURL(url)
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
       toast.success(`${format === "pdf" ? "PDF" : "Excel"} report downloaded.`)
     } catch (error) {
       const fallback = `Unable to export the report to ${format === "pdf" ? "PDF" : "Excel"}.`

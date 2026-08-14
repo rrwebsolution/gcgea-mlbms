@@ -123,9 +123,10 @@ export async function createBenefitApplication(input: CreateBenefitApplicationIn
   return data
 }
 
-export async function uploadBenefitDocument(benefitId: string, file: File, onUploadProgress?: (percent: number) => void): Promise<BenefitDocument> {
+export async function uploadBenefitDocument(benefitId: string, file: File, onUploadProgress?: (percent: number) => void, requirementLabel = "Additional Supporting Document"): Promise<BenefitDocument> {
   const form = new FormData()
   form.append("file", file)
+  form.append("requirementLabel", requirementLabel)
   const { data } = await api.post<BenefitDocument>(`/benefits/${benefitId}/documents`, form, {
     headers: { "Content-Type": "multipart/form-data" },
     onUploadProgress: (event) => onUploadProgress?.(event.total ? Math.round((event.loaded / event.total) * 100) : 0),

@@ -29,7 +29,7 @@ const CATEGORIES: { title: ReportCategory; icon: typeof Users; reports: string[]
   {
     title: "Financial Reports",
     icon: LineChart,
-    reports: ["Financial Statement", "Daily Collection Report", "Monthly Collection Report", "Remittance Breakdown", "Annual Budget", "Monthly Disbursements", "Annual Collection Report", "Loan Release Summary", "Benefits Release Summary", "Cash Flow Summary"],
+    reports: ["Financial Statement", "Unaudited Financial Report", "Daily Collection Report", "Monthly Collection Report", "Remittance Breakdown", "Annual Budget", "Monthly Disbursements", "Annual Collection Report", "Loan Release Summary", "Benefits Release Summary", "Cash Flow Summary"],
   },
 ]
 

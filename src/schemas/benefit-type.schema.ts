@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 export const prorationTierSchema = z.object({
+  membershipScope: z.enum(["all", "legacy", "new"]).optional(),
   minMonths: z.number().int().min(0, "Must be zero or more"),
   maxMonths: z.number().int().min(0).nullable().optional(),
   percentage: z.number().min(0).max(100, "Percentage must be between 0 and 100"),

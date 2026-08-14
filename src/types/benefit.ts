@@ -1,8 +1,11 @@
 /** Which paid-contribution ledger prorationTiers counts months against. */
 export type ProrationBasis = "dues" | "pabaon"
+export type ProrationMembershipScope = "all" | "legacy" | "new"
 
 export interface BenefitTypeProrationTier {
   id: string
+  /** Resolution schedule selected from the member's GCGEA membership date. */
+  membershipScope: ProrationMembershipScope
   minMonths: number
   /** null = open-ended ("and beyond"). */
   maxMonths: number | null
@@ -19,6 +22,7 @@ export interface BenefitTypeFyAmount {
 
 /** Shape for creating/replacing a benefit type's tiers — no `id`, the backend full-replace-syncs these on every save. */
 export interface BenefitTypeProrationTierInput {
+  membershipScope?: ProrationMembershipScope
   minMonths: number
   maxMonths?: number | null
   percentage: number
@@ -65,6 +69,9 @@ export interface BenefitDocument {
   fileName: string
   fileUrl: string
   fileSize?: string
+  fileSizeBytes?: number
+  requirementLabel?: string
+  uploadedBy?: string
   uploadedAt: string
 }
 

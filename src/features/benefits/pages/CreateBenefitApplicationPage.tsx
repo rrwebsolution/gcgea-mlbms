@@ -146,6 +146,7 @@ export default function CreateBenefitApplicationPage() {
   const [siblingBeneficiaryIds, setSiblingBeneficiaryIds] = React.useState<string[]>([])
 
   const [requirements, setRequirements] = React.useState<Record<string, boolean>>({})
+  const [requirementFiles, setRequirementFiles] = React.useState<Record<string, File>>({})
   const [supportingFiles, setSupportingFiles] = React.useState<File[]>([])
   const [isUploadingDocuments, setIsUploadingDocuments] = React.useState(false)
   const [supportingUploadProgress, setSupportingUploadProgress] = React.useState<Record<string, number>>({})
@@ -275,12 +276,16 @@ export default function CreateBenefitApplicationPage() {
         ...memberDirectPabaonContributions.map((contribution) => contribution.contributionPeriod),
       ])
     : countDistinctPeriods(memberContributions.map((c) => c.contributionPeriod))
-  const prorationPreview = benefitType && benefitType.prorationTiers.length > 0 && !isSiblingSchedule
-    ? computeProratedAmount(benefitType.prorationTiers, benefitType.fyAmounts, benefitType.maximumAmount, monthsPaid, new Date(applicationDate).getFullYear())
+  const pabaonResolutionScope = member?.membershipDate && member.membershipDate >= "2026-09-01" ? "new" : "legacy"
+  const applicableProrationTiers = benefitType?.prorationBasis === "pabaon"
+    ? benefitType.prorationTiers.filter((tier) => tier.membershipScope === "all" || tier.membershipScope === pabaonResolutionScope)
+    : benefitType?.prorationTiers ?? []
+  const prorationPreview = benefitType && applicableProrationTiers.length > 0 && !isSiblingSchedule
+    ? computeProratedAmount(applicableProrationTiers, benefitType.fyAmounts, benefitType.maximumAmount, monthsPaid, new Date(applicationDate).getFullYear())
     : null
   const isComputedAmount = Boolean(prorationPreview) || isNuclearMortuary
-  const minimumProrationMonths = benefitType?.prorationTiers.length
-    ? Math.min(...benefitType.prorationTiers.map((tier) => tier.minMonths))
+  const minimumProrationMonths = applicableProrationTiers.length
+    ? Math.min(...applicableProrationTiers.map((tier) => tier.minMonths))
     : 0
 
   React.useEffect(() => {
@@ -452,9 +457,11 @@ export default function CreateBenefitApplicationPage() {
         const key = fileKey(file)
         try {
           setSupportingUploadProgress((current) => ({ ...current, [key]: 0 }))
+          const requirementLabel = Object.entries(requirementFiles).find(([, requirementFile]) => fileKey(requirementFile) === key)?.[0]
+            ?? "Additional Supporting Document"
           uploaded.push(await uploadBenefitDocument(benefit.id, file, (progress) => {
             setSupportingUploadProgress((current) => ({ ...current, [key]: progress }))
-          }))
+          }, requirementLabel))
         } catch {
           failed.push(file)
           setSupportingUploadProgress((current) => {
@@ -490,6 +497,7 @@ export default function CreateBenefitApplicationPage() {
       if (isSiblingSchedule && siblingBeneficiaryIds.length === 0) return false
       if (isNuclearMortuary && (!claimSubjectType || (!isSiblingSchedule && claimSubjectNames.length === 0))) return false
       return !!benefitTypeId && !!requestedAmount && !!reason.trim() && !!resolvedRecipientName.trim() && !!assignedOfficer.trim()
+        && missingRequirements.length === 0
     }
     if (s === 3) return !isBlocked
     return true
@@ -522,7 +530,7 @@ export default function CreateBenefitApplicationPage() {
     }
     setIsSubmitting(true)
     try {
-      const benefit = await benefitDraft.save({
+      const payload: CreateBenefitApplicationInput = {
         memberId: member.id,
         benefitTypeId: benefitType?.id,
         requestedAmount,
@@ -530,18 +538,27 @@ export default function CreateBenefitApplicationPage() {
         reason: reason || undefined,
         beneficiaryOrRecipient: resolvedRecipientName ? storedRecipientLabel : undefined,
         requirements: requirementEntries,
-        asDraft,
+        asDraft: true,
         draftCurrentStep: step,
         overrideEligibility: !asDraft && overrideEnabled && overrideConfirmed,
         overrideReason: !asDraft && overrideEnabled ? overrideReason.trim() : undefined,
-      })
-      const failedFiles = await uploadSupportingFiles(benefit)
+      }
+      // Files require an application id. Persist as Draft first, upload every
+      // requirement, and only then transition to Submitted so a failed upload
+      // can never leave an incomplete application in the approval workflow.
+      const draftBenefit = await benefitDraft.save(payload)
+      const failedFiles = await uploadSupportingFiles(draftBenefit)
       if (asDraft) {
         if (failedFiles.length > 0) toast.warning(`Draft saved, but ${failedFiles.length} supporting file(s) could not be uploaded.`)
         else toast.success("Draft saved successfully.")
       } else {
-        if (failedFiles.length > 0) toast.warning(`Application submitted, but ${failedFiles.length} supporting file(s) could not be uploaded.`)
-        else toast.success("Benefit application submitted successfully.")
+        const requiredFileKeys = new Set(Object.values(requirementFiles).map(fileKey))
+        const failedRequiredFiles = failedFiles.filter((file) => requiredFileKeys.has(fileKey(file)))
+        if (failedRequiredFiles.length > 0) {
+          throw new Error(`Required document upload failed: ${failedRequiredFiles.map((file) => file.name).join(", ")}. The application remains a draft.`)
+        }
+        const benefit = await updateBenefitApplication(draftBenefit.id, { ...payload, asDraft: false })
+        toast.success("Benefit application submitted successfully.")
         setSuccessDialog({ id: benefit.id, applicationNumber: benefit.applicationNumber })
       }
     } catch (err) {
@@ -566,6 +583,7 @@ export default function CreateBenefitApplicationPage() {
     setOverrideReason("")
     setOverrideConfirmed(false)
     setRequirements({})
+    setRequirementFiles({})
     setSupportingFiles([])
     setSupportingUploadProgress({})
     setSiblingBeneficiaryIds([])
@@ -684,6 +702,9 @@ export default function CreateBenefitApplicationPage() {
                 onValueChange={(v) => {
                   const nextBenefitTypeId = v ?? ""
                   setBenefitTypeId(nextBenefitTypeId)
+                  setRequirements({})
+                  setRequirementFiles({})
+                  setSupportingFiles([])
                   if (benefitTypes.find((type) => type.id === nextBenefitTypeId)?.name !== NUCLEAR_MORTUARY_BENEFIT_NAME) {
                     setClaimSubjectType("")
                     setClaimSubjectNames([])
@@ -749,8 +770,8 @@ export default function CreateBenefitApplicationPage() {
                           ? `The requested amount follows the configured ${claimSubjectType.toLowerCase()} mortuary benefit amount.`
                           : "Select an eligible relationship category and qualified family member to complete the automated calculation."
                       : prorationPreview?.tier
-                        ? `${monthsPaid} distinct fully paid Cash Pabaon month(s) qualify for the ${prorationPreview.tier.minMonths}${prorationPreview.tier.maxMonths == null ? "+" : `–${prorationPreview.tier.maxMonths}`} month tier at ${prorationPreview.tier.percentage}%.`
-                        : `${monthsPaid} distinct fully paid Cash Pabaon month(s) recorded. The first benefit tier requires at least ${minimumProrationMonths} months, so ${Math.max(0, minimumProrationMonths - monthsPaid)} more fully paid month(s) are needed.`}
+                        ? `${pabaonResolutionScope === "legacy" ? "Resolution 24-2026 (Old Member)" : "Resolution 27-2026 (New Member)"}: ${monthsPaid} distinct fully paid Cash Pabaon month(s) qualify for the ${prorationPreview.tier.minMonths}${prorationPreview.tier.maxMonths == null ? "+" : `–${prorationPreview.tier.maxMonths}`} month tier at ${prorationPreview.tier.percentage}%.`
+                        : `${pabaonResolutionScope === "legacy" ? "Resolution 24-2026 (Old Member)" : "Resolution 27-2026 (New Member)"}: ${monthsPaid} fully paid month(s) recorded. The first benefit tier requires ${minimumProrationMonths} months, so ${Math.max(0, minimumProrationMonths - monthsPaid)} more month(s) are needed.`}
                   </p>
                 </div>
               ) : (
@@ -1002,6 +1023,47 @@ export default function CreateBenefitApplicationPage() {
             </div>
           </div>
 
+          {benefitType && benefitType.requiredDocuments.length > 0 && (
+            <div className="mt-6 space-y-4 rounded-2xl border border-primary/20 bg-primary/[0.025] p-5">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-bold"><FileCheck className="size-4 text-primary" /> Required Documents</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Upload every document configured for this benefit type before proceeding.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {benefitType.requiredDocuments.map((documentLabel) => (
+                  <FileUploader
+                    key={`${benefitType.id}-${documentLabel}`}
+                    label={documentLabel}
+                    required
+                    disabled={isUploadingDocuments}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    acceptExtensions={["pdf", "jpg", "jpeg", "png"]}
+                    fileName={requirementFiles[documentLabel]?.name}
+                    fileSizeBytes={requirementFiles[documentLabel]?.size}
+                    status="idle"
+                    onUpload={(file) => {
+                      const previous = requirementFiles[documentLabel]
+                      setRequirementFiles((current) => ({ ...current, [documentLabel]: file }))
+                      setSupportingFiles((current) => [...current.filter((item) => !previous || fileKey(item) !== fileKey(previous)), file])
+                      setRequirements((current) => ({ ...current, [documentLabel]: true }))
+                    }}
+                    onRemove={() => {
+                      const previous = requirementFiles[documentLabel]
+                      setRequirementFiles((current) => {
+                        const next = { ...current }
+                        delete next[documentLabel]
+                        return next
+                      })
+                      if (previous) setSupportingFiles((current) => current.filter((item) => fileKey(item) !== fileKey(previous)))
+                      setRequirements((current) => ({ ...current, [documentLabel]: false }))
+                    }}
+                  />
+                ))}
+              </div>
+              {missingRequirements.length > 0 && <p className="text-xs font-medium text-destructive">Upload {missingRequirements.length} remaining required document(s).</p>}
+            </div>
+          )}
+
           {/* Policy Information Summary Grid */}
           {benefitType && (
             <div className="mt-6 rounded-2xl border border-border/70 bg-muted/20 p-5 shadow-2xs space-y-3 relative overflow-hidden">
@@ -1120,8 +1182,8 @@ export default function CreateBenefitApplicationPage() {
                           : "bg-card border-border/60 hover:border-border"
                       )}
                     >
-                      <label className="flex items-center gap-3 text-sm text-foreground font-semibold cursor-pointer">
-                        <Checkbox checked={requirements[req.label]} onCheckedChange={(v) => setRequirements((prev) => ({ ...prev, [req.label]: !!v }))} />
+                      <label className="flex items-center gap-3 text-sm text-foreground font-semibold">
+                        <Checkbox checked={requirements[req.label]} disabled />
                         {req.label}
                       </label>
                       <StatusBadge label={req.completed ? "Submitted" : "Missing"} tone={req.completed ? "success" : "warning"} />

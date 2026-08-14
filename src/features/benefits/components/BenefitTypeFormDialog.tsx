@@ -53,7 +53,7 @@ function toFormValues(benefitType?: BenefitType): BenefitTypeFormValues {
     defaultAmount: benefitType.defaultAmount,
     maximumAmount: benefitType.maximumAmount,
     prorationBasis: benefitType.prorationBasis ?? null,
-    prorationTiers: benefitType.prorationTiers.map((t) => ({ minMonths: t.minMonths, maxMonths: t.maxMonths, percentage: t.percentage })),
+    prorationTiers: benefitType.prorationTiers.map((t) => ({ membershipScope: t.membershipScope ?? "all", minMonths: t.minMonths, maxMonths: t.maxMonths, percentage: t.percentage })),
     fyAmounts: benefitType.fyAmounts.map((fy) => ({ fiscalYear: fy.fiscalYear, baseAmount: fy.baseAmount })),
     eligibilityRequirements: benefitType.eligibilityRequirements,
     requiredMembershipMonths: benefitType.requiredMembershipMonths,
@@ -120,7 +120,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
       setValue("prorationTiers", [])
       setValue("fyAmounts", [])
     } else if (tiersArray.fields.length === 0) {
-      tiersArray.append({ minMonths: 0, maxMonths: null, percentage: 100 })
+      tiersArray.append({ membershipScope: "all", minMonths: 0, maxMonths: null, percentage: 100 })
     }
   }
 
@@ -321,7 +321,7 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                         variant="outline" 
                         size="sm" 
                         className="h-8 text-xs gap-1.5 border-dashed border-primary/30 hover:border-primary/50"
-                        onClick={() => tiersArray.append({ minMonths: 0, maxMonths: null, percentage: 0 })}
+                        onClick={() => tiersArray.append({ membershipScope: watch("prorationBasis") === "pabaon" ? "legacy" : "all", minMonths: 0, maxMonths: null, percentage: 0 })}
                       >
                         <Plus className="size-3.5" /> Add Tier
                       </Button>}
@@ -331,8 +331,23 @@ export function BenefitTypeFormDialog({ open, onOpenChange, benefitType, onSubmi
                       {tiersArray.fields.map((field, index) => (
                         <div 
                           key={field.id} 
-                          className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-background p-2.5 shadow-xs sm:grid-cols-[1fr_auto_1fr_auto_1fr_1.15fr_auto]"
+                          className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-background p-2.5 shadow-xs sm:grid-cols-[1.2fr_1fr_auto_1fr_auto_1fr_1.15fr_auto]"
                         >
+                          <div className="space-y-1">
+                            <span className="px-1 text-[9px] font-bold uppercase text-muted-foreground/70">Member Rule</span>
+                            <CommandSelect
+                              size="sm"
+                              hideSearch
+                              disabled={isProrationReadOnly}
+                              value={watch(`prorationTiers.${index}.membershipScope`) ?? "all"}
+                              onValueChange={(value) => setValue(`prorationTiers.${index}.membershipScope`, value as "all" | "legacy" | "new")}
+                              options={[
+                                { value: "all", label: "All Members" },
+                                { value: "legacy", label: "Old · Res. 24" },
+                                { value: "new", label: "New · Res. 27" },
+                              ]}
+                            />
+                          </div>
                           <div className="space-y-1">
                             <span className="text-[9px] font-bold text-muted-foreground/70 uppercase px-1">Min Months</span>
                             <Input

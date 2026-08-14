@@ -32,7 +32,7 @@ const DEFAULT_TIERS: BenefitTypeProrationTierInput[] = [
   { minMonths: 96, maxMonths: BEYOND_MONTHS, percentage: 100 },
 ]
 
-const DEFAULT_PABAON_TIERS: BenefitTypeProrationTierInput[] = [
+const DEFAULT_NEW_PABAON_TIERS: BenefitTypeProrationTierInput[] = [
   { minMonths: 12, maxMonths: 35, percentage: 12 },
   { minMonths: 36, maxMonths: 47, percentage: 15 },
   { minMonths: 48, maxMonths: 59, percentage: 20 },
@@ -48,8 +48,15 @@ const DEFAULT_PABAON_TIERS: BenefitTypeProrationTierInput[] = [
   { minMonths: 168, maxMonths: 179, percentage: 90 },
   { minMonths: 180, maxMonths: BEYOND_MONTHS, percentage: 100 },
 ]
+const DEFAULT_LEGACY_PABAON_TIERS: BenefitTypeProrationTierInput[] = [
+  { membershipScope: "legacy", minMonths: 12, maxMonths: 24, percentage: 25 },
+  { membershipScope: "legacy", minMonths: 25, maxMonths: 60, percentage: 50 },
+  { membershipScope: "legacy", minMonths: 61, maxMonths: 96, percentage: 75 },
+  { membershipScope: "legacy", minMonths: 97, maxMonths: BEYOND_MONTHS, percentage: 100 },
+]
 
 const DEFAULT_PABAON_FY_AMOUNTS: BenefitTypeFyAmountInput[] = [
+  { fiscalYear: 2025, baseAmount: 60_000 },
   { fiscalYear: 2026, baseAmount: 70_000 },
   { fiscalYear: 2027, baseAmount: 80_000 },
   { fiscalYear: 2028, baseAmount: 90_000 },
@@ -114,7 +121,10 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
   const pabaonType = benefitTypes.find((type) => type.name === CASH_PABAON_NAME)
   const sourcePabaonTiers = pabaonType?.prorationTiers
   const sourceFyAmounts = pabaonType?.fyAmounts
-  const [pabaonTiers, setPabaonTiers] = React.useState<BenefitTypeProrationTierInput[]>(DEFAULT_PABAON_TIERS)
+  const [pabaonScope, setPabaonScope] = React.useState<"legacy" | "new">("legacy")
+  const [legacyPabaonTiers, setLegacyPabaonTiers] = React.useState<BenefitTypeProrationTierInput[]>(DEFAULT_LEGACY_PABAON_TIERS)
+  const [newPabaonTiers, setNewPabaonTiers] = React.useState<BenefitTypeProrationTierInput[]>(DEFAULT_NEW_PABAON_TIERS)
+  const pabaonTiers = pabaonScope === "legacy" ? legacyPabaonTiers : newPabaonTiers
   const [fyAmounts, setFyAmounts] = React.useState<BenefitTypeFyAmountInput[]>(DEFAULT_PABAON_FY_AMOUNTS)
 
   React.useEffect(() => {
@@ -129,11 +139,14 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
 
   React.useEffect(() => {
     if (sourcePabaonTiers?.length) {
-      setPabaonTiers(sourcePabaonTiers.map((tier) => ({
+      const mapTier = (tier: BenefitType["prorationTiers"][number]): BenefitTypeProrationTierInput => ({
+        membershipScope: tier.membershipScope,
         minMonths: tier.minMonths,
         maxMonths: tier.maxMonths ?? BEYOND_MONTHS,
         percentage: tier.percentage,
-      })))
+      })
+      setLegacyPabaonTiers(sourcePabaonTiers.filter((tier) => tier.membershipScope === "legacy").map(mapTier))
+      setNewPabaonTiers(sourcePabaonTiers.filter((tier) => tier.membershipScope === "new").map(mapTier))
     }
   }, [sourcePabaonTiers])
 
@@ -151,13 +164,14 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
     || (index > 0 && tier.minMonths !== (tiers[index - 1].maxMonths ?? tier.minMonths - 1) + 1)
   )
 
-  const invalidPabaonRange = pabaonTiers.some((tier, index) =>
+  const invalidPabaonTierSet = (tierSet: BenefitTypeProrationTierInput[]) => tierSet.some((tier, index) =>
     tier.minMonths < 0
     || (tier.maxMonths != null && tier.maxMonths < tier.minMonths)
     || tier.percentage < 0
     || tier.percentage > 100
-    || (index > 0 && tier.minMonths !== (pabaonTiers[index - 1].maxMonths ?? tier.minMonths - 1) + 1)
+    || (index > 0 && tier.minMonths !== (tierSet[index - 1].maxMonths ?? tier.minMonths - 1) + 1)
   )
+  const invalidPabaonRange = invalidPabaonTierSet(legacyPabaonTiers) || invalidPabaonTierSet(newPabaonTiers)
 
   const invalidFyAmounts = fyAmounts.some((amount) => amount.baseAmount < 0)
     || new Set(fyAmounts.map((amount) => amount.fiscalYear)).size !== fyAmounts.length
@@ -174,7 +188,7 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
         ...configuredTypes.map((entry) =>
           updateBenefitType(entry.type!.id, fullUpdatePayload(entry.type!, tiers, entry.maximumAmount))
         ),
-        updateBenefitType(pabaonType.id, fullUpdatePayload(pabaonType, pabaonTiers, pabaonMaximumAmount, "pabaon", fyAmounts)),
+        updateBenefitType(pabaonType.id, fullUpdatePayload(pabaonType, [...legacyPabaonTiers, ...newPabaonTiers], pabaonMaximumAmount, "pabaon", fyAmounts)),
       ])
     },
     onSuccess: async (updatedTypes) => {
@@ -222,22 +236,25 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
   }
 
   function updatePabaonTier(index: number, patch: Partial<BenefitTypeProrationTierInput>) {
-    setPabaonTiers((current) => current.map((tier, tierIndex) => tierIndex === index ? { ...tier, ...patch } : tier))
+    const setter = pabaonScope === "legacy" ? setLegacyPabaonTiers : setNewPabaonTiers
+    setter((current) => current.map((tier, tierIndex) => tierIndex === index ? { ...tier, ...patch } : tier))
   }
 
   function addPabaonTier() {
-    setPabaonTiers((current) => {
-      if (current.length === 0) return [{ minMonths: 0, maxMonths: BEYOND_MONTHS, percentage: 100 }]
+    const setter = pabaonScope === "legacy" ? setLegacyPabaonTiers : setNewPabaonTiers
+    setter((current) => {
+      if (current.length === 0) return [{ membershipScope: pabaonScope, minMonths: 0, maxMonths: BEYOND_MONTHS, percentage: 100 }]
       const next = current.map((tier) => ({ ...tier }))
       const last = next[next.length - 1]
       const nextMin = last.minMonths + 12
       last.maxMonths = nextMin - 1
-      return [...next, { minMonths: nextMin, maxMonths: BEYOND_MONTHS, percentage: 100 }]
+      return [...next, { membershipScope: pabaonScope, minMonths: nextMin, maxMonths: BEYOND_MONTHS, percentage: 100 }]
     })
   }
 
   function removePabaonTier(index: number) {
-    setPabaonTiers((current) => {
+    const setter = pabaonScope === "legacy" ? setLegacyPabaonTiers : setNewPabaonTiers
+    setter((current) => {
       if (current.length <= 1) return current
       const next = current.filter((_, tierIndex) => tierIndex !== index).map((tier) => ({ ...tier }))
       for (let tierIndex = 0; tierIndex < next.length - 1; tierIndex += 1) {
@@ -405,6 +422,17 @@ export const BenefitComputationSettingsCard = React.forwardRef<BenefitComputatio
       </div>
 
       <div className="space-y-4 p-4 pt-5">
+        <AlertBanner
+          tone="info"
+          title="Cash Pabaon Resolution Classification"
+          description="Old members with membership dates before September 1, 2026 use Resolution 24-2026. New members admitted on or after September 1, 2026 use Resolution 27-2026. The system selects the rule automatically from the member profile."
+        />
+        <Tabs value={pabaonScope} onValueChange={(value) => setPabaonScope(value as "legacy" | "new")}>
+          <TabsList className="grid h-auto w-full grid-cols-1 gap-1 sm:grid-cols-2">
+            <TabsTrigger value="legacy" className="min-h-10">Old Members · Resolution 24-2026</TabsTrigger>
+            <TabsTrigger value="new" className="min-h-10">New Members · Resolution 27-2026</TabsTrigger>
+          </TabsList>
+        </Tabs>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h4 className="text-sm font-semibold">Fiscal Year Maximum Benefits</h4>
           <div className="flex flex-wrap gap-2">

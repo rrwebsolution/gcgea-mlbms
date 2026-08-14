@@ -43,6 +43,7 @@ export const REPORT_ROUTES: Partial<Record<ReportCategory, Record<string, string
   },
   "Financial Reports": {
     "Financial Statement": "/reports/financial/financial-statement",
+    "Unaudited Financial Report": "/reports/financial/unaudited-financial-report",
     "Daily Collection Report": "/reports/financial/daily-collections",
     "Monthly Collection Report": "/reports/financial/monthly-collections",
     "Remittance Breakdown": "/reports/financial/remittance-breakdown",

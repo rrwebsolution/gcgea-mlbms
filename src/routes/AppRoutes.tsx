@@ -112,6 +112,7 @@ import LoanReleaseSummaryReportPage from "@/features/financial/pages/reports/Loa
 import BenefitsReleaseSummaryReportPage from "@/features/financial/pages/reports/BenefitsReleaseSummaryReportPage"
 import CashFlowSummaryReportPage from "@/features/financial/pages/reports/CashFlowSummaryReportPage"
 import FinancialStatementReportPage from "@/features/financial/pages/reports/FinancialStatementReportPage"
+import FinancialConditionStatementPage from "@/features/financial/pages/reports/FinancialConditionStatementPage"
 
 import UsersPage from "@/features/users/pages/UsersPage"
 import UserFormPage from "@/features/users/pages/UserFormPage"
@@ -326,7 +327,8 @@ export function AppRoutes() {
             <Route path="/reports/loans/aging" element={<LoanAgingReportPage />} />
             <Route path="/reports/loans/member-ledger" element={<MemberLoanLedgerReportPage />} />
             <Route path="/reports/financial/daily-collections" element={<DailyCollectionReportPage />} />
-            <Route path="/reports/financial/financial-statement" element={<FinancialStatementReportPage />} />
+            <Route path="/reports/financial/financial-statement" element={<FinancialConditionStatementPage />} />
+            <Route path="/reports/financial/unaudited-financial-report" element={<FinancialStatementReportPage />} />
             <Route path="/reports/financial/monthly-collections" element={<MonthlyCollectionReportPage />} />
             <Route path="/reports/financial/remittance-breakdown" element={<RemittanceBreakdownReportPage />} />
             <Route path="/reports/financial/annual-budget" element={<AnnualBudgetReportPage />} />

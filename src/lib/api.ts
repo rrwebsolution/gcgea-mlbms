@@ -139,6 +139,11 @@ function dataDomainForUrl(url?: string): string {
  * proxy so images and PDFs work consistently in local and Vercel builds.
  */
 function normalizeStorageUrls(value: unknown): unknown {
+  // Binary report/file responses must remain intact. Walking a Blob with
+  // Object.entries() turns it into {}, which later makes URL.createObjectURL
+  // throw "Overload resolution failed" for PDF and Excel downloads.
+  if (typeof Blob !== "undefined" && value instanceof Blob) return value
+  if (typeof ArrayBuffer !== "undefined" && value instanceof ArrayBuffer) return value
   if (typeof value === "string") {
     const storageIndex = value.indexOf("/storage/")
     return storageIndex >= 0 ? value.slice(storageIndex) : value
