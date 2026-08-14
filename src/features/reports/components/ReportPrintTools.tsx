@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api } from "@/lib/api"
+import { useAuth } from "@/contexts/AuthContext"
 
 function safeFileName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "report"
@@ -11,11 +12,12 @@ function safeFileName(value: string) {
 
 export function ReportPrintTools() {
   const location = useLocation()
+  const { hasPermission } = useAuth()
   const isReport = location.pathname.startsWith("/reports/") && location.pathname.split("/").length > 2
   const hasRowExports = location.pathname === "/reports/financial/financial-statement"
   const [exporting, setExporting] = React.useState<"pdf" | "excel" | null>(null)
 
-  if (!isReport || hasRowExports) return null
+  if (!isReport || hasRowExports || !hasPermission("reports.export")) return null
 
   function reportPayload() {
     // Export only the currently visible report tab. This prevents the hidden

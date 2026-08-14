@@ -34,6 +34,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     fiscalYearStart: "January",
     recordsPerPage: 10,
     membershipRegistrationFee: 100,
+    requireMembershipFeeForActivation: true,
     maintenanceMode: false,
     enableAlertTranslations: false,
   },

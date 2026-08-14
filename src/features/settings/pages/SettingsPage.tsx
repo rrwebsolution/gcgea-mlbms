@@ -727,7 +727,15 @@ export default function SettingsPage() {
                 </Field>
               </div>
               <div className="mt-4">
+                <ToggleField
+                  label="Require Membership Fee Before Approval & Activation"
+                  description="When enabled, members registered directly in MLBMS must have a Posted membership fee before approval, activation, contributions, loans, or benefits."
+                  checked={settings.general.requireMembershipFeeForActivation ?? true}
+                  onCheckedChange={(value) => patch("general", { requireMembershipFeeForActivation: value })}
+                />
+                <div className="mt-3">
                 <ToggleField label="Maintenance Mode" description="Temporarily restrict access while performing system maintenance." checked={settings.general.maintenanceMode} onCheckedChange={(v) => patch("general", { maintenanceMode: v })} />
+                </div>
                 <div className="mt-3">
                   <ToggleField
                     label="Enable Alert Translations"

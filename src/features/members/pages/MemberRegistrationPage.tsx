@@ -479,7 +479,7 @@ export default function MemberRegistrationPage() {
             ? "Member profile updated successfully."
             : member.approvalStatus === "approved"
               ? "Member successfully registered and activated."
-              : "Member registration was submitted for approval."
+              : "Member registered. Post the required membership fee under Direct Payments before approval and activation."
         )
       }
       queryClient.invalidateQueries({ queryKey: ["members"] })

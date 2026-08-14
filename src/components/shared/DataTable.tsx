@@ -58,6 +58,8 @@ export interface DataTableProps<TData> {
   toolbar?: React.ReactNode
   /** Rendered as a summary bar below the table (e.g. running totals) — not shown while loading, in error, or empty. */
   footer?: React.ReactNode
+  /** Final full-width row inside tbody, immediately below the data rows. */
+  bodyEnd?: React.ReactNode
 }
 
 export function DataTable<TData>({
@@ -78,6 +80,7 @@ export function DataTable<TData>({
   maxHeight = "max-h-[calc(100vh-22rem)]",
   toolbar,
   footer,
+  bodyEnd,
 }: DataTableProps<TData>) {
   const { isRefreshing } = usePageRefresh()
   const activeQueryCount = useIsFetching()
@@ -382,7 +385,8 @@ export function DataTable<TData>({
               </TableCell>
             </TableRow>
           ) : (
-            table.getRowModel().rows.map((row) => (
+            <>
+            {table.getRowModel().rows.map((row) => (
               <TableRow 
                 key={row.id} 
                 data-state={row.getIsSelected() ? "selected" : undefined}
@@ -406,7 +410,15 @@ export function DataTable<TData>({
                   )
                 })}
               </TableRow>
-            ))
+            ))}
+            {bodyEnd && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={tableColumns.length} className="whitespace-normal border-t bg-muted/20 px-5 py-3">
+                  {bodyEnd}
+                </TableCell>
+              </TableRow>
+            )}
+            </>
           )}
         </TableBody>
       </Table>

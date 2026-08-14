@@ -42,6 +42,7 @@ export const REPORT_ROUTES: Partial<Record<ReportCategory, Record<string, string
     "Member Benefit History": "/reports/benefits/member-history",
   },
   "Financial Reports": {
+    "Transaction Report": "/reports/financial/transactions",
     "Financial Statement": "/reports/financial/financial-statement",
     "Unaudited Financial Report": "/reports/financial/unaudited-financial-report",
     "Daily Collection Report": "/reports/financial/daily-collections",

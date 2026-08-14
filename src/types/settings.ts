@@ -8,6 +8,7 @@ export interface GeneralSettings {
   fiscalYearStart: string
   recordsPerPage: number
   membershipRegistrationFee: number
+  requireMembershipFeeForActivation: boolean
   maintenanceMode: boolean
   enableAlertTranslations: boolean
 }

@@ -113,6 +113,7 @@ import BenefitsReleaseSummaryReportPage from "@/features/financial/pages/reports
 import CashFlowSummaryReportPage from "@/features/financial/pages/reports/CashFlowSummaryReportPage"
 import FinancialStatementReportPage from "@/features/financial/pages/reports/FinancialStatementReportPage"
 import FinancialConditionStatementPage from "@/features/financial/pages/reports/FinancialConditionStatementPage"
+import TransactionReportPage from "@/features/financial/pages/reports/TransactionReportPage"
 
 import UsersPage from "@/features/users/pages/UsersPage"
 import UserFormPage from "@/features/users/pages/UserFormPage"
@@ -183,13 +184,15 @@ export function AppRoutes() {
           </Route>
 
           <Route element={<ProtectedRoute permission="reports.view" />}>
-            <Route path="/reports/members/master-list" element={<MasterListOfMembersReportPage />} />
-            <Route path="/reports/members/active" element={<ActiveMembersReportPage />} />
-            <Route path="/reports/members/retired" element={<RetiredMembersReportPage />} />
-            <Route path="/reports/members/by-office" element={<MembersByOfficeReportPage />} />
-            <Route path="/reports/members/by-sex" element={<MembersBySexReportPage />} />
-            <Route path="/reports/members/new" element={<NewMembersReportPage />} />
-            <Route path="/reports/members/incomplete" element={<IncompleteMemberProfilesReportPage />} />
+            <Route element={<ProtectedRoute permission="reports.member" />}>
+              <Route path="/reports/members/master-list" element={<MasterListOfMembersReportPage />} />
+              <Route path="/reports/members/active" element={<ActiveMembersReportPage />} />
+              <Route path="/reports/members/retired" element={<RetiredMembersReportPage />} />
+              <Route path="/reports/members/by-office" element={<MembersByOfficeReportPage />} />
+              <Route path="/reports/members/by-sex" element={<MembersBySexReportPage />} />
+              <Route path="/reports/members/new" element={<NewMembersReportPage />} />
+              <Route path="/reports/members/incomplete" element={<IncompleteMemberProfilesReportPage />} />
+            </Route>
           </Route>
 
           <Route element={<ProtectedRoute permission="offices.view" />}>
@@ -302,6 +305,8 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission="reports.view" />}>
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/reports/:category" element={<ReportsPage />} />
+            <Route element={<ProtectedRoute permission="reports.contribution" />}>
             <Route path="/reports/contributions" element={<ContributionReportsPage />} />
             <Route path="/reports/contributions/monthly" element={<MonthlyContributionsReportPage />} />
             <Route path="/reports/contributions/by-office" element={<ContributionsByOfficeReportPage />} />
@@ -310,11 +315,16 @@ export function AppRoutes() {
             <Route path="/reports/contributions/payroll-summary" element={<PayrollDeductionSummaryReportPage />} />
             <Route path="/reports/contributions/fund-allocation" element={<FundAllocationReportPage />} />
             <Route path="/reports/contributions/member-monthly-dues-summary" element={<MemberMonthlyDuesSummaryReportPage />} />
+            </Route>
+            <Route element={<ProtectedRoute permission="reports.benefit" />}>
             <Route path="/reports/benefits/applications" element={<BenefitApplicationsReportPage />} />
             <Route path="/reports/benefits/approved" element={<ApprovedBenefitsReportPage />} />
             <Route path="/reports/benefits/released" element={<ReleasedBenefitsReportPage />} />
             <Route path="/reports/benefits/by-type" element={<BenefitsByTypeReportPage />} />
             <Route path="/reports/benefits/by-office" element={<BenefitsByOfficeReportPage />} />
+            <Route path="/reports/benefits/member-history" element={<MemberBenefitHistoryReportPage />} />
+            </Route>
+            <Route element={<ProtectedRoute permission="reports.loan" />}>
             <Route path="/reports/loans/applications" element={<LoanApplicationsReportPage />} />
             <Route path="/reports/loans/approved" element={<ApprovedLoansReportPage />} />
             <Route path="/reports/loans/rejected" element={<RejectedLoansReportPage />} />
@@ -326,6 +336,9 @@ export function AppRoutes() {
             <Route path="/reports/loans/collections" element={<LoanCollectionsReportPage />} />
             <Route path="/reports/loans/aging" element={<LoanAgingReportPage />} />
             <Route path="/reports/loans/member-ledger" element={<MemberLoanLedgerReportPage />} />
+            </Route>
+            <Route element={<ProtectedRoute permission="reports.financial" />}>
+            <Route path="/reports/financial/transactions" element={<TransactionReportPage />} />
             <Route path="/reports/financial/daily-collections" element={<DailyCollectionReportPage />} />
             <Route path="/reports/financial/financial-statement" element={<FinancialConditionStatementPage />} />
             <Route path="/reports/financial/unaudited-financial-report" element={<FinancialStatementReportPage />} />
@@ -337,8 +350,7 @@ export function AppRoutes() {
             <Route path="/reports/financial/loan-release-summary" element={<LoanReleaseSummaryReportPage />} />
             <Route path="/reports/financial/benefits-release-summary" element={<BenefitsReleaseSummaryReportPage />} />
             <Route path="/reports/financial/cash-flow-summary" element={<CashFlowSummaryReportPage />} />
-            <Route path="/reports/benefits/member-history" element={<MemberBenefitHistoryReportPage />} />
-            <Route path="/reports/:category" element={<ReportsPage />} />
+            </Route>
           </Route>
 
           <Route element={<ProtectedRoute permission="users.view" />}>

@@ -11,9 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatCurrency } from "@/utils/format"
 import { api } from "@/lib/api"
+import { useAuth } from "@/contexts/AuthContext"
 import { getFinancialConditionStatements, type FinancialConditionAccounts, type FinancialConditionStatement } from "@/services/financial-condition.service"
 
 export default function FinancialConditionStatementPage() {
+  const { hasPermission } = useAuth()
   const query = useQuery({ queryKey: ["financial-condition-statements"], queryFn: getFinancialConditionStatements })
   const [preview, setPreview] = React.useState<FinancialConditionStatement | null>(null)
   const [exporting, setExporting] = React.useState<string | null>(null)
@@ -45,7 +47,7 @@ export default function FinancialConditionStatementPage() {
       <div className="border-b px-5 py-4"><h2 className="font-semibold">Generated Financial Statements</h2><p className="text-sm text-muted-foreground">Choose a reporting year to preview the full Statement of Financial Condition.</p></div>
       {query.isLoading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-12" />)}</div> :
         <Table><TableHeader><TableRow><TableHead>Report</TableHead><TableHead>Reporting Period</TableHead><TableHead>Status</TableHead><TableHead>Source</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-          <TableBody>{query.data?.length ? query.data.map((report) => <TableRow key={report.id}><TableCell><span className="flex items-center gap-2 font-medium"><FileBarChart className="size-4 text-primary" /> Statement of Financial Condition</span></TableCell><TableCell>As of December 31, {report.fiscalYear}</TableCell><TableCell><Badge variant="secondary">{report.status}</Badge></TableCell><TableCell className="text-muted-foreground">Posted system transactions</TableCell><TableCell><div className="flex justify-end gap-1.5"><Button size="sm" variant="outline" onClick={() => setPreview(report)}><Eye /> Preview</Button><Button size="sm" variant="outline" disabled={exporting !== null} onClick={() => download(report, "pdf")}>{exporting === `${report.id}-pdf` ? <Loader2 className="animate-spin" /> : <FileText />} PDF</Button><Button size="sm" variant="outline" disabled={exporting !== null} onClick={() => download(report, "excel")}>{exporting === `${report.id}-excel` ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />} Excel</Button></div></TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No posted financial transactions are available for reporting.</TableCell></TableRow>}</TableBody>
+          <TableBody>{query.data?.length ? query.data.map((report) => <TableRow key={report.id}><TableCell><span className="flex items-center gap-2 font-medium"><FileBarChart className="size-4 text-primary" /> Statement of Financial Condition</span></TableCell><TableCell>As of December 31, {report.fiscalYear}</TableCell><TableCell><Badge variant="secondary">{report.status}</Badge></TableCell><TableCell className="text-muted-foreground">Posted system transactions</TableCell><TableCell><div className="flex justify-end gap-1.5"><Button size="sm" variant="outline" onClick={() => setPreview(report)}><Eye /> Preview</Button>{hasPermission("reports.export") && <><Button size="sm" variant="outline" disabled={exporting !== null} onClick={() => download(report, "pdf")}>{exporting === `${report.id}-pdf` ? <Loader2 className="animate-spin" /> : <FileText />} PDF</Button><Button size="sm" variant="outline" disabled={exporting !== null} onClick={() => download(report, "excel")}>{exporting === `${report.id}-excel` ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />} Excel</Button></>}</div></TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No posted financial transactions are available for reporting.</TableCell></TableRow>}</TableBody>
         </Table>}
     </div>
 
