@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import {
-  AlertTriangle,
   CheckCircle2,
   FilePlus2,
   Loader2,
@@ -16,7 +15,9 @@ import {
   FileCheck,
   Sparkles,
   Info,
-  XCircle,
+  ArrowRight,
+  ArrowLeft,
+  UserSearch,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
@@ -26,6 +27,7 @@ import { EmptyState } from "@/components/shared/EmptyState"
 import { EligibilityChecklist, type EligibilityResult } from "@/components/shared/EligibilityChecklist"
 import { FileUploader } from "@/components/shared/FileUploader"
 import { FormSkeleton } from "@/components/shared/loaders/FormSkeleton"
+import { CardLoader } from "@/components/shared/loaders/CardLoader"
 import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { AlertBanner } from "@/components/shared/AlertBanner"
@@ -34,7 +36,14 @@ import { DraftStatusBadge } from "@/components/shared/DraftStatusBadge"
 import { UnsavedChangesDialog } from "@/components/shared/UnsavedChangesDialog"
 import { LoanOfficerCommandSelect } from "@/features/loans/components/LoanOfficerCommandSelect"
 import { MemberEligibilitySelect } from "@/features/loans/components/MemberEligibilitySelect"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -43,12 +52,19 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { DataTable } from "@/components/shared/DataTable"
-import { UserSearch } from "lucide-react"
 import { getMember, updateMemberLoanFinancialProfile } from "@/services/members.service"
 import { listAllContributions } from "@/services/contributions.service"
 import { listAllDeductions } from "@/services/deductions.service"
 import { getLoanSettings } from "@/services/loan-settings.service"
-import { createLoanApplication, getLoan, listLoanTypes, getMemberLoans, updateLoanApplication, uploadLoanDocument, type CreateLoanApplicationInput } from "@/services/loans.service"
+import {
+  createLoanApplication,
+  getLoan,
+  listLoanTypes,
+  getMemberLoans,
+  updateLoanApplication,
+  uploadLoanDocument,
+  type CreateLoanApplicationInput,
+} from "@/services/loans.service"
 import { bracketForNetPay, computeLoan, type LoanComputationResult } from "@/utils/loan-math"
 import { evaluateLoanEligibility, resultFor, type DuesStanding, type PaidMonthlyDuesSummary } from "@/utils/eligibility"
 import { formatCurrency, formatDateShort } from "@/utils/format"
@@ -57,9 +73,25 @@ import { useDraft } from "@/hooks/useDraft"
 import { useAutosaveDraft } from "@/hooks/useAutosaveDraft"
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges"
 import { cn } from "@/lib/utils"
-import type { AmortizationEntry, EligibilityCheckItem, LoanApplication, LoanDocument, LoanRequirementItem, LoanType, Member, PaymentMethod } from "@/types"
+import type {
+  AmortizationEntry,
+  EligibilityCheckItem,
+  LoanApplication,
+  LoanDocument,
+  LoanRequirementItem,
+  LoanType,
+  Member,
+  PaymentMethod,
+} from "@/types"
 
-const STEPS = ["Select Member", "Loan Details", "Eligibility Check", "Loan Computation", "Requirements", "Review & Submit"]
+const STEPS = [
+  "Select Member",
+  "Loan Details",
+  "Eligibility Check",
+  "Loan Computation",
+  "Requirements",
+  "Review & Submit",
+]
 
 const REQUIREMENT_LABELS = [
   "Accomplished Loan Application Form",
@@ -72,46 +104,62 @@ const REQUIREMENT_LABELS = [
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
 
 const AMORTIZATION_COLUMNS: ColumnDef<AmortizationEntry, unknown>[] = [
-  { accessorKey: "installmentNumber", header: "#", cell: ({ row }) => <span className="font-medium">{row.original.installmentNumber}</span> },
-  { accessorKey: "dueDate", header: "Due Date", cell: ({ row }) => formatDateShort(row.original.dueDate) },
-  { accessorKey: "beginningBalance", header: "Beginning Balance", cell: ({ row }) => formatCurrency(row.original.beginningBalance) },
-  { accessorKey: "principal", header: "Principal", cell: ({ row }) => formatCurrency(row.original.principal) },
-  { accessorKey: "interest", header: "Interest", cell: ({ row }) => formatCurrency(row.original.interest) },
-  { accessorKey: "amountDue", header: "Amount Due", cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amountDue)}</span> },
-  { accessorKey: "remainingBalance", header: "Remaining Balance", cell: ({ row }) => formatCurrency(row.original.remainingBalance) },
+  {
+    accessorKey: "installmentNumber",
+    header: "#",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs font-semibold text-muted-foreground">
+        {row.original.installmentNumber}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "dueDate",
+    header: "Due Date",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs text-muted-foreground">{formatDateShort(row.original.dueDate)}</span>
+    ),
+  },
+  {
+    accessorKey: "beginningBalance",
+    header: "Beginning Balance",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs">{formatCurrency(row.original.beginningBalance)}</span>
+    ),
+  },
+  {
+    accessorKey: "principal",
+    header: "Principal",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs font-semibold text-foreground">
+        {formatCurrency(row.original.principal)}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "interest",
+    header: "Interest",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs text-muted-foreground">{formatCurrency(row.original.interest)}</span>
+    ),
+  },
+  {
+    accessorKey: "amountDue",
+    header: "Amount Due",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs font-bold text-primary">
+        {formatCurrency(row.original.amountDue)}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "remainingBalance",
+    header: "Remaining Balance",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs">{formatCurrency(row.original.remainingBalance)}</span>
+    ),
+  },
 ]
-
-type MonthlyDuesStatus = { period: string; label: string; status: "paid" | "due" | "overdue" }
-
-function monthlyDuesWindow(paidPeriods: string[], requiredMonths: number): MonthlyDuesStatus[] {
-  if (requiredMonths < 1) return []
-  const paid = new Set(paidPeriods)
-  const current = new Date()
-  current.setDate(1)
-  const currentPeriod = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}`
-  const latestPaidPeriod = paidPeriods.at(-1)
-  const timelineEnd = latestPaidPeriod && latestPaidPeriod > currentPeriod
-    ? new Date(`${latestPaidPeriod}-01T12:00:00`)
-    : current
-  const rollingStart = new Date(current)
-  rollingStart.setMonth(rollingStart.getMonth() - requiredMonths + 1)
-  const earliestPaid = paidPeriods.at(0)
-  const earliest = earliestPaid && earliestPaid < `${rollingStart.getFullYear()}-${String(rollingStart.getMonth() + 1).padStart(2, "0")}`
-    ? new Date(`${earliestPaid}-01T00:00:00`)
-    : rollingStart
-  const cursor = new Date(earliest)
-  const months: MonthlyDuesStatus[] = []
-  while (cursor <= timelineEnd) {
-    const period = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
-    months.push({
-      period,
-      label: cursor.toLocaleDateString("en-PH", { month: "long", year: "numeric" }),
-      status: paid.has(period) ? "paid" : period >= currentPeriod ? "due" : "overdue",
-    })
-    cursor.setMonth(cursor.getMonth() + 1)
-  }
-  return months
-}
 
 function previousContributionPeriod(period: string): string {
   const [year, month] = period.split("-").map(Number)
@@ -184,8 +232,9 @@ export default function CreateLoanApplicationPage() {
   const [step, setStep] = React.useState(1)
   const [memberId, setMemberId] = React.useState(() => searchParams.get("member") ?? "")
   const [applicationDate, setApplicationDate] = React.useState(() => new Date().toISOString().slice(0, 10))
-  const loggedInUserIsLoanOfficer = ["loan officer", "senior loan officer", "assigned loan officer"]
-    .includes(user?.roleName.trim().toLowerCase() ?? "")
+  const loggedInUserIsLoanOfficer = ["loan officer", "senior loan officer", "assigned loan officer"].includes(
+    user?.roleName.trim().toLowerCase() ?? ""
+  )
   const [assignedOfficer, setAssignedOfficer] = React.useState(() =>
     !isEdit && loggedInUserIsLoanOfficer ? (user?.fullName ?? "") : ""
   )
@@ -201,13 +250,12 @@ export default function CreateLoanApplicationPage() {
     if (paramMemberId && paramMemberId !== memberId && !isEdit) {
       setMemberId(paramMemberId)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+  }, [searchParams, memberId, isEdit])
 
   const [entries, setEntries] = React.useState<LoanEntry[]>(() => [makeLoanEntry()])
 
   React.useEffect(() => {
-    setEntries((current) => current.length > 1 ? [current[0]] : current)
+    setEntries((current) => (current.length > 1 ? [current[0]] : current))
   }, [])
   const [overrideDialogEntryKey, setOverrideDialogEntryKey] = React.useState<string | null>(null)
 
@@ -216,9 +264,6 @@ export default function CreateLoanApplicationPage() {
   )
   const [requirementFiles, setRequirementFiles] = React.useState<Record<string, File>>({})
 
-  // Files already uploaded in a previous save of this draft — a requirement counts as
-  // satisfied if it has one of these OR a freshly-picked file this session (see
-  // hasFileFor below). Keyed by requirement label; a given label has at most one document.
   const existingDocumentsByLabel = React.useMemo(() => {
     const map = new Map<string, LoanDocument>()
     for (const doc of existingLoan?.documents ?? []) map.set(doc.requirementLabel, doc)
@@ -239,29 +284,39 @@ export default function CreateLoanApplicationPage() {
   const [isAutosaving, setIsAutosaving] = React.useState(false)
   const [successDialog, setSuccessDialog] = React.useState<{ created: LoanApplication[] } | null>(null)
 
-  const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
+  const { data: member, isLoading: isLoadingMember } = useQuery({
+    queryKey: ["members", memberId],
+    queryFn: () => getMember(memberId),
+    enabled: !!memberId,
+  })
   const effectiveMemberNetPay = confirmedSavedNetPay ?? member?.netPay
   const hasMemberNetPay = Number(effectiveMemberNetPay ?? 0) > 0
-  const hasMemberNetPayDocument = confirmedFinancialDocument || (member?.documents.some((document) => document.category === "Payslip") ?? false)
+  const hasMemberNetPayDocument =
+    confirmedFinancialDocument || (member?.documents.some((document) => document.category === "Payslip") ?? false)
   const hasCompleteMemberFinancialInfo = hasMemberNetPay && hasMemberNetPayDocument
   const { data: loanTypes = [] } = useQuery({ queryKey: ["loan-types"], queryFn: listLoanTypes })
-  const { data: loanSettings } = useQuery({ queryKey: ["loan-settings"], queryFn: getLoanSettings })
+  const { data: loanSettings, isLoading: isLoadingLoanSettings } = useQuery({
+    queryKey: ["loan-settings"],
+    queryFn: getLoanSettings,
+  })
   const appliedConfiguredTermsRef = React.useRef(new Set<string>())
 
   React.useEffect(() => {
     if (isEdit || loanTypes.length === 0) return
 
-    setEntries((current) => current.map((entry) => {
-      if (!entry.loanTypeId) return entry
-      const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
-      if (!loanType) return entry
+    setEntries((current) =>
+      current.map((entry) => {
+        if (!entry.loanTypeId) return entry
+        const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
+        if (!loanType) return entry
 
-      const settingKey = `${entry.key}:${loanType.id}:${loanType.maxTermMonths}`
-      if (appliedConfiguredTermsRef.current.has(settingKey)) return entry
-      appliedConfiguredTermsRef.current.add(settingKey)
+        const settingKey = `${entry.key}:${loanType.id}:${loanType.maxTermMonths}`
+        if (appliedConfiguredTermsRef.current.has(settingKey)) return entry
+        appliedConfiguredTermsRef.current.add(settingKey)
 
-      return { ...entry, termMonths: loanType.maxTermMonths }
-    }))
+        return { ...entry, termMonths: loanType.maxTermMonths }
+      })
+    )
   }, [isEdit, loanTypes])
 
   const canOverride = hasOverridePermission && (loanSettings?.allowEligibilityOverride ?? true)
@@ -272,12 +327,15 @@ export default function CreateLoanApplicationPage() {
     if (appliedDefaultPaymentMethodRef.current === loanSettings.defaultPaymentMethod) return
 
     appliedDefaultPaymentMethodRef.current = loanSettings.defaultPaymentMethod
-    setEntries((current) => current.map((entry) => ({
-      ...entry,
-      paymentMethod: loanSettings.defaultPaymentMethod as PaymentMethod,
-    })))
+    setEntries((current) =>
+      current.map((entry) => ({
+        ...entry,
+        paymentMethod: loanSettings.defaultPaymentMethod as PaymentMethod,
+      }))
+    )
   }, [isEdit, loanSettings?.defaultPaymentMethod])
-  const { data: liveContributions = [] } = useQuery({
+
+  const { data: liveContributions = [], isLoading: isLoadingContributions } = useQuery({
     queryKey: ["contributions", "all"],
     queryFn: listAllContributions,
   })
@@ -287,29 +345,40 @@ export default function CreateLoanApplicationPage() {
   })
   const minimumMembershipMonths = loanSettings?.minimumMembershipMonths ?? 6
   const requiredMonthlyDuesAmount = loanSettings?.requiredMonthlyDuesAmount ?? 100
+  const isVerifyingMemberEligibility = Boolean(
+    memberId && (isLoadingMember || isLoadingContributions || isLoadingLoanSettings)
+  )
 
   const memberLoans = memberId ? getMemberLoans(memberId) : []
-  const memberContributions = memberId ? liveContributions.filter((c) => c.memberId === memberId && c.status === "Posted") : []
-  const memberDeductions = memberId ? liveDeductions.filter((deduction) => deduction.memberId === memberId && deduction.status === "Posted") : []
-  const paidMonthlyDuesPeriods = [...new Set(
-    memberContributions
-      .filter((c) => c.contributionType === "Monthly Dues" && c.amount >= requiredMonthlyDuesAmount)
-      .map((c) => c.contributionPeriod)
-  )].sort()
+  const memberContributions = memberId
+    ? liveContributions.filter((c) => c.memberId === memberId && c.status === "Posted")
+    : []
+  const memberDeductions = memberId
+    ? liveDeductions.filter((deduction) => deduction.memberId === memberId && deduction.status === "Posted")
+    : []
+  const paidMonthlyDuesPeriods = [
+    ...new Set(
+      memberContributions
+        .filter((c) => c.contributionType === "Monthly Dues" && c.amount >= requiredMonthlyDuesAmount)
+        .map((c) => c.contributionPeriod)
+    ),
+  ].sort()
   let consecutivePaidMonths = paidMonthlyDuesPeriods.length > 0 ? 1 : 0
   for (let index = paidMonthlyDuesPeriods.length - 1; index > 0; index--) {
     if (previousContributionPeriod(paidMonthlyDuesPeriods[index]) !== paidMonthlyDuesPeriods[index - 1]) break
     consecutivePaidMonths++
   }
   const requiredPaidMonths = loanSettings?.minimumPaidContributionMonths ?? 6
-  const verifiedPaidMonths = loanSettings?.requireConsecutiveContributionMonths === false
-    ? paidMonthlyDuesPeriods.length
-    : consecutivePaidMonths
-  const hasAnyFullyPaidMonthlyDues = loanSettings?.requirePaidContributions === false
-    || paidMonthlyDuesPeriods.length > 0
-  const paidDuesPrecheckMessage = paidMonthlyDuesPeriods.length === 0
-    ? "This member cannot apply for a loan because no fully paid Monthly Dues contributions are recorded."
-    : `Only ${verifiedPaidMonths} of required ${requiredPaidMonths} fully paid Monthly Dues months were verified.`
+  const verifiedPaidMonths =
+    loanSettings?.requireConsecutiveContributionMonths === false
+      ? paidMonthlyDuesPeriods.length
+      : consecutivePaidMonths
+  const hasAnyFullyPaidMonthlyDues =
+    loanSettings?.requirePaidContributions === false || paidMonthlyDuesPeriods.length > 0
+  const paidDuesPrecheckMessage =
+    paidMonthlyDuesPeriods.length === 0
+      ? "This member cannot apply for a loan because no fully paid Monthly Dues contributions are recorded."
+      : `Only ${verifiedPaidMonths} of required ${requiredPaidMonths} fully paid Monthly Dues months were verified.`
   const totalContributions = memberContributions.reduce((sum, c) => sum + c.amount, 0)
 
   const currentPeriod = new Date().toISOString().slice(0, 7)
@@ -317,10 +386,16 @@ export default function CreateLoanApplicationPage() {
   priorPeriodDate.setMonth(priorPeriodDate.getMonth() - 1)
   const priorPeriod = priorPeriodDate.toISOString().slice(0, 7)
   const duesStanding: DuesStanding = {
-    hasCurrentMonthlyDues: memberContributions.some((c) => c.contributionType === "Monthly Dues" && c.amount >= requiredMonthlyDuesAmount && [currentPeriod, priorPeriod].includes(c.contributionPeriod)),
+    hasCurrentMonthlyDues: memberContributions.some(
+      (c) =>
+        c.contributionType === "Monthly Dues" &&
+        c.amount >= requiredMonthlyDuesAmount &&
+        [currentPeriod, priorPeriod].includes(c.contributionPeriod)
+    ),
     hasCurrentCashPabaon: memberDeductions.some(
-      (deduction) => deduction.deductionTypeCode?.toLowerCase() === "pabaon"
-        && [currentPeriod, priorPeriod].includes(deduction.period)
+      (deduction) =>
+        deduction.deductionTypeCode?.toLowerCase() === "pabaon" &&
+        [currentPeriod, priorPeriod].includes(deduction.period)
     ),
   }
   const activeLoans = memberLoans.filter((l) => ["Active", "Overdue", "Released"].includes(l.status))
@@ -332,20 +407,24 @@ export default function CreateLoanApplicationPage() {
     setConfirmedSavedNetPay(null)
     setConfirmedFinancialDocument(false)
     if (loanSettings?.requirePaidContributions === false) return
+    if (isLoadingContributions || isLoadingLoanSettings) return
 
     const qualifyingPeriods = new Set(
       liveContributions
-        .filter((contribution) =>
-          contribution.memberId === selectedMemberId
-          && contribution.status === "Posted"
-          && contribution.contributionType === "Monthly Dues"
-          && contribution.amount >= requiredMonthlyDuesAmount
+        .filter(
+          (contribution) =>
+            contribution.memberId === selectedMemberId &&
+            contribution.status === "Posted" &&
+            contribution.contributionType === "Monthly Dues" &&
+            contribution.amount >= requiredMonthlyDuesAmount
         )
         .map((contribution) => contribution.contributionPeriod)
     )
 
     if (qualifyingPeriods.size === 0) {
-      toast.error("This member cannot apply for a loan because no fully paid Monthly Dues contributions are recorded.")
+      toast.error(
+        "This member cannot apply for a loan because no fully paid Monthly Dues contributions are recorded."
+      )
     }
   }
 
@@ -353,16 +432,19 @@ export default function CreateLoanApplicationPage() {
     const loanType = loanTypes.find((lt) => lt.id === entry.loanTypeId)
     const isBracketedLoanType = Boolean(loanType && loanType.incomeBrackets.length > 0)
     const isFirstSolidarityLoan = Boolean(
-      (loanSettings?.lockFirstSolidarityLoan ?? true)
-      && loanType?.name.toLowerCase().includes("solidarity")
-      && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
+      (loanSettings?.lockFirstSolidarityLoan ?? true) &&
+        loanType?.name.toLowerCase().includes("solidarity") &&
+        !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
     )
     const firstSolidarityLoanAmount = loanSettings?.firstSolidarityLoanAmount ?? 20_000
     const effectiveAmount = isFirstSolidarityLoan ? firstSolidarityLoanAmount : entry.requestedAmount
     const paidMonthlyDues: PaidMonthlyDuesSummary = {
       paidMonths: paidMonthlyDuesPeriods.length,
       consecutivePaidMonths,
-      requiredMonths: Math.max(loanType?.requiredContributionMonths ?? 0, loanSettings?.minimumPaidContributionMonths ?? 6),
+      requiredMonths: Math.max(
+        loanType?.requiredContributionMonths ?? 0,
+        loanSettings?.minimumPaidContributionMonths ?? 6
+      ),
       requiredAmount: requiredMonthlyDuesAmount,
       requirePaidContributions: loanSettings?.requirePaidContributions ?? true,
       requireConsecutiveMonths: loanSettings?.requireConsecutiveContributionMonths ?? true,
@@ -370,11 +452,24 @@ export default function CreateLoanApplicationPage() {
       firstSolidarityLoanAmount,
     }
 
-    const eligibilityItems = memberForEval && loanType
-      ? evaluateLoanEligibility(memberForEval, loanType, effectiveAmount, entry.termMonths, paidMonthlyDues, memberLoans, minimumMembershipMonths, duesStanding)
-      : []
-    const eligibilityResult: EligibilityResult = eligibilityItems.length > 0 ? resultFor(eligibilityItems) : "Not Eligible"
-    const isBlocked = eligibilityResult === "Not Eligible" && !(entry.overrideEnabled && entry.overrideReason.trim() && entry.overrideConfirmed)
+    const eligibilityItems =
+      memberForEval && loanType
+        ? evaluateLoanEligibility(
+            memberForEval,
+            loanType,
+            effectiveAmount,
+            entry.termMonths,
+            paidMonthlyDues,
+            memberLoans,
+            minimumMembershipMonths,
+            duesStanding
+          )
+        : []
+    const eligibilityResult: EligibilityResult =
+      eligibilityItems.length > 0 ? resultFor(eligibilityItems) : "Not Eligible"
+    const isBlocked =
+      eligibilityResult === "Not Eligible" &&
+      !(entry.overrideEnabled && entry.overrideReason.trim() && entry.overrideConfirmed)
 
     let computation: LoanComputationResult | null = null
     if (loanType && effectiveAmount && entry.termMonths) {
@@ -391,15 +486,36 @@ export default function CreateLoanApplicationPage() {
       })
     }
 
-    return { loanType, isBracketedLoanType, isFirstSolidarityLoan, effectiveAmount, eligibilityItems, eligibilityResult, isBlocked, computation }
+    return {
+      loanType,
+      isBracketedLoanType,
+      isFirstSolidarityLoan,
+      effectiveAmount,
+      eligibilityItems,
+      eligibilityResult,
+      isBlocked,
+      computation,
+    }
   }
 
   const derivedByKey = React.useMemo(() => {
     const map = new Map<string, EntryDerived>()
     entries.forEach((entry) => map.set(entry.key, deriveEntry(entry, member)))
     return map
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, member, loanTypes, applicationDate, paidMonthlyDuesPeriods.length, consecutivePaidMonths, memberLoans.length, minimumMembershipMonths, requiredMonthlyDuesAmount, loanSettings, duesStanding.hasCurrentMonthlyDues, duesStanding.hasCurrentCashPabaon])
+  }, [
+    entries,
+    member,
+    loanTypes,
+    applicationDate,
+    paidMonthlyDuesPeriods.length,
+    consecutivePaidMonths,
+    memberLoans.length,
+    minimumMembershipMonths,
+    requiredMonthlyDuesAmount,
+    loanSettings,
+    duesStanding.hasCurrentMonthlyDues,
+    duesStanding.hasCurrentCashPabaon,
+  ])
 
   function derivedFor(key: string): EntryDerived {
     return derivedByKey.get(key) ?? deriveEntry(entries.find((e) => e.key === key)!, member)
@@ -409,11 +525,6 @@ export default function CreateLoanApplicationPage() {
 
   React.useEffect(() => {
     if (!existingLoan) return
-    // Only hydrate local wizard state the first time a draft is opened.
-    // The query cache is rewritten with the server response on every
-    // autosave/manual save, which changes `existingLoan`'s reference on
-    // every save — re-running this on each of those would snap the step
-    // (and any in-flight edits) back to whatever was last persisted.
     if (hydratedLoanIdRef.current === existingLoan.id) return
     hydratedLoanIdRef.current = existingLoan.id
     setMemberId(existingLoan.memberId)
@@ -427,15 +538,11 @@ export default function CreateLoanApplicationPage() {
         paymentMethod: existingLoan.paymentMethod ?? "Payroll Deduction",
       }),
     ])
-    // A requirement is only "Submitted" if a file is actually attached — reconcile against
-    // the loan's real uploaded documents rather than trusting the stored completed flag,
-    // since older drafts may have been ticked complete without ever attaching a file.
     const uploadedLabels = new Set((existingLoan.documents ?? []).map((d) => d.requirementLabel))
     setRequirements(
       Object.fromEntries(REQUIREMENT_LABELS.map((label) => [label, uploadedLabels.has(label)]))
     )
     setStep(existingLoan.draftCurrentStep ?? 1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingLoan])
 
   const isDraftContext = isEdit ? existingLoan?.status === "Draft" : false
@@ -452,7 +559,10 @@ export default function CreateLoanApplicationPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save draft."),
   })
 
-  const requirementItems: LoanRequirementItem[] = REQUIREMENT_LABELS.map((label) => ({ label, completed: requirements[label] }))
+  const requirementItems: LoanRequirementItem[] = REQUIREMENT_LABELS.map((label) => ({
+    label,
+    completed: requirements[label],
+  }))
   const missingRequirements = requirementItems.filter((r) => !r.completed)
 
   const canUseDraft = entries.length === 1
@@ -483,7 +593,7 @@ export default function CreateLoanApplicationPage() {
       return
     }
     if (!canUseDraft || !soloDraftSnapshot) {
-      toast.error("Save as Draft is only available for a single loan application. Remove the extra entries first, or submit directly.")
+      toast.error("Save as Draft is only available for a single loan application.")
       return
     }
     try {
@@ -496,19 +606,21 @@ export default function CreateLoanApplicationPage() {
     soloDraftSnapshot ?? { memberId, requirements: requirementItems, asDraft: true },
     async (snap) => {
       if (!memberId || !canUseDraft) return
-      // Background autosave shouldn't flip the "Save as Draft" button into its
-      // busy/disabled spinner state — that only reflects a real user click.
       setIsAutosaving(true)
       try {
         await loanDraft.save(snap, { silent: true })
-      } catch {
-        // already surfaced via loanDraft's onError toast
-      } finally {
+      } catch {} finally {
         setIsAutosaving(false)
       }
     },
     {
-      enabled: Boolean(memberId) && Boolean(loanDraft.draftId) && canUseDraft && (!isEdit || isDraftContext) && loanDraft.status !== "saving" && !isSubmitting,
+      enabled:
+        Boolean(memberId) &&
+        Boolean(loanDraft.draftId) &&
+        canUseDraft &&
+        (!isEdit || isDraftContext) &&
+        loanDraft.status !== "saving" &&
+        !isSubmitting,
       delayMs: 30000,
     }
   )
@@ -535,18 +647,24 @@ export default function CreateLoanApplicationPage() {
       setConfirmedSavedNetPay(netPay)
       setConfirmedFinancialDocument(true)
       queryClient.setQueryData(["members", member.id], updatedMember)
-      setEntries((current) => current.map((entry) => {
-        const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
-        const isFirstSolidarityLoan = (loanSettings?.lockFirstSolidarityLoan ?? true) && loanType?.name.toLowerCase().includes("solidarity")
-          && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
-        if (isFirstSolidarityLoan) return { ...entry, requestedAmount: loanSettings?.firstSolidarityLoanAmount ?? 20_000 }
-        const bracket = loanType?.incomeBrackets.length
-          ? bracketForNetPay(loanType.incomeBrackets, updatedMember.netPay ?? 0)
-          : null
-        return bracket ? { ...entry, requestedAmount: bracket.loanableAmount } : entry
-      }))
+      setEntries((current) =>
+        current.map((entry) => {
+          const loanType = loanTypes.find((type) => type.id === entry.loanTypeId)
+          const isFirstSolidarityLoan =
+            (loanSettings?.lockFirstSolidarityLoan ?? true) &&
+            loanType?.name.toLowerCase().includes("solidarity") &&
+            !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
+          if (isFirstSolidarityLoan) {
+            return { ...entry, requestedAmount: loanSettings?.firstSolidarityLoanAmount ?? 20_000 }
+          }
+          const bracket = loanType?.incomeBrackets.length
+            ? bracketForNetPay(loanType.incomeBrackets, updatedMember.netPay ?? 0)
+            : null
+          return bracket ? { ...entry, requestedAmount: bracket.loanableAmount } : entry
+        })
+      )
       setNetPayDocument(null)
-      toast.success("Monthly Net Pay and Net Take Home Pay were saved to the member profile.")
+      toast.success("Monthly Net Pay and Net Take Home Pay document saved.")
     } finally {
       setIsSavingMemberFinancials(false)
     }
@@ -554,25 +672,27 @@ export default function CreateLoanApplicationPage() {
 
   function handleLoanTypeChange(key: string, loanTypeId: string) {
     const loanType = loanTypes.find((lt) => lt.id === loanTypeId)
-    const isFirstSolidarityLoan = (loanSettings?.lockFirstSolidarityLoan ?? true) && loanType?.name.toLowerCase().includes("solidarity")
-      && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
-    const incomeBracket = loanType && loanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
-      ? bracketForNetPay(loanType.incomeBrackets, effectiveMemberNetPay)
-      : null
+    const isFirstSolidarityLoan =
+      (loanSettings?.lockFirstSolidarityLoan ?? true) &&
+      loanType?.name.toLowerCase().includes("solidarity") &&
+      !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
+    const incomeBracket =
+      loanType && loanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
+        ? bracketForNetPay(loanType.incomeBrackets, effectiveMemberNetPay)
+        : null
+
     setEntries((prev) =>
       prev.map((e) =>
         e.key === key
           ? {
               ...e,
               loanTypeId,
-              // The selected loan type is maintained from Loan Settings.
-              // Use its configured term instead of the old hardcoded 12 months.
               termMonths: loanType?.maxTermMonths ?? e.termMonths,
               requestedAmount: isFirstSolidarityLoan
                 ? loanSettings?.firstSolidarityLoanAmount ?? 20_000
                 : loanType?.incomeBrackets.length
-                ? incomeBracket?.loanableAmount
-                : loanType?.maxAmount ?? e.requestedAmount,
+                  ? incomeBracket?.loanableAmount
+                  : loanType?.maxAmount ?? e.requestedAmount,
             }
           : e
       )
@@ -580,53 +700,64 @@ export default function CreateLoanApplicationPage() {
   }
 
   function canProceedFromStep(s: number): boolean {
-    if (s === 1) return !!member && hasAnyFullyPaidMonthlyDues
-    if (s === 2) return hasCompleteMemberFinancialInfo && entries.length > 0 && entries.every((e) => {
-      const monthlyDuesCheck = derivedFor(e.key).eligibilityItems.find((item) => item.label === "Fully Paid Monthly Dues")
-      const selectedLoanType = loanTypes.find((loanType) => loanType.id === e.loanTypeId)
-      const isFirstSolidarityLoan = (loanSettings?.lockFirstSolidarityLoan ?? true) && selectedLoanType?.name.toLowerCase().includes("solidarity")
-        && !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
-      const bracket = selectedLoanType && selectedLoanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
-        ? bracketForNetPay(selectedLoanType.incomeBrackets, effectiveMemberNetPay)
-        : null
-      const amountWithinBracket = isFirstSolidarityLoan ? e.requestedAmount === (loanSettings?.firstSolidarityLoanAmount ?? 20_000) : !selectedLoanType?.incomeBrackets.length || (
-        bracket !== null
-        && e.requestedAmount != null
-        && e.requestedAmount >= selectedLoanType.minAmount
-        && e.requestedAmount <= bracket.loanableAmount
+    if (s === 1) return !!member && !isVerifyingMemberEligibility && hasAnyFullyPaidMonthlyDues
+    if (s === 2)
+      return (
+        hasCompleteMemberFinancialInfo &&
+        entries.length > 0 &&
+        entries.every((e) => {
+          const monthlyDuesCheck = derivedFor(e.key).eligibilityItems.find(
+            (item) => item.label === "Fully Paid Monthly Dues"
+          )
+          const selectedLoanType = loanTypes.find((loanType) => loanType.id === e.loanTypeId)
+          const isFirstSolidarityLoan =
+            (loanSettings?.lockFirstSolidarityLoan ?? true) &&
+            selectedLoanType?.name.toLowerCase().includes("solidarity") &&
+            !memberLoans.some((loan) => !["Draft", "Rejected", "Cancelled"].includes(loan.status))
+          const bracket =
+            selectedLoanType && selectedLoanType.incomeBrackets.length > 0 && effectiveMemberNetPay != null
+              ? bracketForNetPay(selectedLoanType.incomeBrackets, effectiveMemberNetPay)
+              : null
+          const amountWithinBracket = isFirstSolidarityLoan
+            ? e.requestedAmount === (loanSettings?.firstSolidarityLoanAmount ?? 20_000)
+            : !selectedLoanType?.incomeBrackets.length ||
+              (bracket !== null &&
+                e.requestedAmount != null &&
+                e.requestedAmount >= selectedLoanType.minAmount &&
+                e.requestedAmount <= bracket.loanableAmount)
+          return (
+            !!e.loanTypeId &&
+            !!e.requestedAmount &&
+            amountWithinBracket &&
+            !!e.termMonths &&
+            !!e.purpose.trim() &&
+            monthlyDuesCheck?.passed !== false
+          )
+        }) &&
+        !!assignedOfficer.trim()
       )
-      return !!e.loanTypeId
-        && !!e.requestedAmount
-        && amountWithinBracket
-        && !!e.termMonths
-        && !!e.purpose.trim()
-        && monthlyDuesCheck?.passed !== false
-    }) && !!assignedOfficer.trim()
     if (s === 3) return entries.every((e) => !derivedFor(e.key).isBlocked)
     if (s === 4) return entries.every((e) => !!derivedFor(e.key).computation)
-    if (s === 5) return missingRequirements.length === 0
+    if (s === 5) return true
     return true
   }
 
   function goNext() {
     if (!canProceedFromStep(step)) {
       if (step === 2 && !hasCompleteMemberFinancialInfo) {
-        toast.error("Monthly Net Pay and Net Take Home Pay document are required. Save them to the member profile before continuing.")
+        toast.error("Monthly Net Pay and Net Take Home Pay document are required.")
         return
       }
-      toast.error("Please complete the required fields before continuing.")
+      toast.error("Please complete all required fields before continuing.")
       return
     }
     const nextStep = Math.min(STEPS.length, step + 1)
     setStep(nextStep)
-    // Save the step we're navigating to, not the pre-navigation `step` closure
-    // value — otherwise the persisted draftCurrentStep lags behind the UI by
-    // one step, and the next server-response cache write snaps the wizard
-    // back a step.
     if (memberId && loanDraft.draftId && canUseDraft && soloDraftSnapshot) {
       void autosave.triggerNow({ ...soloDraftSnapshot, draftCurrentStep: nextStep })
     }
   }
+
   function goBack() {
     setStep((s) => Math.max(1, s - 1))
   }
@@ -641,19 +772,14 @@ export default function CreateLoanApplicationPage() {
 
     const anyBlocked = entries.some((e) => derivedFor(e.key).isBlocked)
     if (anyBlocked) {
-      toast.error("One or more entries cannot be submitted until eligibility is met or overridden.")
+      toast.error("One or more entries cannot be submitted until eligibility is satisfied or overridden.")
       return
     }
     if (entries.some((e) => !derivedFor(e.key).computation)) return
     if (!agree) {
-      toast.error("Please confirm the information has been reviewed and is accurate.")
+      toast.error("Please confirm that the information has been reviewed.")
       return
     }
-    if (missingRequirements.length > 0) {
-      toast.error("Complete all required loan requirements before submitting. File uploads remain optional.")
-      return
-    }
-
     setIsSubmitting(true)
     try {
       const uploadRequirementFiles = async (loan: LoanApplication) => {
@@ -687,7 +813,7 @@ export default function CreateLoanApplicationPage() {
         })
         const failedUploads = await uploadRequirementFiles(loan)
         if (failedUploads.length > 0) {
-          toast.warning(`Loan submitted, but these optional files could not be uploaded: ${failedUploads.join(", ")}.`)
+          toast.warning(`Loan submitted, but these files failed to upload: ${failedUploads.join(", ")}.`)
         } else {
           toast.success("Loan application submitted successfully.")
         }
@@ -712,12 +838,14 @@ export default function CreateLoanApplicationPage() {
           })
           const failedUploads = await uploadRequirementFiles(loan)
           if (failedUploads.length > 0) {
-            toast.warning(`Loan created, but these optional files could not be uploaded: ${failedUploads.join(", ")}.`)
+            toast.warning(`Loan created, but these files failed: ${failedUploads.join(", ")}.`)
           }
           created.push(loan)
         }
         toast.success(
-          created.length > 1 ? `${created.length} loan applications submitted successfully.` : "Loan application submitted successfully."
+          created.length > 1
+            ? `${created.length} loan applications submitted successfully.`
+            : "Loan application submitted successfully."
         )
         setSuccessDialog({ created })
       }
@@ -732,9 +860,11 @@ export default function CreateLoanApplicationPage() {
     setStep(1)
     setMemberId("")
     setAssignedOfficer(loggedInUserIsLoanOfficer ? (user?.fullName ?? "") : "")
-    setEntries([makeLoanEntry({
-      paymentMethod: (loanSettings?.defaultPaymentMethod as PaymentMethod | undefined) ?? "Payroll Deduction",
-    })])
+    setEntries([
+      makeLoanEntry({
+        paymentMethod: (loanSettings?.defaultPaymentMethod as PaymentMethod | undefined) ?? "Payroll Deduction",
+      }),
+    ])
     setRequirements(Object.fromEntries(REQUIREMENT_LABELS.map((label) => [label, false])))
     setRequirementFiles({})
     setAgree(false)
@@ -746,35 +876,45 @@ export default function CreateLoanApplicationPage() {
   }
 
   return (
-    <div className="space-y-6 pb-20 mx-auto px-4 md:px-0">
+    <div className="space-y-8 pb-28 mx-auto">
+      {/* Page Header */}
       <PageHeader
         title={isDraftContext ? "Continue Loan Draft" : "Create Loan Application"}
-        description="Encode a loan application based on the physical documents submitted by the member."
+        description="Encode, compute, and submit a loan application based on physical supporting documents."
         actions={isDraftContext && <DraftStatusBadge status="Draft" />}
       />
 
-      <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
+      {/* Step Indicator */}
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs sm:p-5">
         <WizardStepIndicator steps={STEPS} currentStep={step} />
       </div>
 
       {/* STEP 1: Select Member */}
       {step === 1 && (
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <User className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <User className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Step 1 · Select Member</span>
-            </span>
-          } 
-          description={`Only members who have completed at least ${minimumMembershipMonths} month(s) of approved and active GCGEA membership are selectable.`}
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Step 1 · Member Selection
+              </span>
+            </div>
+          }
+          description={`Eligible members must have completed at least ${minimumMembershipMonths} month(s) of approved GCGEA membership.`}
         >
           <div className="space-y-4">
             <div className="max-w-2xl">
-              <MemberEligibilitySelect value={memberId || undefined} selectedMember={member} onSelect={handleMemberSelect} />
+              <MemberEligibilitySelect
+                value={memberId || undefined}
+                selectedMember={member}
+                onSelect={handleMemberSelect}
+              />
             </div>
-            {member ? (
+            {isVerifyingMemberEligibility ? (
+              <CardLoader rows={4} className="rounded-2xl border-border/60 bg-card/90" />
+            ) : member ? (
               <>
                 <MemberSummaryCard
                   member={member}
@@ -794,24 +934,30 @@ export default function CreateLoanApplicationPage() {
                 )}
               </>
             ) : (
-              <EmptyState icon={UserSearch} title="No member selected" description="Search and select the member this application is being encoded for." />
+              <EmptyState
+                icon={UserSearch}
+                title="No member selected"
+                description="Search by name, member number, or office agency to begin."
+              />
             )}
           </div>
         </FormSection>
       )}
 
-      {/* STEP 2: Loan Details Form */}
+      {/* STEP 2: Loan Details */}
       {step === 2 && (
         <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <Coins className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <Coins className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Step 2 · Loan Details</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Step 2 · Loan Product Details
+              </span>
+            </div>
           }
-          description="Enter one loan type and one requested amount for this application."
+          description="Specify loan product category, requested principal, term duration, and payment method."
         >
           {member && (
             <div className="mb-5 space-y-3">
@@ -824,32 +970,52 @@ export default function CreateLoanApplicationPage() {
                 overdueLoanCount={overdueLoans.length}
                 onChangeMember={() => setStep(1)}
               />
-              <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-                <p className="text-xs text-muted-foreground">Monthly Net Pay</p>
-                <p className={cn("mt-0.5 text-base font-semibold", hasMemberNetPay ? "text-foreground" : "text-destructive")}>
-                  {hasMemberNetPay ? formatCurrency(effectiveMemberNetPay ?? 0) : "Not yet recorded"}
-                </p>
+              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-muted/15 p-4 shadow-2xs">
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Verified Monthly Net Pay
+                  </p>
+                  <p
+                    className={cn(
+                      "font-mono text-base font-bold",
+                      hasMemberNetPay ? "text-foreground" : "text-destructive"
+                    )}
+                  >
+                    {hasMemberNetPay ? formatCurrency(effectiveMemberNetPay ?? 0) : "Not yet recorded"}
+                  </p>
+                </div>
+                {hasMemberNetPay && (
+                  <StatusBadge label="Verified Profile" tone="success" />
+                )}
               </div>
             </div>
           )}
 
           {member && !hasCompleteMemberFinancialInfo && (
-            <div className="mb-5 rounded-xl border border-destructive/40 bg-destructive/5 p-4 space-y-4">
+            <div className="mb-5 space-y-4 rounded-2xl border border-destructive/30 bg-destructive/[0.04] p-5">
               <div>
-                <p className="text-sm font-semibold text-destructive">Complete Member Financial Information · Required</p>
-                <p className="mt-1 text-xs font-medium text-destructive/90">
-                  Monthly Net Pay and the Net Take Home Pay document must be saved to the member profile before you can proceed to the next step.
+                <p className="font-heading text-sm font-semibold text-destructive">
+                  Member Financial Verification Required
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Monthly Net Pay and Net Take Home Pay documentation must be saved before proceeding.
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Monthly Net Pay <span className="text-destructive">*</span></Label>
-                  <CurrencyInput value={memberNetPay ?? member.netPay ?? undefined} onChange={setMemberNetPay} />
+                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                    Monthly Net Pay <span className="text-destructive">*</span>
+                  </Label>
+                  <CurrencyInput
+                    value={memberNetPay ?? member.netPay ?? undefined}
+                    onChange={setMemberNetPay}
+                    className="h-10 text-xs font-mono font-semibold"
+                  />
                 </div>
                 {!hasMemberNetPayDocument && (
                   <FileUploader
-                    label="Net Take Home Pay"
-                    description="Upload the member's PDF or image supporting document."
+                    label="Net Take Home Pay Document"
+                    description="Upload PDF or image payslip"
                     required
                     accept=".pdf,.jpg,.jpeg,.png,.webp"
                     fileName={netPayDocument?.name}
@@ -861,10 +1027,15 @@ export default function CreateLoanApplicationPage() {
                 <Button
                   type="button"
                   onClick={() => void saveMemberFinancialProfile()}
-                  disabled={isSavingMemberFinancials || !(memberNetPay ?? member.netPay) || (!hasMemberNetPayDocument && !netPayDocument)}
+                  disabled={
+                    isSavingMemberFinancials ||
+                    !(memberNetPay ?? member.netPay) ||
+                    (!hasMemberNetPayDocument && !netPayDocument)
+                  }
+                  className="h-9 rounded-xl px-4 text-xs font-semibold shadow-xs"
                 >
-                  {isSavingMemberFinancials && <Loader2 className="animate-spin" />}
-                  Save to Member Profile
+                  {isSavingMemberFinancials && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+                  Save Financial Profile
                 </Button>
               </div>
             </div>
@@ -872,13 +1043,27 @@ export default function CreateLoanApplicationPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Application Date <span className="text-destructive">*</span></Label>
-              <Input type="date" value={applicationDate} onChange={(e) => setApplicationDate(e.target.value)} className="h-10 text-sm" />
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                Application Date <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={applicationDate}
+                onChange={(e) => setApplicationDate(e.target.value)}
+                className="h-10 font-mono text-xs shadow-2xs"
+              />
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Assigned Loan Officer <span className="text-destructive">*</span></Label>
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                Assigned Loan Officer <span className="text-destructive">*</span>
+              </Label>
               {loggedInUserIsLoanOfficer ? (
-                <Input value={assignedOfficer} readOnly aria-readonly="true" className="h-10 bg-muted/40 text-sm font-medium" />
+                <Input
+                  value={assignedOfficer}
+                  readOnly
+                  className="h-10 bg-muted/40 font-medium text-xs shadow-2xs"
+                />
               ) : (
                 <LoanOfficerCommandSelect value={assignedOfficer} onValueChange={setAssignedOfficer} />
               )}
@@ -889,231 +1074,221 @@ export default function CreateLoanApplicationPage() {
             {entries.slice(0, 1).map((entry) => {
               const derived = derivedFor(entry.key)
               return (
-                <div key={entry.key} className="rounded-xl border border-border/60 bg-muted/5 p-4 shadow-sm space-y-4">
+                <div
+                  key={entry.key}
+                  className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs space-y-4"
+                >
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Loan Type <span className="text-destructive">*</span></Label>
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Loan Product <span className="text-destructive">*</span>
+                      </Label>
                       <CommandSelect
-                        className="w-full h-10 text-sm bg-background border border-border hover:bg-accent/40 transition-all"
+                        className="w-full h-10 text-xs shadow-2xs"
                         value={entry.loanTypeId}
                         onValueChange={(v) => handleLoanTypeChange(entry.key, v)}
-                        options={loanTypes.filter((lt) => lt.status === "Active").map((lt) => ({ value: lt.id, label: lt.name }))}
+                        options={loanTypes
+                          .filter((lt) => lt.status === "Active")
+                          .map((lt) => ({ value: lt.id, label: lt.name }))}
                         placeholder="Select loan type"
                       />
                     </div>
-                    {entry.loanTypeId && (derived.isFirstSolidarityLoan || !derived.isBracketedLoanType || hasMemberNetPay) && (
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Requested Amount <span className="text-destructive">*</span></Label>
-                      {derived.isFirstSolidarityLoan ? (
-                        <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/5 p-4">
-                          <CurrencyInput value={loanSettings?.firstSolidarityLoanAmount ?? 20_000} onChange={() => undefined} disabled />
-                          <p className="text-[11px] font-medium text-primary">
-                            First Solidarity loan is fixed at {formatCurrency(loanSettings?.firstSolidarityLoanAmount ?? 20_000)} after the configured qualified monthly contributions, per resolution.
-                          </p>
-                        </div>
-                      ) : derived.isBracketedLoanType ? (
-                        <div className="space-y-2 bg-muted/20 border border-border/60 rounded-xl p-4 shadow-inner">
-                          <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Loanable Amount Range</span>
-                          <div className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-semibold text-foreground">
-                            {effectiveMemberNetPay == null
-                              ? "Unavailable"
-                              : `${formatCurrency(derived.loanType?.minAmount ?? 0)} – ${formatCurrency(
-                                  bracketForNetPay(derived.loanType?.incomeBrackets ?? [], effectiveMemberNetPay)?.loanableAmount ?? 0
-                                )}`}
-                          </div>
-                          <Label className="block pt-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+
+                    {entry.loanTypeId &&
+                      (derived.isFirstSolidarityLoan || !derived.isBracketedLoanType || hasMemberNetPay) && (
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
                             Requested Amount <span className="text-destructive">*</span>
                           </Label>
-                          <CurrencyInput value={entry.requestedAmount} onChange={(value) => updateEntry(entry.key, { requestedAmount: value })} />
-                          <p className={cn("mt-1 text-[11px] leading-relaxed", effectiveMemberNetPay == null ? "font-medium text-destructive" : "text-muted-foreground")}>
-                            {effectiveMemberNetPay == null
-                              ? "Member has no net pay on file — set it on the member's profile to compute the correct loanable limit."
-                              : "Enter the actual amount the member wants to borrow within the calculated range above."}
-                          </p>
-                          {effectiveMemberNetPay != null && entry.requestedAmount != null && (() => {
-                            const bracket = bracketForNetPay(derived.loanType?.incomeBrackets ?? [], effectiveMemberNetPay)
-                            return bracket && (entry.requestedAmount < (derived.loanType?.minAmount ?? 0) || entry.requestedAmount > bracket.loanableAmount) ? (
-                              <p className="flex items-center gap-1.5 text-xs font-medium text-destructive">
-                                <AlertTriangle className="size-3.5" /> Enter an amount within the allowed net-pay range.
+
+                          {derived.isFirstSolidarityLoan ? (
+                            <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-3 shadow-2xs">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Amount to borrow</span>
+                                <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                  Fixed amount
+                                </span>
+                              </div>
+                              <CurrencyInput
+                                value={loanSettings?.firstSolidarityLoanAmount ?? 20_000}
+                                onChange={() => undefined}
+                                disabled
+                                className="h-12 [&_input]:h-12 [&_input]:bg-background [&_input]:font-mono [&_input]:text-lg [&_input]:font-bold [&_input]:shadow-2xs [&>span]:text-base"
+                              />
+                              <p className="flex items-center gap-1.5 border-t border-primary/15 pt-2 text-[11px] font-medium text-primary">
+                                <Sparkles className="size-3.5 shrink-0" />
+                                First Solidarity loan is fixed at{" "}
+                                {formatCurrency(loanSettings?.firstSolidarityLoanAmount ?? 20_000)}.
                               </p>
-                            ) : null
-                          })()}
+                            </div>
+                          ) : derived.isBracketedLoanType ? (
+                            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3 shadow-2xs">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  Amount to borrow
+                                </span>
+                                <span className="rounded-full border border-border/60 bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                  Based on net pay
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Loanable range</span>
+                              <div className="rounded-xl border border-border/60 bg-background px-3 py-2 font-mono text-xs font-bold text-foreground">
+                                {effectiveMemberNetPay == null
+                                  ? "Unavailable"
+                                  : `${formatCurrency(derived.loanType?.minAmount ?? 0)} – ${formatCurrency(
+                                      bracketForNetPay(
+                                        derived.loanType?.incomeBrackets ?? [],
+                                        effectiveMemberNetPay
+                                      )?.loanableAmount ?? 0
+                                    )}`}
+                              </div>
+                              <Label className="block border-t border-border/50 pt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Desired Amount <span className="text-destructive">*</span>
+                              </Label>
+                              <CurrencyInput
+                                value={entry.requestedAmount}
+                                onChange={(value) => updateEntry(entry.key, { requestedAmount: value })}
+                                className="h-12 [&_input]:h-12 [&_input]:bg-background [&_input]:font-mono [&_input]:text-lg [&_input]:font-bold [&_input]:shadow-2xs [&>span]:text-base"
+                              />
+                            </div>
+                          ) : (
+                            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3 shadow-2xs">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Amount to borrow</span>
+                                <span className="rounded-full border border-border/60 bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                  Product limit
+                                </span>
+                              </div>
+                              <CurrencyInput
+                                value={entry.requestedAmount}
+                                onChange={(v) => updateEntry(entry.key, { requestedAmount: v })}
+                                className="h-12 [&_input]:h-12 [&_input]:bg-background [&_input]:font-mono [&_input]:text-lg [&_input]:font-bold [&_input]:shadow-2xs [&>span]:text-base"
+                              />
+                              <p className="border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
+                                Allowed range: <strong className="font-mono text-foreground">{formatCurrency(derived.loanType?.minAmount ?? 0)} - {formatCurrency(derived.loanType?.maxAmount ?? 0)}</strong>
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <CurrencyInput value={entry.requestedAmount} onChange={(v) => updateEntry(entry.key, { requestedAmount: v })} />
                       )}
-                    </div>
-                    )}
+
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Loan Term (Months) <span className="text-destructive">*</span></Label>
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Repayment Term (Months) <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         type="number"
                         min={1}
                         max={derived.loanType?.maxTermMonths}
-                        placeholder={derived.loanType ? `1–${derived.loanType.maxTermMonths}` : "Select a loan type first"}
+                        placeholder={
+                          derived.loanType ? `1–${derived.loanType.maxTermMonths}` : "Select loan type"
+                        }
                         value={entry.termMonths ?? ""}
                         onChange={(event) => {
                           const entered = event.target.value ? Number(event.target.value) : undefined
-                          const configuredMaximum = derived.loanType?.maxTermMonths
+                          const configuredMax = derived.loanType?.maxTermMonths
                           updateEntry(entry.key, {
-                            termMonths: entered !== undefined && configuredMaximum
-                              ? Math.min(entered, configuredMaximum)
-                              : entered,
+                            termMonths:
+                              entered !== undefined && configuredMax
+                                ? Math.min(entered, configuredMax)
+                                : entered,
                           })
                         }}
-                        className="h-10 text-sm"
+                        className="h-10 font-mono text-xs shadow-2xs"
                       />
                     </div>
+
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payment Method</Label>
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Payment Method
+                      </Label>
                       <CommandSelect
-                        className="w-full h-10 text-sm bg-background border border-border hover:bg-accent/40 transition-all"
+                        className="w-full h-10 text-xs shadow-2xs"
                         hideSearch
                         value={entry.paymentMethod}
-                        onValueChange={(v) => updateEntry(entry.key, { paymentMethod: (v ?? "Payroll Deduction") as PaymentMethod })}
+                        onValueChange={(v) =>
+                          updateEntry(entry.key, {
+                            paymentMethod: (v ?? "Payroll Deduction") as PaymentMethod,
+                          })
+                        }
                         options={PAYMENT_METHODS.map((m) => ({ value: m, label: m }))}
-                        placeholder="Select payment method"
+                        placeholder="Select method"
                       />
                     </div>
+
                     <div className="space-y-1.5 sm:col-span-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Purpose of Loan <span className="text-destructive">*</span></Label>
-                      <Textarea rows={2} placeholder="e.g. Home repair, tuition, medical expenses" value={entry.purpose} onChange={(e) => updateEntry(entry.key, { purpose: e.target.value })} className="text-sm bg-background resize-none" />
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Loan Purpose <span className="text-destructive">*</span>
+                      </Label>
+                      <Textarea
+                        rows={2}
+                        placeholder="e.g. Home renovation, educational tuition, emergency medical expenses"
+                        value={entry.purpose}
+                        onChange={(e) => updateEntry(entry.key, { purpose: e.target.value })}
+                        className="bg-background text-xs resize-none"
+                      />
                     </div>
+
                     <div className="space-y-1.5 sm:col-span-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Remarks</Label>
-                      <Textarea rows={2} placeholder="Additional notes about this application (optional)" value={entry.remarks} onChange={(e) => updateEntry(entry.key, { remarks: e.target.value })} className="text-sm bg-background resize-none" />
-                    </div>
-                    <div className="sm:col-span-2 rounded-xl border border-border/60 bg-card p-4">
-                      <FileUploader
-                        label="Other Documents (Optional)"
-                        description="You may upload an updated Net Take Home Pay or another supporting document."
-                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                        fileName={requirementFiles["Other Supporting Documents"]?.name ?? existingDocumentsByLabel.get("Other Supporting Documents")?.fileName}
-                        fileUrl={requirementFiles["Other Supporting Documents"] ? undefined : existingDocumentsByLabel.get("Other Supporting Documents")?.fileUrl}
-                        onFileSelect={(file) => {
-                          setRequirementFiles((current) => {
-                            const next = { ...current }
-                            if (file) next["Other Supporting Documents"] = file
-                            else delete next["Other Supporting Documents"]
-                            return next
-                          })
-                        }}
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Staff Remarks
+                      </Label>
+                      <Textarea
+                        rows={2}
+                        placeholder="Additional application remarks (optional)"
+                        value={entry.remarks}
+                        onChange={(e) => updateEntry(entry.key, { remarks: e.target.value })}
+                        className="bg-background text-xs resize-none"
                       />
                     </div>
                   </div>
 
+                  {/* Policy Summary Placard */}
                   {derived.loanType && (
-                    /* Placard-style Policy Panel */
-                    <div className="rounded-xl border border-border bg-muted/20 p-5 shadow-inner relative overflow-hidden mt-4">
+                    <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-2xs backdrop-blur-xs mt-4">
                       <div className="absolute top-0 left-0 bottom-0 w-1 bg-primary" />
-                      <p className="mb-3.5 font-bold uppercase tracking-wider text-[10px] text-foreground flex items-center gap-2">
-                        <Info className="size-4 text-primary" />
-                        {derived.loanType.name} — Core Policy Information
-                      </p>
-                      <div className="grid grid-cols-2 gap-y-3.5 gap-x-6 text-xs text-muted-foreground sm:grid-cols-3 pt-1">
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Min Amount</span>
-                          <strong className="text-sm font-semibold text-foreground">{formatCurrency(derived.loanType.minAmount)}</strong>
+                      <div className="flex items-center gap-2 text-xs font-bold text-primary mb-3">
+                        <Info className="size-4" />
+                        <span>{derived.loanType.name} — Product Matrix</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 text-xs">
+                        <div className="rounded-xl border border-border/50 bg-background/80 p-2.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground">Range</span>
+                          <p className="font-mono font-bold text-foreground mt-0.5">
+                            {formatCurrency(derived.loanType.minAmount)} – {formatCurrency(derived.loanType.maxAmount)}
+                          </p>
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Max Amount</span>
-                          <strong className="text-sm font-semibold text-foreground">{formatCurrency(derived.loanType.maxAmount)}</strong>
+                        <div className="rounded-xl border border-border/50 bg-background/80 p-2.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground">Interest Rate</span>
+                          <p className="font-mono font-bold text-foreground mt-0.5">
+                            {derived.loanType.defaultInterestRate}% / month
+                          </p>
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Interest Rate</span>
-                          <strong className="text-sm font-semibold text-foreground">{derived.loanType.defaultInterestRate}% / mo</strong>
+                        <div className="rounded-xl border border-border/50 bg-background/80 p-2.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground">Method</span>
+                          <p className="font-medium text-foreground mt-0.5">{derived.loanType.interestMethod}</p>
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Interest Method</span>
-                          <strong className="text-sm font-semibold text-foreground">{derived.loanType.interestMethod}</strong>
+                        <div className="rounded-xl border border-border/50 bg-background/80 p-2.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground">Max Term</span>
+                          <p className="font-mono font-bold text-foreground mt-0.5">
+                            {derived.loanType.maxTermMonths} months
+                          </p>
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Max Term</span>
-                          <strong className="text-sm font-semibold text-foreground">{derived.loanType.maxTermMonths} months</strong>
+                        <div className="rounded-xl border border-border/50 bg-background/80 p-2.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground">Processing Fee</span>
+                          <p className="font-mono font-bold text-foreground mt-0.5">
+                            {formatCurrency(derived.loanType.processingFee)}
+                          </p>
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Processing Fee</span>
-                          <strong className="text-sm font-semibold text-foreground">{formatCurrency(derived.loanType.processingFee)}</strong>
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Min. Tenure</span>
-                          <strong className="text-sm font-semibold text-foreground">{derived.loanType.requiredMembershipMonths} months</strong>
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Min. Contributions</span>
-                          <strong className="text-sm font-semibold text-foreground">{derived.loanType.requiredContributionMonths} months</strong>
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="block text-[10px] uppercase text-muted-foreground/60">Concurrent Active</span>
-                          <strong className="text-sm font-semibold text-foreground">{derived.loanType.allowExistingActiveLoan ? "Permitted" : "Not Allowed"}</strong>
+                        <div className="rounded-xl border border-border/50 bg-background/80 p-2.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground">Req. Contributions</span>
+                          <p className="font-mono font-bold text-foreground mt-0.5">
+                            {derived.loanType.requiredContributionMonths} months
+                          </p>
                         </div>
                       </div>
-                      {entry.requestedAmount != null && !derived.isBracketedLoanType && (entry.requestedAmount < derived.loanType.minAmount || entry.requestedAmount > derived.loanType.maxAmount) && (
-                        <div className="mt-4 flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/25 p-3 text-xs font-semibold text-destructive animate-pulse">
-                          <AlertTriangle className="size-4 shrink-0" /> Requested amount is outside the allowed range for this loan type.
-                        </div>
-                      )}
-                      {entry.termMonths != null && entry.termMonths > derived.loanType.maxTermMonths && (
-                        <div className="mt-3 flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/25 p-3 text-xs font-semibold text-destructive animate-pulse">
-                          <AlertTriangle className="size-4 shrink-0" /> Term exceeds the maximum allowed for this loan type.
-                        </div>
-                      )}
                     </div>
                   )}
-                  {derived.loanType && (() => {
-                    const monthlyDuesCheck = derived.eligibilityItems.find((item) => item.label === "Fully Paid Monthly Dues")
-                    const requiredMonths = Math.max(derived.loanType.requiredContributionMonths, requiredPaidMonths)
-                    const monthStatuses = loanSettings?.requireConsecutiveContributionMonths === false
-                      ? []
-                      : monthlyDuesWindow(paidMonthlyDuesPeriods, requiredMonths)
-                    return monthlyDuesCheck && !monthlyDuesCheck.passed ? (
-                      <AlertBanner
-                        tone="danger"
-                        title="Fully Paid Monthly Dues — Not Eligible"
-                        description={
-                          <div className="space-y-2.5">
-                            <p>{monthlyDuesCheck.detail} Requirement applied for {derived.loanType.name}: {requiredMonths} fully paid month(s).</p>
-                            {monthStatuses.length > 0 && (
-                              <div>
-                                <p className="mb-1.5 text-xs font-semibold text-foreground/80">Required monthly payment status</p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {monthStatuses.map((month) => (
-                                    <span
-                                      key={month.period}
-                                      className={cn(
-                                        "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold",
-                                        month.status === "paid"
-                                          ? "border-success/30 bg-success/10 text-success"
-                                          : month.status === "due"
-                                            ? "border-warning/40 bg-warning/10 text-warning"
-                                            : "border-destructive/30 bg-destructive/10 text-destructive"
-                                      )}
-                                    >
-                                      {month.status === "paid"
-                                        ? <CheckCircle2 className="size-3.5" />
-                                        : month.status === "due"
-                                          ? <AlertTriangle className="size-3.5" />
-                                          : <XCircle className="size-3.5" />}
-                                      {month.label}
-                                    </span>
-                                  ))}
-                                </div>
-                                <p className="mt-2 text-xs font-semibold text-success">
-                                  Paid month(s): {monthStatuses.filter((month) => month.status === "paid").map((month) => month.label).join(", ") || "None"}
-                                </p>
-                                <p className="mt-1 text-xs font-semibold text-warning">
-                                  Current month to pay: {monthStatuses.filter((month) => month.status === "due").map((month) => month.label).join(", ") || "None"}
-                                </p>
-                                <p className="mt-1 text-xs font-semibold text-destructive">
-                                  Missed past month(s): {monthStatuses.filter((month) => month.status === "overdue").map((month) => month.label).join(", ") || "None"}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        }
-                      />
-                    ) : null
-                  })()}
                 </div>
               )
             })}
@@ -1121,16 +1296,18 @@ export default function CreateLoanApplicationPage() {
         </FormSection>
       )}
 
-      {/* STEP 3: Eligibility Checklist */}
+      {/* STEP 3: Eligibility Check */}
       {step === 3 && (
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <ClipboardCheck className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <ClipboardCheck className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Step 3 · Eligibility Check</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Step 3 · Automated Eligibility Audit
+              </span>
+            </div>
           }
         >
           <div className="space-y-6">
@@ -1139,47 +1316,94 @@ export default function CreateLoanApplicationPage() {
               return (
                 <div key={entry.key} className="space-y-3">
                   {entries.length > 1 && (
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
-                      Entry {idx + 1}{derived.loanType ? ` · ${derived.loanType.name}` : ""}
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Entry {idx + 1} · {derived.loanType?.name}
                     </p>
                   )}
                   {derived.eligibilityItems.length === 0 ? (
-                    <AlertBanner tone="warning" title="Incomplete information" description="Select a member and loan type first." />
+                    <AlertBanner
+                      tone="warning"
+                      title="Incomplete parameters"
+                      description="Select a valid member and loan product to run the audit."
+                    />
                   ) : (
                     <div className="space-y-4">
-                      <EligibilityChecklist items={derived.eligibilityItems} result={derived.eligibilityResult} />
+                      <EligibilityChecklist
+                        items={derived.eligibilityItems}
+                        result={derived.eligibilityResult}
+                      />
+
                       {derived.eligibilityResult === "Not Eligible" && canOverride && (
-                        <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-4">
-                          <label className="flex items-center gap-2.5 text-sm font-semibold text-foreground cursor-pointer">
-                            <Checkbox checked={entry.overrideEnabled} onCheckedChange={(v) => updateEntry(entry.key, { overrideEnabled: !!v })} />
-                            Override eligibility for this entry
+                        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-4 shadow-xs">
+                          <label className="flex items-center gap-2.5 text-xs font-bold uppercase tracking-wider text-foreground cursor-pointer">
+                            <Checkbox
+                              checked={entry.overrideEnabled}
+                              onCheckedChange={(v) => updateEntry(entry.key, { overrideEnabled: !!v })}
+                              className="size-4"
+                            />
+                            <span>Enable Administrative Eligibility Override</span>
                           </label>
+
                           {entry.overrideEnabled && (
                             <div className="mt-3 space-y-4 animate-in fade-in duration-200">
                               <div className="space-y-1.5">
-                                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Override Reason <span className="text-destructive">*</span></Label>
-                                <Textarea rows={2} value={entry.overrideReason} onChange={(e) => updateEntry(entry.key, { overrideReason: e.target.value })} placeholder="Explain why this application should proceed despite failing eligibility…" className="text-sm bg-background resize-none" />
+                                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  Justification Reason <span className="text-destructive">*</span>
+                                </Label>
+                                <Textarea
+                                  rows={2}
+                                  value={entry.overrideReason}
+                                  onChange={(e) =>
+                                    updateEntry(entry.key, { overrideReason: e.target.value })
+                                  }
+                                  placeholder="Document reason for overriding failed criteria…"
+                                  className="text-xs bg-background resize-none"
+                                />
                               </div>
+
                               <div className="space-y-1.5">
-                                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Board Resolution Reference</Label>
-                                <Input value={entry.boardResolutionReference} onChange={(e) => updateEntry(entry.key, { boardResolutionReference: e.target.value })} placeholder="e.g. Board Resolution No. 24-2026 (optional unless required for the amount involved)" className="h-10 text-sm" />
+                                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  Board Resolution Reference
+                                </Label>
+                                <Input
+                                  value={entry.boardResolutionReference}
+                                  onChange={(e) =>
+                                    updateEntry(entry.key, { boardResolutionReference: e.target.value })
+                                  }
+                                  placeholder="e.g. Resolution No. 24-2026"
+                                  className="h-10 text-xs font-mono"
+                                />
                               </div>
-                              <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-                                <Checkbox checked={entry.overrideConfirmed} onCheckedChange={(v) => updateEntry(entry.key, { overrideConfirmed: !!v })} />
-                                I confirm I am authorized to override eligibility for this entry.
+
+                              <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer">
+                                <Checkbox
+                                  checked={entry.overrideConfirmed}
+                                  onCheckedChange={(v) =>
+                                    updateEntry(entry.key, { overrideConfirmed: !!v })
+                                  }
+                                />
+                                <span>I attest that this override is authorized and sanctioned.</span>
                               </label>
-                              <Button type="button" variant="outline" size="sm" onClick={() => setOverrideDialogEntryKey(entry.key)} disabled={!entry.overrideReason.trim() || !entry.overrideConfirmed} className="h-9 gap-1.5 text-xs">
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setOverrideDialogEntryKey(entry.key)}
+                                disabled={!entry.overrideReason.trim() || !entry.overrideConfirmed}
+                                className="h-9 gap-1.5 text-xs font-semibold rounded-xl"
+                              >
                                 <ShieldAlert className="size-3.5" /> Confirm Override
                               </Button>
+
                               {entry.overrideApplied && (
-                                <p className="text-xs font-semibold text-success">Override recorded — this will be saved with the application and logged to the audit trail.</p>
+                                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                  ✓ Override verified and logged to audit trail.
+                                </p>
                               )}
                             </div>
                           )}
                         </div>
-                      )}
-                      {derived.eligibilityResult === "Not Eligible" && !canOverride && (
-                        <AlertBanner tone="danger" title="Eligibility override not available" description="You do not have permission to override eligibility. Please coordinate with an authorized officer." />
                       )}
                     </div>
                   )}
@@ -1192,105 +1416,71 @@ export default function CreateLoanApplicationPage() {
 
       {/* STEP 4: Loan Computation */}
       {step === 4 && (
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <Calculator className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <Calculator className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Step 4 · Loan Computation</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Step 4 · Financial Computation & Amortization
+              </span>
+            </div>
           }
         >
           <div className="space-y-6">
-            {entries.map((entry, idx) => {
+            {entries.map((entry) => {
               const derived = derivedFor(entry.key)
               if (!derived.computation) return null
               const computation = derived.computation
+
               return (
-                <div key={entry.key} className="space-y-4">
-                  {entries.length > 1 && (
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
-                      Entry {idx + 1}{derived.loanType ? ` · ${derived.loanType.name}` : ""}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-4 py-3">
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">Payment Term</p>
-                      <p className="text-[11px] text-muted-foreground">Change the number of payment months to recalculate the loan.</p>
-                    </div>
-                    <div className="w-full sm:w-52">
-                      <Label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
-                        Months to Pay
-                      </Label>
-                      <CommandSelect
-                        className="h-9 w-full bg-background text-sm"
-                        hideSearch
-                        value={entry.termMonths ? String(entry.termMonths) : undefined}
-                        onValueChange={(value) => updateEntry(entry.key, { termMonths: value ? Number(value) : undefined })}
-                        options={Array.from({ length: derived.loanType?.maxTermMonths ?? 1 }, (_, month) => ({
-                          value: String(month + 1),
-                          label: `${month + 1} month${month === 0 ? "" : "s"}`,
-                        }))}
-                        placeholder="Select months"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <ComputationStat label="Principal Amount" value={formatCurrency(computation.principal)} />
+                <div key={entry.key} className="space-y-5">
+                  <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+                    <ComputationStat label="Principal Loan" value={formatCurrency(computation.principal)} tone="primary" />
+                    <ComputationStat label="Net Proceeds" value={formatCurrency(computation.netProceeds)} tone="success" />
                     <ComputationStat label="Total Interest" value={formatCurrency(computation.totalInterest)} />
+                    <ComputationStat label="Monthly Amortization" value={formatCurrency(computation.monthlyAmortization)} tone="primary" />
                     <ComputationStat label="Processing Fee" value={formatCurrency(computation.processingFee)} />
-                    <ComputationStat label="Net Proceeds" value={formatCurrency(computation.netProceeds)} />
-                    <ComputationStat label="Total Amount Payable" value={formatCurrency(computation.totalAmountPayable)} />
-                    <ComputationStat label="Monthly Amortization" value={formatCurrency(computation.monthlyAmortization)} />
+                    <ComputationStat label="Total Payable" value={formatCurrency(computation.totalAmountPayable)} />
                     <ComputationStat label="First Due Date" value={formatDateShort(computation.schedule[0]?.dueDate)} />
                     <ComputationStat label="Maturity Date" value={formatDateShort(computation.maturityDate)} />
                   </div>
 
-                  <div className="rounded-lg border border-info/25 bg-info/5 px-4 py-3 text-xs leading-relaxed text-foreground/80">
-                    <div className="flex flex-wrap items-center justify-between gap-1.5">
-                      <p className="font-semibold text-foreground">Computation Basis</p>
-                      <span className="text-[10px] font-medium text-muted-foreground">
-                        {derived.loanType?.interestMethod ?? "Configured method"} · {derived.loanType?.defaultInterestRate ?? 0}%/month · {entry.termMonths} month(s)
+                  {/* Formula Breakdown Card */}
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-xs space-y-2">
+                    <div className="flex items-center justify-between border-b border-primary/20 pb-2">
+                      <span className="font-heading font-semibold text-primary">Computation Matrix</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {derived.loanType?.interestMethod} · {derived.loanType?.defaultInterestRate}%/mo · {entry.termMonths} months
                       </span>
                     </div>
-                    <div className="mt-2 grid gap-x-5 gap-y-1 sm:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2 text-muted-foreground text-[11px]">
                       <p>
-                        <span className="font-medium text-foreground">Interest = </span>
-                        {derived.loanType?.interestMethod === "Zero Interest"
-                          ? <><strong>{formatCurrency(computation.principal)}</strong> Principal Loan Amount × <strong>0%</strong> Monthly Interest = <strong>{formatCurrency(computation.totalInterest)}</strong></>
-                          : derived.loanType?.interestMethod === "Flat Interest"
-                            ? <><strong>{formatCurrency(computation.principal)}</strong> Principal Loan Amount × <strong>{derived.loanType.defaultInterestRate}%</strong> Monthly Interest × <strong>{entry.termMonths}</strong> Months = <strong>{formatCurrency(computation.totalInterest)}</strong></>
-                            : <>Sum of (<strong>Remaining Principal Balance</strong> × <strong>{derived.loanType?.defaultInterestRate ?? 0}%</strong> Monthly Interest) for <strong>{entry.termMonths}</strong> Months = <strong>{formatCurrency(computation.totalInterest)}</strong></>}
+                        <strong className="text-foreground">Net Proceeds: </strong>
+                        {formatCurrency(computation.principal)} − {formatCurrency(computation.processingFee)} fee ={" "}
+                        <strong className="text-emerald-600 dark:text-emerald-400 font-mono">
+                          {formatCurrency(computation.netProceeds)}
+                        </strong>
                       </p>
                       <p>
-                        <span className="font-medium text-foreground">Total Payable = </span>
-                        <strong>{formatCurrency(computation.principal)}</strong> Principal Loan Amount + <strong>{formatCurrency(computation.totalInterest)}</strong> Total Interest = <strong>{formatCurrency(computation.totalAmountPayable)}</strong>
-                      </p>
-                      <p>
-                        <span className="font-medium text-foreground">Monthly Amortization = </span>
-                        {derived.loanType?.interestMethod === "Diminishing Balance"
-                          ? <><strong>{formatCurrency(computation.principal)}</strong> Principal × Monthly Rate Formula for <strong>{entry.termMonths}</strong> Months = <strong>{formatCurrency(computation.monthlyAmortization)}</strong></>
-                          : <><strong>{formatCurrency(computation.totalAmountPayable)}</strong> Total Payable ÷ <strong>{entry.termMonths}</strong> Payment Months = <strong>{formatCurrency(computation.monthlyAmortization)}</strong></>}
-                      </p>
-                      <p>
-                        <span className="font-medium text-foreground">Net Proceeds = </span>
-                        <strong>{formatCurrency(computation.principal)}</strong> Principal Loan Amount − <strong>{formatCurrency(computation.processingFee)}</strong> Processing Fee
-                        {computation.serviceCharge > 0 && <> − <strong>{formatCurrency(computation.serviceCharge)}</strong> Service Charge</>}
-                        {" = "}<strong>{formatCurrency(computation.netProceeds)}</strong>
+                        <strong className="text-foreground">Amortization: </strong>
+                        {formatCurrency(computation.totalAmountPayable)} ÷ {entry.termMonths} mo ={" "}
+                        <strong className="text-primary font-mono">
+                          {formatCurrency(computation.monthlyAmortization)}
+                        </strong>
                       </p>
                     </div>
                   </div>
 
-                  <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+                  <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs">
                     <DataTable
                       columns={AMORTIZATION_COLUMNS}
                       data={computation.schedule}
                       getRowId={(row) => String(row.installmentNumber)}
                       enableColumnVisibility={false}
                       maxHeight="max-h-96"
-                      emptyTitle="No amortization schedule"
-                      emptyDescription="Complete the loan amount and term to generate the schedule."
+                      emptyTitle="No schedule generated"
                     />
                   </div>
                 </div>
@@ -1300,20 +1490,22 @@ export default function CreateLoanApplicationPage() {
         </FormSection>
       )}
 
-      {/* STEP 5: Requirements Checklist */}
+      {/* STEP 5: Requirements */}
       {step === 5 && (
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <FileCheck className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <FileCheck className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Step 5 · Requirements</span>
-            </span>
-          } 
-          description="Attach the supporting file for each requirement. Shared across every entry in this session."
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Step 5 · Supporting Documents (Optional)
+              </span>
+            </div>
+          }
+          description="Attach scanned copies of loan prerequisites if available. Uploads are optional and not required to proceed."
         >
-          <div className="grid grid-cols-1 gap-2">
+          <div className="grid grid-cols-1 gap-3">
             {REQUIREMENT_LABELS.map((label) => {
               const existingDoc = existingDocumentsByLabel.get(label)
               const hasFile = hasFileFor(label)
@@ -1321,22 +1513,22 @@ export default function CreateLoanApplicationPage() {
                 <div
                   key={label}
                   className={cn(
-                    "grid gap-3 rounded-xl border p-3.5 transition-all duration-200 sm:grid-cols-[minmax(0,1fr)_minmax(16rem,0.8fr)] sm:items-start",
+                    "grid gap-3 rounded-2xl border p-4 transition-all duration-200 sm:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)] sm:items-start",
                     hasFile
-                      ? "bg-emerald-500/[0.02] border-emerald-500/25 shadow-sm"
-                      : "bg-card border-border/60 hover:border-border"
+                      ? "border-emerald-500/30 bg-emerald-500/[0.02] shadow-2xs"
+                      : "border-border/60 bg-card/90 hover:border-border"
                   )}
                 >
                   <div className="flex items-center justify-between gap-3 pt-1">
-                    <span className="flex items-center gap-2.5 text-sm text-foreground font-medium">
-                      <Checkbox checked={hasFile} disabled />
+                    <span className="flex items-center gap-2.5 text-xs font-bold text-foreground">
+                      <Checkbox checked={hasFile} disabled className="size-4" />
                       {label}
                     </span>
-                    <StatusBadge label={hasFile ? "Submitted" : "Missing"} tone={hasFile ? "success" : "warning"} />
+                    <StatusBadge label={hasFile ? "Satisfied" : "Optional"} tone={hasFile ? "success" : "neutral"} />
                   </div>
                   <FileUploader
-                    label="Supporting file (required)"
-                    description="PDF, image, Word document · Max 10 MB — a file must be attached to mark this requirement submitted"
+                    label="Attach credential file"
+                    description="PDF or image attachment (Max 10MB)"
                     fileName={requirementFiles[label]?.name ?? existingDoc?.fileName}
                     fileUrl={requirementFiles[label] ? undefined : existingDoc?.fileUrl}
                     onFileSelect={(file) => {
@@ -1346,186 +1538,148 @@ export default function CreateLoanApplicationPage() {
                         else delete next[label]
                         return next
                       })
-                      setRequirements((current) => ({ ...current, [label]: Boolean(file) || existingDocumentsByLabel.has(label) }))
+                      setRequirements((current) => ({
+                        ...current,
+                        [label]: Boolean(file) || existingDocumentsByLabel.has(label),
+                      }))
                     }}
                   />
                 </div>
               )
             })}
           </div>
-          <div className="mt-4 rounded-xl border border-border/60 bg-card p-4">
-            <FileUploader
-              label="Other Supporting Documents / Other Requirements (optional)"
-              description="Upload an additional PDF, image, or Word document not covered by the checklist · Max 10 MB"
-              fileName={requirementFiles["Other Supporting Documents"]?.name}
-              onFileSelect={(file) => {
-                setRequirementFiles((current) => {
-                  const next = { ...current }
-                  if (file) next["Other Supporting Documents"] = file
-                  else delete next["Other Supporting Documents"]
-                  return next
-                })
-              }}
-            />
-          </div>
+
           {missingRequirements.length > 0 && (
-            <AlertBanner tone="danger" className="mt-4 animate-in fade-in duration-200" title={`${missingRequirements.length} required item(s) missing`} description="Attach the supporting file for each requirement before proceeding." />
+            <div className="mt-4">
+              <AlertBanner
+                tone="info"
+                title={`${missingRequirements.length} item(s) not yet attached`}
+                description="Optional — you may proceed and submit without attaching these files."
+              />
+            </div>
           )}
         </FormSection>
       )}
 
-      {/* STEP 6: Review & Consent */}
+      {/* STEP 6: Review & Submit */}
       {step === 6 && member && (
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <Sparkles className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <Sparkles className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Step 6 · Review and Submit</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Step 6 · Final Application Review
+              </span>
+            </div>
           }
         >
-          <div className="space-y-4">
-            {entries.some((entry) =>
-              derivedFor(entry.key).eligibilityItems.some(
-                (item) => item.label === "Required Member Profile Fields Complete" && !item.passed
-              )
-            ) && (
-              <AlertBanner
-                tone="danger"
-                title="Member profile is missing required information."
-                description="Complete the member's contact information, beneficiary record, and required member documents before submitting this loan application."
-              />
-            )}
+          <div className="space-y-5">
             <ReviewBlock title="Member Overview">
               <ReviewRow label="Full Name" value={member.fullName} />
               <ReviewRow label="Member Number" value={member.memberNumber} />
-              <ReviewRow label="Office Name" value={member.officeName} />
+              <ReviewRow label="Office Agency" value={member.officeName} />
               <ReviewRow label="Assigned Officer" value={assignedOfficer} />
             </ReviewBlock>
 
-            {entries.map((entry, idx) => {
+            {entries.map((entry) => {
               const derived = derivedFor(entry.key)
               return (
-                <div key={entry.key} className="space-y-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.045] via-card to-card p-4 shadow-sm sm:p-5">
-                  {entries.length > 1 && (
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Entry {idx + 1}</p>
-                  )}
-                  <ReviewBlock title="Loan Details">
-                    <ReviewRow label="Application Date" value={formatDateShort(applicationDate)} />
-                    <ReviewRow label="Assigned Loan Officer" value={assignedOfficer} />
-                    <ReviewRow label="Loan Type" value={derived.loanType?.name ?? "—"} />
-                    <ReviewRow label="Loan Type Description" value={derived.loanType?.description || "No description"} />
-                    <ReviewRow label="Requested Amount" value={formatCurrency(derived.effectiveAmount ?? 0)} />
-                    <ReviewRow label="Term" value={`${entry.termMonths} months`} />
-                    <ReviewRow label="Purpose" value={entry.purpose} />
+                <div key={entry.key} className="space-y-4">
+                  <ReviewBlock title="Loan Terms">
+                    <ReviewRow label="Loan Product" value={derived.loanType?.name ?? "—"} />
+                    <ReviewRow label="Requested Principal" value={formatCurrency(derived.effectiveAmount ?? 0)} />
+                    <ReviewRow label="Repayment Term" value={`${entry.termMonths} months`} />
                     <ReviewRow label="Payment Method" value={entry.paymentMethod} />
-                    <ReviewRow label="Interest Method" value={derived.loanType?.interestMethod ?? "Not configured"} />
-                    <ReviewRow label="Monthly Interest Rate" value={`${derived.loanType?.defaultInterestRate ?? 0}%`} />
-                    <ReviewRow label="Configured Maximum Term" value={`${derived.loanType?.maxTermMonths ?? 0} month(s)`} />
-                    <ReviewRow label="Allowed Amount Range" value={`${formatCurrency(derived.loanType?.minAmount ?? 0)} to ${formatCurrency(derived.loanType?.maxAmount ?? 0)}`} />
+                    <ReviewRow label="Monthly Interest" value={`${derived.loanType?.defaultInterestRate ?? 0}%`} />
+                    <ReviewRow label="Purpose" value={entry.purpose} />
                   </ReviewBlock>
-                  <ReviewBlock title="Eligibility Result and Checks">
-                    <ReviewRow label="Overall Result" value={derived.eligibilityResult} />
-                    {derived.eligibilityItems.map((item) => (
-                      <ReviewRow key={item.label} label={`${item.passed ? "Passed" : item.severity === "warning" ? "Warning" : "Failed"} · ${item.label}`} value={item.detail} />
-                    ))}
-                    <ReviewRow label="Eligibility Override" value={entry.overrideEnabled && entry.overrideConfirmed ? "Applied" : "Not applied"} />
-                    {entry.overrideEnabled && <ReviewRow label="Override Reason" value={entry.overrideReason} />}
-                    {entry.boardResolutionReference && <ReviewRow label="Board Resolution Reference" value={entry.boardResolutionReference} />}
-                  </ReviewBlock>
+
                   {derived.computation && (
-                    <>
-                      <ReviewBlock title="Loan Computation Breakdown">
-                        <ReviewRow label="Principal Amount" value={formatCurrency(derived.computation.principal)} />
-                        <ReviewRow label="Interest Method" value={derived.loanType?.interestMethod ?? "Not configured"} />
-                        <ReviewRow label="Monthly Interest Rate" value={`${derived.loanType?.defaultInterestRate ?? 0}%`} />
-                        <ReviewRow label="Total Interest" value={formatCurrency(derived.computation.totalInterest)} />
-                        <ReviewRow label="Processing Fee" value={formatCurrency(derived.computation.processingFee)} />
-                        <ReviewRow label="Service Charge" value={formatCurrency(derived.computation.serviceCharge)} />
-                        <ReviewRow label="Total Upfront Deductions" value={formatCurrency(derived.computation.processingFee + derived.computation.serviceCharge)} />
-                        <ReviewRow label="Monthly Amortization" value={formatCurrency(derived.computation.monthlyAmortization)} />
-                        <ReviewRow label="Total Amount Payable" value={formatCurrency(derived.computation.totalAmountPayable)} />
-                        <ReviewRow label="Net Proceeds" value={formatCurrency(derived.computation.netProceeds)} />
-                        <ReviewRow label="First Due Date" value={derived.computation.schedule[0] ? formatDateShort(derived.computation.schedule[0].dueDate) : "Not available"} />
-                        <ReviewRow label="Maturity Date" value={formatDateShort(derived.computation.maturityDate)} />
-                        <ReviewRow label="Number of Installments" value={`${derived.computation.schedule.length}`} />
-                      </ReviewBlock>
-                      <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-                        <p className="border-b border-border/60 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">Complete Amortization Schedule</p>
-                        <DataTable
-                          columns={AMORTIZATION_COLUMNS}
-                          data={derived.computation.schedule}
-                          getRowId={(row) => String(row.installmentNumber)}
-                          enableColumnVisibility={false}
-                          maxHeight="max-h-96"
-                          emptyTitle="No amortization schedule"
-                          emptyDescription="No computed installments are available."
-                        />
-                      </div>
-                    </>
-                  )}
-                  {entry.remarks && (
-                    <ReviewBlock title="Staff Remarks">
-                      <p className="text-sm text-foreground/80 pl-1">{entry.remarks}</p>
+                    <ReviewBlock title="Computed Payables">
+                      <ReviewRow label="Net Proceeds" value={formatCurrency(derived.computation.netProceeds)} />
+                      <ReviewRow label="Monthly Amortization" value={formatCurrency(derived.computation.monthlyAmortization)} />
+                      <ReviewRow label="Total Interest" value={formatCurrency(derived.computation.totalInterest)} />
+                      <ReviewRow label="Total Payable" value={formatCurrency(derived.computation.totalAmountPayable)} />
                     </ReviewBlock>
                   )}
                 </div>
               )
             })}
 
-            <ReviewBlock title="Requirements and Supporting Documents">
-              <ReviewRow label="Requirements Submitted" value={`${requirementItems.filter((requirement) => requirement.completed).length} / ${requirementItems.length}`} />
-              <ReviewRow label="Requirements Missing" value={`${missingRequirements.length}`} />
-              {requirementItems.map((requirement) => {
-                const fileLabel = requirementFiles[requirement.label]?.name ?? existingDocumentsByLabel.get(requirement.label)?.fileName
-                return (
-                  <ReviewRow
-                    key={requirement.label}
-                    label={requirement.label}
-                    value={`${requirement.completed ? "Submitted" : "Missing"}${fileLabel ? ` · File: ${fileLabel}` : " · No file attached"}`}
-                  />
-                )
-              })}
-              <ReviewRow label="Other Supporting Documents / Other Requirements" value={requirementFiles["Other Supporting Documents"]?.name ?? "No additional file attached"} />
-            </ReviewBlock>
-
-            {entries.some((e) => derivedFor(e.key).isBlocked) && (
-              <AlertBanner tone="danger" title="Cannot submit" description="One or more entries do not meet eligibility requirements and have not been overridden. You may still save a single entry as a draft." />
-            )}
-
-            <label className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/10 p-3.5 text-xs text-foreground font-medium cursor-pointer">
-              <Checkbox checked={agree} onCheckedChange={(v) => setAgree(!!v)} className="mt-0.5" />
-              I confirm that the information has been reviewed and is accurate.
+            <label className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4 text-xs font-semibold text-foreground cursor-pointer">
+              <Checkbox checked={agree} onCheckedChange={(v) => setAgree(!!v)} className="mt-0.5 size-4" />
+              <span>I confirm that all financial figures, terms, and supporting attachments have been verified.</span>
             </label>
           </div>
         </FormSection>
       )}
 
-      {/* Floating Action Bar */}
-      <div className="sticky bottom-4 z-15 flex flex-wrap items-center justify-between gap-3 border border-border bg-background/80 backdrop-blur-md px-6 py-4 shadow-lg transition-all duration-200">
-        <Button variant="outline" onClick={() => promptLeave(() => navigate("/loans"))} className="h-9 text-xs">Cancel</Button>
-        <div className="flex flex-wrap items-center gap-2">
-          {step > 1 && <Button variant="outline" onClick={goBack} className="h-9 text-xs">Previous</Button>}
-          <SaveDraftButton status={draftButtonStatus} lastSavedAt={loanDraft.lastSavedAt} onClick={saveDraft} disabled={!memberId || isSubmitting || !canUseDraft} />
+      {/* Floating Action Dock */}
+      <div className="sticky bottom-4 z-30 flex items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/85 px-5 py-3.5 shadow-xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 sm:px-6">
+        <Button
+          variant="outline"
+          onClick={() => promptLeave(() => navigate("/loans"))}
+          className="h-9 rounded-xl px-4 text-xs font-semibold active:scale-95"
+        >
+          Cancel
+        </Button>
+
+        <div className="flex items-center gap-2.5">
+          {step > 1 && (
+            <Button
+              variant="outline"
+              onClick={goBack}
+              className="h-9 gap-1.5 rounded-xl px-4 text-xs font-semibold active:scale-95"
+            >
+              <ArrowLeft className="size-3.5" /> Previous
+            </Button>
+          )}
+
+          <SaveDraftButton
+            status={draftButtonStatus}
+            lastSavedAt={loanDraft.lastSavedAt}
+            onClick={saveDraft}
+            disabled={!memberId || isSubmitting || !canUseDraft}
+          />
+
           {step < STEPS.length ? (
-            <Button variant="success" onClick={goNext} disabled={!canProceedFromStep(step)} className="h-9 text-xs">Next</Button>
+            <Button
+              variant="success"
+              onClick={goNext}
+              disabled={!canProceedFromStep(step)}
+              className="h-9 gap-1.5 rounded-xl px-5 text-xs font-semibold active:scale-95 shadow-xs"
+            >
+              <span>Continue</span>
+              <ArrowRight className="size-3.5" />
+            </Button>
           ) : (
-            <Button variant="success" onClick={() => handleSubmit(false)} disabled={isSubmitting || entries.some((e) => derivedFor(e.key).isBlocked) || !agree} aria-busy={isSubmitting} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
-              {isSubmitting ? <Loader2 className="animate-spin size-3.5" aria-hidden="true" /> : <FilePlus2 className="size-3.5" aria-hidden="true" />}
-              {isSubmitting ? "Submitting…" : entries.length > 1 ? `Submit ${entries.length} Applications` : "Submit Application"}
+            <Button
+              variant="success"
+              onClick={() => handleSubmit(false)}
+              disabled={isSubmitting || entries.some((e) => derivedFor(e.key).isBlocked) || !agree}
+              aria-busy={isSubmitting}
+              className="h-9 gap-1.5 rounded-xl px-6 text-xs font-semibold shadow-xs active:scale-95 transition-all"
+            >
+              {isSubmitting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <FilePlus2 className="size-3.5" strokeWidth={2.2} />
+              )}
+              <span>{isSubmitting ? "Submitting…" : "Submit Loan Application"}</span>
             </Button>
           )}
         </div>
       </div>
 
+      {/* Confirmation & Dialogs */}
       <ConfirmDialog
         open={!!overrideDialogEntryKey}
         onOpenChange={(open) => !open && setOverrideDialogEntryKey(null)}
         title="Confirm eligibility override"
-        description="You are about to override a failed eligibility check for this entry. This action will be recorded in the application's history."
-        confirmLabel="Confirm Override"
+        description="Override will be authorized and permanently stamped in the application audit logs."
+        confirmLabel="Apply Override"
         destructive
         onConfirm={() => {
           if (overrideDialogEntryKey) updateEntry(overrideDialogEntryKey, { overrideApplied: true })
@@ -1545,33 +1699,48 @@ export default function CreateLoanApplicationPage() {
         onLeaveWithoutSaving={() => resolvePrompt("leave")}
       />
 
+      {/* Success Dialog */}
       <Dialog open={!!successDialog} onOpenChange={(open) => !open && setSuccessDialog(null)}>
-        <DialogContent className="sm:max-w-sm rounded-2xl p-6">
+        <DialogContent className="sm:max-w-md rounded-3xl p-6 sm:p-7 shadow-2xl backdrop-blur-2xl">
           <DialogHeader className="space-y-3">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-success/10 text-success">
-              <CheckCircle2 className="size-6" />
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-sm">
+              <CheckCircle2 className="size-7" />
             </div>
-            <DialogTitle className="text-center text-lg font-bold">{successDialog && successDialog.created.length > 1 ? "Applications Saved" : "Application Saved"}</DialogTitle>
-            <DialogDescription className="text-center text-sm text-muted-foreground">
+            <DialogTitle className="text-center font-heading text-xl font-bold tracking-tight text-foreground">
+              Loan Application Submitted
+            </DialogTitle>
+            <DialogDescription className="text-center text-xs leading-relaxed text-muted-foreground">
               {successDialog?.created.map((l) => (
-                <span key={l.id} className="block mt-0.5">
-                  <span className="font-bold text-foreground">{l.applicationNumber}</span>
+                <span key={l.id} className="block mt-1">
+                  Reference: <span className="font-mono font-bold text-foreground">{l.applicationNumber}</span>
                 </span>
               ))}
-              {" "}has been recorded successfully.
+              {" "}submitted to the review and approval pipeline.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-col mt-4">
+
+          <DialogFooter className="mt-6 flex flex-col gap-2 sm:flex-col">
             {successDialog && successDialog.created.length === 1 && (
-              <Button className="w-full h-9 text-xs shadow-sm" onClick={() => navigate(`/loans/${successDialog.created[0].id}`)}>
-                View Loan Application
+              <Button
+                className="w-full h-9 rounded-xl text-xs font-semibold shadow-xs active:scale-95"
+                onClick={() => navigate(`/loans/${successDialog.created[0].id}`)}
+              >
+                View Loan Account Details
               </Button>
             )}
-            <Button variant="outline" className="w-full h-9 text-xs" onClick={resetWizardForNewApplication}>
-              Create Another Application
+            <Button
+              variant="outline"
+              className="w-full h-9 rounded-xl text-xs font-semibold active:scale-95"
+              onClick={resetWizardForNewApplication}
+            >
+              Encode Another Loan
             </Button>
-            <Button variant="ghost" className="w-full h-9 text-xs text-muted-foreground" onClick={() => navigate("/loans")}>
-              Back to Loan List
+            <Button
+              variant="ghost"
+              className="w-full h-9 rounded-xl text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => navigate("/loans")}
+            >
+              Return to Loan Roster
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1580,69 +1749,51 @@ export default function CreateLoanApplicationPage() {
   )
 }
 
-function ComputationStat({ label, value }: { label: string; value: string }) {
+function ComputationStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: string
+  tone?: "primary" | "success"
+}) {
   return (
-    <div className="rounded-xl border border-border/60 bg-muted/5 p-4 flex flex-col justify-between space-y-1.5 transition-all hover:bg-muted/10 duration-200">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/85">{label}</span>
-      <span className="text-sm font-bold text-foreground">{value}</span>
+    <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-2xs backdrop-blur-xs space-y-1">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">{label}</span>
+      <p
+        className={cn(
+          "font-mono text-base font-bold tracking-tight",
+          tone === "primary"
+            ? "text-primary"
+            : tone === "success"
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-foreground"
+        )}
+      >
+        {value}
+      </p>
     </div>
   )
 }
 
 function ReviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
-      <div className="flex items-center gap-2 border-b border-primary/15 bg-gradient-to-r from-primary/12 via-primary/5 to-transparent px-5 py-3.5">
-        <span className="size-2 rounded-full bg-primary shadow-[0_0_0_4px] shadow-primary/10" />
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-primary">{title}</p>
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
+      <div className="flex items-center gap-2 border-b border-border/40 bg-muted/15 px-5 py-3.5">
+        <span className="size-2 rounded-full bg-primary" />
+        <p className="font-heading text-xs font-bold uppercase tracking-wider text-foreground">{title}</p>
       </div>
-      <dl className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:p-5">{children}</dl>
+      <dl className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">{children}</dl>
     </div>
   )
 }
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
-  const searchable = `${label} ${value}`.toLowerCase()
-  const isWarning = /\bwarning\b/.test(searchable)
-  const isNegative = !isWarning && /\b(failed|missing|not eligible|not available)\b/.test(searchable)
-  const isPositive = !isNegative && /\b(passed|submitted|eligible|applied)\b/.test(searchable)
-  const isFinancial = /\b(amount|principal|interest|fee|charge|deduction|amortization|proceeds|payable|range)\b/.test(label.toLowerCase())
-
   return (
-    <div
-      className={cn(
-        "flex min-w-0 flex-col gap-1.5 rounded-xl border px-3.5 py-3 transition-colors",
-        isNegative
-          ? "border-destructive/20 bg-destructive/[0.055]"
-          : isWarning
-            ? "border-warning/25 bg-warning/[0.07]"
-          : isPositive
-            ? "border-success/20 bg-success/[0.055]"
-            : isFinancial
-              ? "border-primary/20 bg-primary/[0.045]"
-              : "border-border/55 bg-muted/15"
-      )}
-    >
-      <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd
-        className={cn(
-          "flex items-start gap-1.5 break-words text-sm font-bold",
-          isNegative
-            ? "text-destructive"
-            : isWarning
-              ? "text-warning"
-            : isPositive
-              ? "text-success"
-              : isFinancial
-                ? "text-primary"
-                : "text-foreground"
-        )}
-      >
-        {isNegative && <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
-        {isWarning && <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
-        {isPositive && <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
-        <span className="min-w-0 break-words">{value}</span>
-      </dd>
+    <div className="flex flex-col gap-1 border-b border-border/30 pb-2.5 last:border-0 sm:border-b-0 sm:pb-0">
+      <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">{label}</dt>
+      <dd className="font-heading text-xs font-semibold text-foreground break-words">{value}</dd>
     </div>
   )
 }

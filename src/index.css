@@ -93,8 +93,8 @@
   --radius: 0.625rem;
   --sidebar: oklch(1 0 0 / 62%);
   --sidebar-foreground: oklch(0.22 0.03 258);
-  --sidebar-primary: oklch(0.78 0.15 85);
-  --sidebar-primary-foreground: oklch(0.22 0.05 258);
+  --sidebar-primary: oklch(0.32 0.09 258);
+  --sidebar-primary-foreground: oklch(0.98 0.01 255);
   --sidebar-accent: oklch(0.92 0.015 258 / 75%);
   --sidebar-accent-foreground: oklch(0.22 0.03 258);
   --sidebar-border: oklch(0.2 0.02 258 / 14%);
@@ -136,8 +136,8 @@
   --chart-5: oklch(0.704 0.18 22.216);
   --sidebar: oklch(0.19 0.015 258 / 68%);
   --sidebar-foreground: oklch(0.94 0.01 255);
-  --sidebar-primary: oklch(0.78 0.15 85);
-  --sidebar-primary-foreground: oklch(0.18 0.03 258);
+  --sidebar-primary: oklch(0.55 0.14 258);
+  --sidebar-primary-foreground: oklch(0.98 0.01 255);
   --sidebar-accent: oklch(0.24 0.02 258);
   --sidebar-accent-foreground: oklch(0.95 0.005 255);
   --sidebar-border: oklch(1 0 0 / 10%);
@@ -199,7 +199,7 @@ html[data-compact="true"] [data-slot="card"] {
 /* Compact X/Y scrollbars specifically for reusable data tables. */
 .data-table-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--primary), transparent 18%) transparent;
+  scrollbar-color: var(--primary) transparent;
 }
 .data-table-scrollbar::-webkit-scrollbar {
   width: 6px;
@@ -213,7 +213,7 @@ html[data-compact="true"] [data-slot="card"] {
   min-height: 28px;
   border: 1px solid transparent;
   border-radius: 9999px;
-  background-color: color-mix(in oklch, var(--primary), transparent 18%);
+  background-color: var(--primary);
   background-clip: padding-box;
 }
 .data-table-scrollbar::-webkit-scrollbar-corner {

@@ -3,7 +3,20 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Save, Sparkles, User, FileText, Briefcase, FilePlus2, Landmark, X, Eye } from "lucide-react"
+import {
+  Loader2,
+  Save,
+  Sparkles,
+  User,
+  FileText,
+  Briefcase,
+  FilePlus2,
+  Landmark,
+  X,
+  Eye,
+  Users2,
+  AlertCircle,
+} from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
@@ -46,12 +59,26 @@ import {
 } from "@/services/members.service"
 import { calculateAge, calculateDurationLabel, formatDateShort } from "@/utils/format"
 import { listEmploymentStatuses } from "@/services/employment-statuses.service"
-import { DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, IMAGE_EXTENSIONS, IMAGE_MIME_TYPES, isImageFile, isPdfFile, type UploadStatus } from "@/lib/upload-validation"
+import {
+  DOCUMENT_EXTENSIONS,
+  DOCUMENT_MIME_TYPES,
+  IMAGE_EXTENSIONS,
+  IMAGE_MIME_TYPES,
+  isImageFile,
+  isPdfFile,
+  type UploadStatus,
+} from "@/lib/upload-validation"
 import { cn } from "@/lib/utils"
 import type { ApiValidationError } from "@/lib/api"
 import type { DocumentCategory, Member } from "@/types"
 
-const DOCUMENT_CATEGORIES: DocumentCategory[] = ["Valid ID", "Appointment Document", "Payslip", "Membership Form", "Other Supporting Document"]
+const DOCUMENT_CATEGORIES: DocumentCategory[] = [
+  "Valid ID",
+  "Appointment Document",
+  "Payslip",
+  "Membership Form",
+  "Other Supporting Document",
+]
 
 interface SlotState {
   status: UploadStatus
@@ -89,7 +116,9 @@ export default function MemberRegistrationPage() {
   useBreadcrumbExtra(isEdit ? existingMember?.fullName : undefined)
 
   const [isDirty, setIsDirty] = React.useState(false)
-  const [completionPercentage, setCompletionPercentage] = React.useState<number | undefined>(existingMember?.draftCompletionPercentage)
+  const [completionPercentage, setCompletionPercentage] = React.useState<number | undefined>(
+    existingMember?.draftCompletionPercentage
+  )
   const [profilePhoto, setProfilePhoto] = React.useState<File | null>(null)
   const [documents, setDocuments] = React.useState<Partial<Record<DocumentCategory, File | null>>>({})
   const [otherDocuments, setOtherDocuments] = React.useState<File[]>([])
@@ -155,38 +184,35 @@ export default function MemberRegistrationPage() {
 
   React.useEffect(() => {
     if (existingMember) {
-      reset({
-        memberNumber: existingMember.memberNumber,
-        employeeNumber: existingMember.employeeNumber ?? "",
-        surname: existingMember.surname ?? "",
-        firstName: existingMember.firstName ?? "",
-        middleName: existingMember.middleName ?? "",
-        suffix: existingMember.suffix ?? "",
-        sex: existingMember.sex ?? "Male",
-        birthdate: existingMember.birthdate ?? "",
-        civilStatus: existingMember.civilStatus ?? "Single",
-        permanentAddress: existingMember.permanentAddress ?? "",
-        cellphoneNumber: existingMember.cellphoneNumber ?? "",
-        email: existingMember.email ?? "",
-        nameOfSpouse: existingMember.nameOfSpouse ?? "",
-        officeId: existingMember.officeId ?? "",
-        position: existingMember.position ?? "",
-        dateOfRegularAppointment: existingMember.dateOfRegularAppointment ?? "",
-        employmentStatus: existingMember.employmentStatus ?? "Permanent",
-        membershipType: existingMember.membershipType ?? "Regular",
-        membershipDate: existingMember.membershipDate ?? "",
-        membershipStatus: existingMember.membershipStatus ?? "Active",
-        netPay: existingMember.netPay ?? undefined,
-        retireeStatus: existingMember.retireeStatus ?? "Not Retired",
-        remarks: existingMember.remarks ?? "",
-        beneficiaries: existingMember.beneficiaries,
-      }, {
-        // Live photo/document uploads refresh the member query. Preserve
-        // fields the user has already changed (especially Monthly Net Pay)
-        // so that refresh cannot replace unsaved form input with the older
-        // value still stored on the server.
-        keepDirtyValues: true,
-      })
+      reset(
+        {
+          memberNumber: existingMember.memberNumber,
+          employeeNumber: existingMember.employeeNumber ?? "",
+          surname: existingMember.surname ?? "",
+          firstName: existingMember.firstName ?? "",
+          middleName: existingMember.middleName ?? "",
+          suffix: existingMember.suffix ?? "",
+          sex: existingMember.sex ?? "Male",
+          birthdate: existingMember.birthdate ?? "",
+          civilStatus: existingMember.civilStatus ?? "Single",
+          permanentAddress: existingMember.permanentAddress ?? "",
+          cellphoneNumber: existingMember.cellphoneNumber ?? "",
+          email: existingMember.email ?? "",
+          nameOfSpouse: existingMember.nameOfSpouse ?? "",
+          officeId: existingMember.officeId ?? "",
+          position: existingMember.position ?? "",
+          dateOfRegularAppointment: existingMember.dateOfRegularAppointment ?? "",
+          employmentStatus: existingMember.employmentStatus ?? "Permanent",
+          membershipType: existingMember.membershipType ?? "Regular",
+          membershipDate: existingMember.membershipDate ?? "",
+          membershipStatus: existingMember.membershipStatus ?? "Active",
+          netPay: existingMember.netPay ?? undefined,
+          retireeStatus: existingMember.retireeStatus ?? "Not Retired",
+          remarks: existingMember.remarks ?? "",
+          beneficiaries: existingMember.beneficiaries,
+        },
+        { keepDirtyValues: true }
+      )
       setCompletionPercentage(existingMember.draftCompletionPercentage)
     }
   }, [existingMember, reset])
@@ -212,12 +238,17 @@ export default function MemberRegistrationPage() {
   const officeId = watch("officeId")
   const permanentAddress = watch("permanentAddress")
 
-  // ---- Profile photo: live mutations (edit mode only) ----
+  // Photo upload mutation (edit mode)
   const photoUploadMutation = useMutation({
     mutationFn: async (file: File) => {
       photoAbortRef.current = new AbortController()
       setPhotoSlot({ status: "uploading", progress: 0 })
-      return uploadMemberPhoto(id!, file, (progress) => setPhotoSlot({ status: "uploading", progress }), photoAbortRef.current.signal)
+      return uploadMemberPhoto(
+        id!,
+        file,
+        (progress) => setPhotoSlot({ status: "uploading", progress }),
+        photoAbortRef.current.signal
+      )
     },
     onSuccess: (member) => {
       setPhotoSlot({ status: "uploaded", progress: 100 })
@@ -248,15 +279,20 @@ export default function MemberRegistrationPage() {
     onError: (err: Error) => toast.error(err.message || "Failed to remove profile photo."),
   })
 
-  // ---- Documents: live mutations (edit mode only) ----
+  // Document upload mutations (edit mode)
   const documentUploadMutation = useMutation({
-    mutationFn: async ({ category, file, existingDocId }: { category: DocumentCategory; file: File; existingDocId?: string }) => {
+    mutationFn: async ({
+      category,
+      file,
+      existingDocId,
+    }: {
+      category: DocumentCategory
+      file: File
+      existingDocId?: string
+    }) => {
       const controller = new AbortController()
       docAbortRefs.current[category] = controller
       setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress: 0 } }))
-      // Keep the existing document until its replacement has uploaded
-      // successfully. This prevents a failed/cancelled replacement from
-      // permanently removing the member's current file.
       let member = await uploadMemberDocument(
         id!,
         category,
@@ -376,7 +412,10 @@ export default function MemberRegistrationPage() {
     }
   }
 
-  const isAnyLiveUploadInProgress = photoSlot.status === "uploading" || Object.values(docSlots).some((s) => s.status === "uploading") || otherDocumentsUploadMutation.isPending
+  const isAnyLiveUploadInProgress =
+    photoSlot.status === "uploading" ||
+    Object.values(docSlots).some((s) => s.status === "uploading") ||
+    otherDocumentsUploadMutation.isPending
 
   const wasExistingDraft = isEdit ? existingMember?.isDraft === true : false
   const memberDraft = useDraft<MemberDraftInput, Member>({
@@ -411,12 +450,15 @@ export default function MemberRegistrationPage() {
       const payload: MemberDraftInput = { ...values, beneficiaries: values.beneficiaries, asDraft: true }
       try {
         await memberDraft.save(payload, { silent: true })
-      } catch {
-        // already surfaced via memberDraft's onError toast
-      }
+      } catch {}
     },
     {
-      enabled: isDirty && Boolean(memberDraft.draftId) && !isAnyLiveUploadInProgress && (!isEdit || wasExistingDraft) && memberDraft.status !== "saving",
+      enabled:
+        isDirty &&
+        Boolean(memberDraft.draftId) &&
+        !isAnyLiveUploadInProgress &&
+        (!isEdit || wasExistingDraft) &&
+        memberDraft.status !== "saving",
       delayMs: 30000,
     }
   )
@@ -436,7 +478,9 @@ export default function MemberRegistrationPage() {
         if (profilePhoto) {
           setPhotoSlot({ status: "uploading", progress: 0 })
           try {
-            member = await uploadMemberPhoto(member.id, profilePhoto, (progress) => setPhotoSlot({ status: "uploading", progress }))
+            member = await uploadMemberPhoto(member.id, profilePhoto, (progress) =>
+              setPhotoSlot({ status: "uploading", progress })
+            )
             setPhotoSlot({ status: "uploaded", progress: 100 })
           } catch {
             setPhotoSlot({ status: "failed", progress: 0 })
@@ -447,7 +491,9 @@ export default function MemberRegistrationPage() {
           if (!file) continue
           setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress: 0 } }))
           try {
-            member = await uploadMemberDocument(member.id, category, file, (progress) => setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress } })))
+            member = await uploadMemberDocument(member.id, category, file, (progress) =>
+              setDocSlots((prev) => ({ ...prev, [category]: { status: "uploading", progress } }))
+            )
             setDocSlots((prev) => ({ ...prev, [category]: { status: "uploaded", progress: 100 } }))
           } catch {
             setDocSlots((prev) => ({ ...prev, [category]: { status: "failed", progress: 0 } }))
@@ -463,16 +509,15 @@ export default function MemberRegistrationPage() {
         }
       }
 
-      // Always use the authoritative server response after all attachments.
-      // The create/update response predates document uploads and otherwise
-      // overwrites the detail cache with an empty documents array.
       member = (await getMember(member.id)) ?? member
       return { member, uploadFailures }
     },
     onSuccess: ({ member, uploadFailures }) => {
       queryClient.setQueryData(["members", member.id], member)
       if (uploadFailures.length > 0) {
-        toast.warning(`Member saved, but these files could not be uploaded: ${uploadFailures.join(", ")}. Open Edit Member Information to retry.`)
+        toast.warning(
+          `Member saved, but these files could not be uploaded: ${uploadFailures.join(", ")}. Open Edit Member Information to retry.`
+        )
       } else {
         toast.success(
           isEdit
@@ -492,7 +537,10 @@ export default function MemberRegistrationPage() {
           setError(field as never, { type: "server", message: messages[0] })
         })
       }
-      toast.error(apiError.message || "Failed to save member profile. Please review the highlighted fields and try again.")
+      toast.error(
+        apiError.message ||
+          "Failed to save member profile. Please review the highlighted fields and try again."
+      )
     },
   })
 
@@ -500,46 +548,49 @@ export default function MemberRegistrationPage() {
 
   async function onSubmit(values: MemberFormValues) {
     const hasValidId = Boolean(
-      documents["Valid ID"]
-      || existingMember?.documents.some((document) => document.category === "Valid ID")
+      documents["Valid ID"] || existingMember?.documents.some((d) => d.category === "Valid ID")
     )
     const hasAppointmentDocument = Boolean(
-      documents["Appointment Document"]
-      || existingMember?.documents.some((document) => document.category === "Appointment Document")
+      documents["Appointment Document"] ||
+        existingMember?.documents.some((d) => d.category === "Appointment Document")
     )
     const hasMembershipForm = Boolean(
-      documents["Membership Form"]
-      || existingMember?.documents.some((document) => document.category === "Membership Form")
+      documents["Membership Form"] ||
+        existingMember?.documents.some((d) => d.category === "Membership Form")
     )
     const requiresPayslip = Number(values.netPay ?? 0) > 0
     const hasPayslip = Boolean(
-      documents.Payslip
-      || existingMember?.documents.some((document) => document.category === "Payslip")
+      documents.Payslip || existingMember?.documents.some((d) => d.category === "Payslip")
     )
+
     if (!hasValidId) {
       setValidIdError(true)
       toast.error("Valid ID is required. Upload the document in Section 5 before saving.")
       return
     }
     setValidIdError(false)
+
     if (!hasAppointmentDocument) {
       setAppointmentDocumentError(true)
       toast.error("Appointment Document is required under Employment Documents.")
       return
     }
     setAppointmentDocumentError(false)
+
     if (!hasMembershipForm) {
       setMembershipFormError(true)
       toast.error("Membership Form is required under Membership Documents.")
       return
     }
     setMembershipFormError(false)
+
     if (requiresPayslip && !hasPayslip) {
       setPayslipError(true)
       toast.error("Net Take Home Pay is required when Monthly Net Pay is provided.")
       return
     }
     setPayslipError(false)
+
     try {
       await mutation.mutateAsync(values)
     } catch {}
@@ -550,62 +601,75 @@ export default function MemberRegistrationPage() {
   }
 
   if (isEdit && isLoadingMember) {
-    return <FormSkeleton fields={["text", "text", "text", "select", "date", "select"]} columns={3} showAvatar showUpload />
+    return (
+      <FormSkeleton
+        fields={["text", "text", "text", "select", "date", "select"]}
+        columns={3}
+        showAvatar
+        showUpload
+      />
+    )
   }
 
   const photoHasFile = Boolean(profilePhoto || existingMember?.profilePhotoUrl)
-  const photoDisplayStatus: UploadStatus = photoSlot.status !== "idle" ? photoSlot.status : photoHasFile ? "uploaded" : "idle"
+  const photoDisplayStatus: UploadStatus =
+    photoSlot.status !== "idle" ? photoSlot.status : photoHasFile ? "uploaded" : "idle"
 
   const hasMonthlyNetPay = Number(watch("netPay") ?? 0) > 0
   const hasNetTakeHomePayDocument = Boolean(
-    documents.Payslip
-    || existingMember?.documents.some((document) => document.category === "Payslip")
+    documents.Payslip || existingMember?.documents.some((document) => document.category === "Payslip")
   )
   const visibleDocumentCategories = DOCUMENT_CATEGORIES.filter(
     (category) => category !== "Payslip" || hasMonthlyNetPay || hasNetTakeHomePayDocument
   )
-  const documentGalleryItems: DocumentGalleryItem[] = visibleDocumentCategories.filter((category) => category !== "Other Supporting Document").map((category) => {
-    const existingDoc = existingMember?.documents.find((d) => d.category === category)
-    const hasFile = Boolean(documents[category] || existingDoc)
-    const slot = docSlots[category]
-    const displayStatus: UploadStatus = slot.status !== "idle" ? slot.status : hasFile ? "uploaded" : "idle"
+  const documentGalleryItems: DocumentGalleryItem[] = visibleDocumentCategories
+    .filter((category) => category !== "Other Supporting Document")
+    .map((category) => {
+      const existingDoc = existingMember?.documents.find((d) => d.category === category)
+      const hasFile = Boolean(documents[category] || existingDoc)
+      const slot = docSlots[category]
+      const displayStatus: UploadStatus =
+        slot.status !== "idle" ? slot.status : hasFile ? "uploaded" : "idle"
 
-    return {
-      category,
-      node: (
-        <div className="rounded-xl border border-border/60 bg-card p-1 transition-all hover:border-border hover:shadow-xs">
-          <FileUploader
-            key={`${category}-${docResetKeys[category]}`}
-            label={category === "Payslip" ? "Net Take Home Pay" : category}
-            required={
-              category === "Valid ID"
-              || category === "Appointment Document"
-              || category === "Membership Form"
-              || (category === "Payslip" && hasMonthlyNetPay)
-            }
-            accept={DOCUMENT_MIME_TYPES}
-            acceptExtensions={DOCUMENT_EXTENSIONS}
-            fileName={existingDoc?.fileName}
-            fileUrl={existingDoc?.fileUrl}
-            uploadedAt={existingDoc ? formatDateShort(existingDoc.uploadedAt) : undefined}
-            status={displayStatus}
-            progress={slot.progress}
-            onUpload={(file) => handleDocumentUpload(category, file)}
-            onReplace={(file) => handleDocumentUpload(category, file)}
-            onRemove={hasFile ? () => handleDocumentRemoveClick(category) : undefined}
-            onCancel={() => {
-              docAbortRefs.current[category]?.abort()
-            }}
-          />
-        </div>
-      ),
-    }
-  })
-  const existingOtherDocuments = existingMember?.documents.filter((document) => document.category === "Other Supporting Document") ?? []
+      return {
+        category,
+        node: (
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-2 shadow-2xs backdrop-blur-xs transition-all duration-200 hover:border-border hover:shadow-xs">
+            <FileUploader
+              key={`${category}-${docResetKeys[category]}`}
+              label={category === "Payslip" ? "Net Take Home Pay" : category}
+              required={
+                category === "Valid ID" ||
+                category === "Appointment Document" ||
+                category === "Membership Form" ||
+                (category === "Payslip" && hasMonthlyNetPay)
+              }
+              accept={DOCUMENT_MIME_TYPES}
+              acceptExtensions={DOCUMENT_EXTENSIONS}
+              fileName={existingDoc?.fileName}
+              fileUrl={existingDoc?.fileUrl}
+              uploadedAt={existingDoc ? formatDateShort(existingDoc.uploadedAt) : undefined}
+              status={displayStatus}
+              progress={slot.progress}
+              onUpload={(file) => handleDocumentUpload(category, file)}
+              onReplace={(file) => handleDocumentUpload(category, file)}
+              onRemove={hasFile ? () => handleDocumentRemoveClick(category) : undefined}
+              onCancel={() => {
+                docAbortRefs.current[category]?.abort()
+              }}
+            />
+          </div>
+        ),
+      }
+    })
+
+  const existingOtherDocuments =
+    existingMember?.documents.filter((d) => d.category === "Other Supporting Document") ?? []
+
   documentGalleryItems.push({
     category: "Other Supporting Document",
     node: (
-      <div className="rounded-xl border border-border/60 bg-card p-3 space-y-3 transition-all hover:border-border hover:shadow-xs">
+      <div className="space-y-3 rounded-2xl border border-border/60 bg-card/90 p-4 shadow-2xs backdrop-blur-xs transition-all duration-200 hover:border-border hover:shadow-xs">
         <FileUploader
           label="Other Supporting Documents (optional)"
           description="Upload one or more optional images or documents."
@@ -619,18 +683,40 @@ export default function MemberRegistrationPage() {
               return
             }
             setOtherDocuments((current) => {
-              const known = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`))
-              return [...current, ...files.filter((file) => !known.has(`${file.name}:${file.size}:${file.lastModified}`))]
+              const known = new Set(
+                current.map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+              )
+              return [
+                ...current,
+                ...files.filter(
+                  (file) => !known.has(`${file.name}:${file.size}:${file.lastModified}`)
+                ),
+              ]
             })
           }}
         />
         {(existingOtherDocuments.length > 0 || otherDocuments.length > 0) && (
           <div className="space-y-2">
-            {existingOtherDocuments.map((document) => (
-              <OtherDocumentRow key={document.id} name={document.fileName} url={document.fileUrl} status={`Uploaded ${formatDateShort(document.uploadedAt)}`} onRemove={() => setRemoveTarget({ kind: "document", category: document.category, documentId: document.id })} />
+            {existingOtherDocuments.map((doc) => (
+              <OtherDocumentRow
+                key={doc.id}
+                name={doc.fileName}
+                url={doc.fileUrl}
+                status={`Uploaded ${formatDateShort(doc.uploadedAt)}`}
+                onRemove={() =>
+                  setRemoveTarget({ kind: "document", category: doc.category, documentId: doc.id })
+                }
+              />
             ))}
             {otherDocuments.map((file) => (
-              <OtherDocumentRow key={`${file.name}-${file.size}-${file.lastModified}`} file={file} status="Ready to upload" onRemove={() => setOtherDocuments((current) => current.filter((item) => item !== file))} />
+              <OtherDocumentRow
+                key={`${file.name}-${file.size}-${file.lastModified}`}
+                file={file}
+                status="Ready to upload"
+                onRemove={() =>
+                  setOtherDocuments((current) => current.filter((item) => item !== file))
+                }
+              />
             ))}
           </div>
         )}
@@ -639,55 +725,81 @@ export default function MemberRegistrationPage() {
   })
 
   return (
-    <div className="mx-auto space-y-8 pb-20 px-4 sm:px-0">
+    <div className="mx-auto space-y-8 pb-28">
+      {/* Page Header */}
       <PageHeader
-        title={isDraftContext ? "Continue Member Draft" : isEdit ? "Edit Member Information" : "Member Registration"}
-        description="Encode the member's information based on submitted physical documents."
+        title={
+          isDraftContext
+            ? "Continue Member Draft"
+            : isEdit
+              ? "Edit Member Information"
+              : "Member Registration"
+        }
+        description="Encode the member's profile and credentials based on submitted physical documents."
         actions={isDraftContext && <DraftStatusBadge status="Draft" />}
       />
 
+      {/* Ambient Draft Progress Alert Card */}
       {isDraftContext && (
-        <div className="rounded-xl border border-warning/20 bg-warning/5 px-5 py-4 shadow-sm flex flex-col gap-2.5 relative overflow-hidden">
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-warning" />
+        <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-5 shadow-xs">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500" />
           <div className="flex items-center gap-2 pl-2">
-            <Sparkles className="size-4 text-warning animate-pulse" />
-            <p className="text-xs font-semibold text-foreground">
+            <Sparkles className="size-4 text-amber-600 dark:text-amber-400 animate-pulse" />
+            <p className="text-xs font-bold uppercase tracking-wider text-foreground">
               {(isEdit ? existingMember?.draftReferenceNo : undefined) ?? "Draft Registration Progress"}
             </p>
           </div>
-          <DraftCompletionBar percentage={completionPercentage ?? 0} className="mt-1 pl-2" />
+          <DraftCompletionBar percentage={completionPercentage ?? 0} className="mt-2 pl-2" />
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-8">
         
         {/* SECTION 1: Personal Information */}
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <User className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <User className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Section 1 · Personal Information</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Section 1 · Personal Information
+              </span>
+            </div>
           }
         >
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* Input fields panel */}
-            <div className="lg:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Input fields */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
               {isEdit && (
                 <Field label="Member Number">
-                  <Input value={existingMember?.memberNumber ?? ""} disabled className="bg-muted/40 font-mono text-sm" />
+                  <Input
+                    value={existingMember?.memberNumber ?? ""}
+                    disabled
+                    className="bg-muted/40 font-mono text-xs font-semibold"
+                  />
                 </Field>
               )}
               <Field label="Employee Number" required error={errors.employeeNumber?.message}>
-                <Input placeholder="e.g. 2024-00123" {...register("employeeNumber")} aria-invalid={!!errors.employeeNumber} />
+                <Input
+                  placeholder="e.g. 2024-00123"
+                  {...register("employeeNumber")}
+                  aria-invalid={!!errors.employeeNumber}
+                />
               </Field>
               <Field label="Surname" required error={errors.surname?.message}>
-                <Input placeholder="e.g. Dela Cruz" {...register("surname")} aria-invalid={!!errors.surname} />
+                <Input
+                  placeholder="e.g. Dela Cruz"
+                  {...register("surname")}
+                  aria-invalid={!!errors.surname}
+                />
               </Field>
               <Field label="First Name" required error={errors.firstName?.message}>
-                <Input placeholder="e.g. Juan" {...register("firstName")} aria-invalid={!!errors.firstName} />
+                <Input
+                  placeholder="e.g. Juan"
+                  {...register("firstName")}
+                  aria-invalid={!!errors.firstName}
+                />
               </Field>
               <Field label="Middle Name" error={errors.middleName?.message}>
                 <Input placeholder="e.g. Santos (optional)" {...register("middleName")} />
@@ -712,17 +824,19 @@ export default function MemberRegistrationPage() {
                 <Input type="date" {...register("birthdate")} aria-invalid={!!errors.birthdate} />
               </Field>
               <Field label="Age" isCalculated>
-                <Input 
-                  value={birthdate ? `${calculateAge(birthdate)} years old` : "—"} 
-                  disabled 
-                  className="bg-muted/10 border-dashed border-amber-500/30 text-foreground/80 font-medium cursor-not-allowed select-none"
+                <Input
+                  value={birthdate ? `${calculateAge(birthdate)} years old` : "—"}
+                  disabled
+                  className="bg-muted/20 border-dashed border-amber-500/30 text-foreground font-mono text-xs font-semibold cursor-not-allowed select-none"
                 />
               </Field>
               <Field label="Civil Status" required>
                 <CommandSelect
                   className="w-full h-10"
                   value={watch("civilStatus")}
-                  onValueChange={(v) => setValue("civilStatus", v as MemberFormValues["civilStatus"], { shouldDirty: true })}
+                  onValueChange={(v) =>
+                    setValue("civilStatus", v as MemberFormValues["civilStatus"], { shouldDirty: true })
+                  }
                   options={[
                     { value: "Single", label: "Single" },
                     { value: "Married", label: "Married" },
@@ -738,13 +852,27 @@ export default function MemberRegistrationPage() {
                 <Input placeholder="Full name (if married)" {...register("nameOfSpouse")} />
               </Field>
               <Field label="Cellphone Number" required error={errors.cellphoneNumber?.message}>
-                <Input placeholder="09XXXXXXXXX" {...register("cellphoneNumber")} aria-invalid={!!errors.cellphoneNumber} />
+                <Input
+                  placeholder="09XXXXXXXXX"
+                  {...register("cellphoneNumber")}
+                  aria-invalid={!!errors.cellphoneNumber}
+                />
               </Field>
               <Field label="Email Address" error={errors.email?.message}>
-                <Input type="email" placeholder="e.g. jdelacruz@gcgea.gingoog.gov.ph" {...register("email")} aria-invalid={!!errors.email} />
+                <Input
+                  type="email"
+                  placeholder="e.g. jdelacruz@gcgea.gingoog.gov.ph"
+                  {...register("email")}
+                  aria-invalid={!!errors.email}
+                />
               </Field>
-              <Field label="Permanent Address" required error={errors.permanentAddress?.message} className="sm:col-span-2">
-                <div className="space-y-3 rounded-xl border border-border/60 bg-muted/5 p-4 shadow-sm transition-all hover:bg-muted/10 duration-200">
+              <Field
+                label="Permanent Address"
+                required
+                error={errors.permanentAddress?.message}
+                className="sm:col-span-2"
+              >
+                <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/15 p-4 shadow-2xs">
                   <AddressCommandSelect
                     value={selectedLocationLabel}
                     placeholder="Search barangay, city, municipality, or province…"
@@ -768,7 +896,7 @@ export default function MemberRegistrationPage() {
 
             {/* Profile photo uploader panel */}
             <div className="lg:col-span-1">
-              <div className="lg:sticky lg:top-4 bg-muted/5 rounded-xl border border-border/50 p-4 shadow-xs">
+              <div className="rounded-2xl border border-border/60 bg-card/80 p-4 shadow-xs backdrop-blur-xs lg:sticky lg:top-20">
                 <FileUploader
                   key={`photo-${photoResetKey}`}
                   label="Profile Photo"
@@ -791,38 +919,60 @@ export default function MemberRegistrationPage() {
         </FormSection>
 
         {/* SECTION 2: Employment Information */}
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <Briefcase className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <Briefcase className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Section 2 · Employment Information</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Section 2 · Employment Information
+              </span>
+            </div>
           }
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Present Office" required error={errors.officeId?.message}>
-              <OfficeCommandSelect value={officeId} onValueChange={(v) => setValue("officeId", v, { shouldDirty: true })} valueField="id" />
+              <OfficeCommandSelect
+                value={officeId}
+                onValueChange={(v) => setValue("officeId", v, { shouldDirty: true })}
+                valueField="id"
+              />
             </Field>
             <Field label="Occupation / Position" required error={errors.position?.message}>
-              <Input placeholder="e.g. Administrative Officer II" {...register("position")} aria-invalid={!!errors.position} />
+              <Input
+                placeholder="e.g. Administrative Officer II"
+                {...register("position")}
+                aria-invalid={!!errors.position}
+              />
             </Field>
-            <Field label="Date of Regular Appointment" required error={errors.dateOfRegularAppointment?.message}>
-              <Input type="date" {...register("dateOfRegularAppointment")} aria-invalid={!!errors.dateOfRegularAppointment} />
+            <Field
+              label="Date of Regular Appointment"
+              required
+              error={errors.dateOfRegularAppointment?.message}
+            >
+              <Input
+                type="date"
+                {...register("dateOfRegularAppointment")}
+                aria-invalid={!!errors.dateOfRegularAppointment}
+              />
             </Field>
             <Field label="Length of Government Service" isCalculated>
-              <Input 
-                value={dateOfRegularAppointment ? calculateDurationLabel(dateOfRegularAppointment) : "—"} 
-                disabled 
-                className="bg-muted/10 border-dashed border-amber-500/30 text-foreground/80 font-medium cursor-not-allowed select-none"
+              <Input
+                value={dateOfRegularAppointment ? calculateDurationLabel(dateOfRegularAppointment) : "—"}
+                disabled
+                className="bg-muted/20 border-dashed border-amber-500/30 text-foreground font-mono text-xs font-semibold cursor-not-allowed select-none"
               />
             </Field>
             <Field label="Employment Status" required error={errors.employmentStatus?.message}>
               <CommandSelect
                 className="w-full h-10"
                 value={watch("employmentStatus")}
-                onValueChange={(v) => setValue("employmentStatus", v as MemberFormValues["employmentStatus"], { shouldDirty: true })}
+                onValueChange={(v) =>
+                  setValue("employmentStatus", v as MemberFormValues["employmentStatus"], {
+                    shouldDirty: true,
+                  })
+                }
                 options={employmentStatuses
                   .filter((status) => status.isActive || status.name === watch("employmentStatus"))
                   .map((status) => ({ value: status.name, label: status.name }))}
@@ -834,14 +984,16 @@ export default function MemberRegistrationPage() {
         </FormSection>
 
         {/* SECTION 3: Membership Information */}
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <Landmark className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <Landmark className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Section 3 · Membership Information</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Section 3 · Membership Information
+              </span>
+            </div>
           }
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -849,7 +1001,11 @@ export default function MemberRegistrationPage() {
               <CommandSelect
                 className="w-full h-10"
                 value={watch("membershipType")}
-                onValueChange={(v) => setValue("membershipType", v as MemberFormValues["membershipType"], { shouldDirty: true })}
+                onValueChange={(v) =>
+                  setValue("membershipType", v as MemberFormValues["membershipType"], {
+                    shouldDirty: true,
+                  })
+                }
                 options={[
                   { value: "Regular", label: "Regular" },
                   { value: "Associate", label: "Associate" },
@@ -860,20 +1016,28 @@ export default function MemberRegistrationPage() {
               />
             </Field>
             <Field label="Date as GCGEA Member" required error={errors.membershipDate?.message}>
-              <Input type="date" {...register("membershipDate")} aria-invalid={!!errors.membershipDate} />
+              <Input
+                type="date"
+                {...register("membershipDate")}
+                aria-invalid={!!errors.membershipDate}
+              />
             </Field>
             <Field label="Length of Membership" isCalculated>
-              <Input 
-                value={membershipDate ? calculateDurationLabel(membershipDate) : "—"} 
-                disabled 
-                className="bg-muted/10 border-dashed border-amber-500/30 text-foreground/80 font-medium cursor-not-allowed select-none"
+              <Input
+                value={membershipDate ? calculateDurationLabel(membershipDate) : "—"}
+                disabled
+                className="bg-muted/20 border-dashed border-amber-500/30 text-foreground font-mono text-xs font-semibold cursor-not-allowed select-none"
               />
             </Field>
             <Field label="Membership Status" required>
               <CommandSelect
                 className="w-full h-10"
                 value={watch("membershipStatus")}
-                onValueChange={(v) => setValue("membershipStatus", v as MemberFormValues["membershipStatus"], { shouldDirty: true })}
+                onValueChange={(v) =>
+                  setValue("membershipStatus", v as MemberFormValues["membershipStatus"], {
+                    shouldDirty: true,
+                  })
+                }
                 options={[
                   { value: "Active", label: "Active" },
                   { value: "Inactive", label: "Inactive" },
@@ -889,7 +1053,11 @@ export default function MemberRegistrationPage() {
               <CommandSelect
                 className="w-full h-10"
                 value={watch("retireeStatus")}
-                onValueChange={(v) => setValue("retireeStatus", v as MemberFormValues["retireeStatus"], { shouldDirty: true })}
+                onValueChange={(v) =>
+                  setValue("retireeStatus", v as MemberFormValues["retireeStatus"], {
+                    shouldDirty: true,
+                  })
+                }
                 options={[
                   { value: "Not Retired", label: "Not Retired" },
                   { value: "Retired", label: "Retired" },
@@ -899,86 +1067,152 @@ export default function MemberRegistrationPage() {
               />
             </Field>
             <Field label="Monthly Net Pay" error={errors.netPay?.message}>
-              <CurrencyInput value={watch("netPay")} onChange={(v) => setValue("netPay", v, { shouldDirty: true })} placeholder="Optional — used for income-tiered loan products" />
+              <CurrencyInput
+                value={watch("netPay")}
+                onChange={(v) => setValue("netPay", v, { shouldDirty: true })}
+                placeholder="Optional — used for income-tiered products"
+              />
             </Field>
             <Field label="Remarks" className="sm:col-span-2">
-              <Textarea rows={2} placeholder="Additional notes about this member (optional)" {...register("remarks")} className="bg-background" />
+              <Textarea
+                rows={2}
+                placeholder="Additional notes about this member (optional)"
+                {...register("remarks")}
+                className="bg-background resize-none"
+              />
             </Field>
           </div>
         </FormSection>
 
         {/* SECTION 4: Beneficiaries */}
-        <FormSection title="Section 4 · Beneficiaries" description="Add one or more beneficiaries for this member.">
-          <div className="rounded-xl border border-border bg-card p-4 sm:p-6 shadow-sm">
-            <BeneficiaryFieldArray control={control} register={register} errors={errors} civilStatus={civilStatus} />
+        <FormSection
+          title={
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <Users2 className="size-4" strokeWidth={2.2} />
+              </div>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Section 4 · Beneficiaries
+              </span>
+            </div>
+          }
+          description="Designate one or more beneficiaries associated with this member."
+        >
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs sm:p-6">
+            <BeneficiaryFieldArray
+              control={control}
+              register={register}
+              errors={errors}
+              civilStatus={civilStatus}
+            />
           </div>
         </FormSection>
 
         {/* SECTION 5: Documents */}
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <FileText className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <FileText className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Section 5 · Documents</span>
-            </span>
-          } 
-          description="Upload scanned copies of supporting documents."
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Section 5 · Supporting Documents
+              </span>
+            </div>
+          }
+          description="Upload clear scanned copies or image attachments of required credentials."
         >
-          <div className="rounded-xl border border-border bg-muted/15 p-4 sm:p-6 shadow-sm">
+          <div className="space-y-4 rounded-2xl border border-border/60 bg-muted/15 p-5 shadow-xs sm:p-6">
             {validIdError && (
-              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
-                Valid ID is required. Upload a PDF or image before saving the member.
-              </p>
+              <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs font-semibold text-destructive">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>Valid ID is required. Upload a PDF or image before submitting.</span>
+              </div>
             )}
             {appointmentDocumentError && (
-              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
-                Appointment Document is required under Employment Documents.
-              </p>
+              <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs font-semibold text-destructive">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>Appointment Document is required under Employment Documents.</span>
+              </div>
             )}
             {membershipFormError && (
-              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
-                Membership Form is required under Membership Documents.
-              </p>
+              <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs font-semibold text-destructive">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>Membership Form is required under Membership Documents.</span>
+              </div>
             )}
             {payslipError && hasMonthlyNetPay && (
-              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs font-medium text-destructive">
-                Net Take Home Pay is required because Monthly Net Pay has been provided.
-              </p>
+              <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs font-semibold text-destructive">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>Net Take Home Pay document is required because Monthly Net Pay has been provided.</span>
+              </div>
             )}
+
             <DocumentGallery items={documentGalleryItems} />
           </div>
         </FormSection>
 
-        {/* Sticky Action Footer */}
-        <div className="sticky bottom-4 z-15 flex items-center justify-end gap-3 border border-border/65 bg-background/80 backdrop-blur-md px-6 py-4 shadow-lg transition-all duration-200">
-          {isAnyLiveUploadInProgress && (
-            <p className="mr-auto text-xs text-muted-foreground flex items-center gap-1.5 animate-pulse">
-              <span className="size-1.5 rounded-full bg-primary animate-ping" />
-              Waiting for uploads to finish…
-            </p>
-          )}
-          <Button type="button" variant="outline" onClick={handleCancelClick} disabled={isSaving} className="h-9 text-xs">
-            Cancel
-          </Button>
-          {(!isEdit || wasExistingDraft) && (
-            <SaveDraftButton
-              status={memberDraft.status}
-              lastSavedAt={memberDraft.lastSavedAt}
-              onClick={saveDraft}
-              label="Save as Draft"
+        {/* Floating Glass Action Dock */}
+        <div className="sticky bottom-4 z-30 flex items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/85 px-5 py-3.5 shadow-xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 sm:px-6">
+          <div className="flex items-center gap-2">
+            {isAnyLiveUploadInProgress && (
+              <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground animate-pulse">
+                <Loader2 className="size-3.5 animate-spin text-primary" />
+                Processing uploads…
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelClick}
+              disabled={isSaving}
+              className="h-9 rounded-xl px-4 text-xs font-semibold active:scale-95 transition-transform"
+            >
+              Cancel
+            </Button>
+
+            {(!isEdit || wasExistingDraft) && (
+              <SaveDraftButton
+                status={memberDraft.status}
+                lastSavedAt={memberDraft.lastSavedAt}
+                onClick={saveDraft}
+                label="Save as Draft"
+                disabled={isSaving || isAnyLiveUploadInProgress}
+              />
+            )}
+
+            <Button
+              type="submit"
+              variant="success"
               disabled={isSaving || isAnyLiveUploadInProgress}
-            />
-          )}
-          <Button type="submit" variant="success" disabled={isSaving || isAnyLiveUploadInProgress} aria-busy={isSaving} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
-            {isSaving ? <Loader2 className="animate-spin size-4" aria-hidden="true" /> : isDraftContext ? <FilePlus2 className="size-4" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}
-            {isSaving ? "Saving changes…" : isDraftContext ? "Submit Registration" : isEdit ? "Save Changes" : "Register Member"}
-          </Button>
+              aria-busy={isSaving}
+              className="h-9 gap-1.5 rounded-xl px-5 text-xs font-semibold shadow-xs active:scale-95 transition-all"
+            >
+              {isSaving ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : isDraftContext ? (
+                <FilePlus2 className="size-4" aria-hidden="true" />
+              ) : (
+                <Save className="size-4" strokeWidth={2.2} aria-hidden="true" />
+              )}
+              <span>
+                {isSaving
+                  ? "Saving changes…"
+                  : isDraftContext
+                    ? "Submit Registration"
+                    : isEdit
+                      ? "Save Changes"
+                      : "Register Member"}
+              </span>
+            </Button>
+          </div>
         </div>
       </form>
 
-      {/* Dialog: Unsaved changes on leave */}
+      {/* Dialog: Unsaved changes prompt */}
       <UnsavedChangesDialog
         open={showUnsavedPrompt}
         onOpenChange={(open) => !open && resolvePrompt("stay")}
@@ -990,7 +1224,7 @@ export default function MemberRegistrationPage() {
         onLeaveWithoutSaving={() => resolvePrompt("leave")}
       />
 
-      {/* Dialog: Confirm Photo/Doc Deletion */}
+      {/* Dialog: Confirm Deletion */}
       <ConfirmDialog
         open={removeTarget !== null}
         onOpenChange={(open) => !open && setRemoveTarget(null)}
@@ -1009,7 +1243,19 @@ export default function MemberRegistrationPage() {
   )
 }
 
-function OtherDocumentRow({ file, name, url, status, onRemove }: { file?: File; name?: string; url?: string; status: string; onRemove: () => void }) {
+function OtherDocumentRow({
+  file,
+  name,
+  url,
+  status,
+  onRemove,
+}: {
+  file?: File
+  name?: string
+  url?: string
+  status: string
+  onRemove: () => void
+}) {
   const [previewOpen, setPreviewOpen] = React.useState(false)
   const [localUrl, setLocalUrl] = React.useState<string>()
   const fileName = file?.name ?? name ?? "Supporting document"
@@ -1026,20 +1272,65 @@ function OtherDocumentRow({ file, name, url, status, onRemove }: { file?: File; 
   const isPdf = isPdfFile(fileName)
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2.5">
-        {isImage && previewUrl ? <img src={previewUrl} alt={fileName} className="size-10 shrink-0 rounded-md border border-border object-cover" /> : <FileText className="size-5 shrink-0 text-primary" />}
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-2.5 shadow-2xs backdrop-blur-xs transition-all hover:border-border hover:shadow-xs">
+      <div className="flex min-w-0 items-center gap-3">
+        {isImage && previewUrl ? (
+          <img
+            src={previewUrl}
+            alt={fileName}
+            className="size-9 shrink-0 rounded-lg border border-border/80 object-cover shadow-2xs"
+          />
+        ) : (
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+            <FileText className="size-4" strokeWidth={2.2} />
+          </div>
+        )}
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-foreground">{fileName}</p>
-          <p className="text-[11px] text-muted-foreground">{status}</p>
+          <p className="truncate font-heading text-xs font-semibold text-foreground">{fileName}</p>
+          <p className="text-[10px] font-medium text-muted-foreground">{status}</p>
         </div>
       </div>
+
       <div className="flex shrink-0 items-center gap-1">
-        {previewUrl && (isImage || isPdf) && <Button type="button" variant="ghost" size="icon-sm" aria-label={`Preview ${fileName}`} onClick={() => setPreviewOpen(true)}><Eye className="size-3.5" /></Button>}
-        <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${fileName}`} onClick={onRemove}><X className="size-3.5" /></Button>
+        {previewUrl && (isImage || isPdf) && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 rounded-lg hover:bg-muted/80 active:scale-90"
+            aria-label={`Preview ${fileName}`}
+            onClick={() => setPreviewOpen(true)}
+          >
+            <Eye className="size-3.5" />
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="size-7 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90"
+          aria-label={`Remove ${fileName}`}
+          onClick={onRemove}
+        >
+          <X className="size-3.5" />
+        </Button>
       </div>
-      {isImage && previewUrl && <ImagePreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} images={[{ url: previewUrl, name: fileName }]} />}
-      {isPdf && previewUrl && <PDFPreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} url={previewUrl} name={fileName} />}
+
+      {isImage && previewUrl && (
+        <ImagePreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          images={[{ url: previewUrl, name: fileName }]}
+        />
+      )}
+      {isPdf && previewUrl && (
+        <PDFPreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          url={previewUrl}
+          name={fileName}
+        />
+      )}
     </div>
   )
 }
@@ -1061,21 +1352,21 @@ function Field({
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90 flex items-center gap-1.5">
-        {label}
-        {required && <span className="text-destructive font-bold">*</span>}
+      <Label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+        <span className="flex items-center gap-1">
+          {label}
+          {required && <span className="text-destructive font-bold">*</span>}
+        </span>
         {isCalculated && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full select-none">
-            <Sparkles className="size-2.5" aria-hidden="true" />
-            Calculated
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400 select-none">
+            <Sparkles className="size-2.5" />
+            Auto-calculated
           </span>
         )}
       </Label>
-      <div className="relative">
-        {children}
-      </div>
+      <div className="relative">{children}</div>
       {error && (
-        <p className="text-xs font-medium text-destructive mt-1 animate-in fade-in-50 slide-in-from-top-1 duration-150">
+        <p className="mt-1 text-[11px] font-semibold text-destructive animate-in fade-in-50 slide-in-from-top-1 duration-150">
           {error}
         </p>
       )}

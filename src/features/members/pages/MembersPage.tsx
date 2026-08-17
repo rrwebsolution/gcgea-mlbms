@@ -2,7 +2,15 @@ import * as React from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef, SortingState } from "@tanstack/react-table"
-import { Archive, ArchiveRestore, Eye, PencilLine, Plus, UploadCloud } from "lucide-react"
+import {
+  Archive,
+  ArchiveRestore,
+  Eye,
+  PencilLine,
+  Plus,
+  RotateCcw,
+  UploadCloud,
+} from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
@@ -32,6 +40,7 @@ import {
 import { calculateAge, calculateDurationLabel, formatDateShort, initialsFromName } from "@/utils/format"
 import { paginate, sortBy as applySortBy } from "@/utils/paginate"
 import type { Member } from "@/types"
+import { cn } from "@/lib/utils"
 
 interface MembersPageProps {
   archived?: boolean
@@ -41,7 +50,13 @@ interface MembersPageProps {
   description?: string
 }
 
-export default function MembersPage({ archived = false, incompleteOnly = false, draftsOnly = false, title, description }: MembersPageProps) {
+export default function MembersPage({
+  archived = false,
+  incompleteOnly = false,
+  draftsOnly = false,
+  title,
+  description,
+}: MembersPageProps) {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -60,10 +75,7 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   const sortBy = sorting[0]?.id
   const sortDir = sorting[0] ? (sorting[0].desc ? "desc" : "asc") : undefined
 
-  // Fetches this view's full dataset once (browse/archived/drafts are three different
-  // underlying queries server-side — see MemberController::all()) and searches/filters/
-  // sorts/paginates entirely client-side, mirroring index()/archived()'s rules so results
-  // match what the equivalent server query used to return.
+  // Fetches full dataset for client-side search/sort/paginate
   const { data: allMembers = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["members", "all", archived ? "archived" : draftsOnly ? "drafts" : "browse"],
     queryFn: () => listAllMembersForBrowse({ archived, draftsOnly }),
@@ -72,33 +84,58 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   const filteredMembers = React.useMemo(() => {
     const q = search.trim().toLowerCase()
     return allMembers.filter((m) => {
-      // Fields typed as required strings can still come back null for legacy/incomplete
-      // records (position/cellphoneNumber/etc. are exactly what "Incomplete Profiles"
-      // looks for) — guard every field before .toLowerCase() or a single bad row throws
-      // and blanks the whole page.
-      const matchesSearch = !q
-        || (m.fullName ?? "").toLowerCase().includes(q)
-        || (m.memberNumber ?? "").toLowerCase().includes(q)
-        || (m.position ?? "").toLowerCase().includes(q)
-        || (m.cellphoneNumber ?? "").toLowerCase().includes(q)
-        || (m.officeName ?? "").toLowerCase().includes(q)
+      const matchesSearch =
+        !q ||
+        (m.fullName ?? "").toLowerCase().includes(q) ||
+        (m.memberNumber ?? "").toLowerCase().includes(q) ||
+        (m.position ?? "").toLowerCase().includes(q) ||
+        (m.cellphoneNumber ?? "").toLowerCase().includes(q) ||
+        (m.officeName ?? "").toLowerCase().includes(q)
+
       if (archived || draftsOnly) return matchesSearch
+
       const matchesOffice = !office || m.officeName === office
       const matchesSex = !sex || m.sex === sex
       const matchesMembershipStatus = !membershipStatus || m.membershipStatus === membershipStatus
       const matchesRetiree = !retireeStatus || m.retireeStatus === retireeStatus
-      const matchesIncomplete = !incompleteOnly || (
-        !m.email || !m.cellphoneNumber || !m.permanentAddress
-        || (m.beneficiaries?.length ?? 0) === 0 || (m.documents?.length ?? 0) === 0
+      const matchesIncomplete =
+        !incompleteOnly ||
+        !m.email ||
+        !m.cellphoneNumber ||
+        !m.permanentAddress ||
+        (m.beneficiaries?.length ?? 0) === 0 ||
+        (m.documents?.length ?? 0) === 0
+
+      return (
+        matchesSearch &&
+        matchesOffice &&
+        matchesSex &&
+        matchesMembershipStatus &&
+        matchesRetiree &&
+        matchesIncomplete
       )
-      return matchesSearch && matchesOffice && matchesSex && matchesMembershipStatus && matchesRetiree && matchesIncomplete
     })
   }, [allMembers, search, archived, draftsOnly, office, sex, membershipStatus, retireeStatus, incompleteOnly])
 
-  // Sorted globally across the full filtered set (not just the current page) to match the
-  // server-side ORDER BY this page used to rely on.
-  const sortedMembers = React.useMemo(() => applySortBy(filteredMembers, sortBy, sortDir), [filteredMembers, sortBy, sortDir])
+  const sortedMembers = React.useMemo(
+    () => applySortBy(filteredMembers, sortBy, sortDir),
+    [filteredMembers, sortBy, sortDir]
+  )
   const { data: pagedMembers, meta } = paginate(sortedMembers, page, perPage)
+
+  const hasActiveFilters = Boolean(search || office || sex || membershipStatus || retireeStatus)
+
+  function clearFilters() {
+    setSearch("")
+    setOffice("")
+    setSex("")
+    setMembershipStatus("")
+    setRetireeStatus("")
+    setPage(1)
+    const next = new URLSearchParams(searchParams)
+    next.delete("office")
+    setSearchParams(next, { replace: true })
+  }
 
   const archiveMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => archiveMember(id, reason),
@@ -143,54 +180,111 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   const columns: ColumnDef<Member, unknown>[] = [
     {
       accessorKey: "memberNumber",
-      header: draftsOnly ? "Draft Reference" : "Member Number",
+      header: draftsOnly ? "Draft Reference" : "Member ID",
       meta: { sticky: "left" },
       cell: ({ row }) =>
         draftsOnly ? (
           <div className="flex items-center gap-2">
-            <Link to={`/members/${row.original.id}/edit`} className="font-medium text-primary hover:underline">
-              {row.original.draftReferenceNo ?? "Untitled Member Draft"}
+            <Link
+              to={`/members/${row.original.id}/edit`}
+              className="font-medium text-primary hover:underline"
+            >
+              {row.original.draftReferenceNo ?? "Untitled Draft"}
             </Link>
             <DraftStatusBadge status="Draft" />
           </div>
         ) : (
-          <Link to={`/members/${row.original.id}`} className="font-medium text-primary hover:underline">
+          <Link
+            to={`/members/${row.original.id}`}
+            className="inline-flex items-center rounded-lg border border-border/60 bg-muted/40 px-2 py-0.5 font-mono text-xs font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/5"
+          >
             {row.original.memberNumber}
           </Link>
         ),
     },
     {
       accessorKey: "fullName",
-      header: "Full Name",
+      header: "Member Name",
       meta: { sticky: "left" },
       cell: ({ row }) => (
-        <span className="flex items-center gap-2">
-          <Avatar size="sm">
-            <AvatarFallback className="bg-primary text-[0.6rem] text-primary-foreground">{initialsFromName(row.original.fullName)}</AvatarFallback>
+        <div className="flex items-center gap-3">
+          <Avatar className="size-8 border border-border/60 shadow-2xs">
+            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-xs font-bold text-primary">
+              {initialsFromName(row.original.fullName)}
+            </AvatarFallback>
           </Avatar>
-          <span className="font-medium text-foreground">{row.original.fullName}</span>
-        </span>
+          <div className="flex flex-col">
+            <span className="font-heading font-semibold text-foreground tracking-tight">
+              {row.original.fullName}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {row.original.position || "Member"}
+            </span>
+          </div>
+        </div>
       ),
     },
     { accessorKey: "sex", header: "Sex" },
-    { accessorKey: "birthdate", header: "Birthdate", cell: ({ row }) => formatDateShort(row.original.birthdate) },
-    { id: "age", header: "Age", enableSorting: false, cell: ({ row }) => calculateAge(row.original.birthdate) },
+    {
+      accessorKey: "birthdate",
+      header: "Birthdate",
+      cell: ({ row }) => formatDateShort(row.original.birthdate),
+    },
+    {
+      id: "age",
+      header: "Age",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <span className="font-mono text-xs">{calculateAge(row.original.birthdate)}</span>
+      ),
+    },
     { accessorKey: "officeName", header: "Office" },
-    { accessorKey: "position", header: "Position" },
-    { accessorKey: "cellphoneNumber", header: "Contact Number" },
-    { accessorKey: "membershipDate", header: "Membership Date", cell: ({ row }) => formatDateShort(row.original.membershipDate) },
-    { id: "membershipLength", header: "Membership Length", enableSorting: false, cell: ({ row }) => calculateDurationLabel(row.original.membershipDate) },
+    {
+      accessorKey: "cellphoneNumber",
+      header: "Contact",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {row.original.cellphoneNumber || "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "membershipDate",
+      header: "Joined Date",
+      cell: ({ row }) => formatDateShort(row.original.membershipDate),
+    },
+    {
+      id: "membershipLength",
+      header: "Tenure",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">
+          {calculateDurationLabel(row.original.membershipDate)}
+        </span>
+      ),
+    },
     {
       accessorKey: "membershipStatus",
-      header: "Membership Status",
+      header: "Status",
       cell: ({ row }) => {
         const member = row.original
         const isActive = member.membershipStatus === "Active"
-        const isUpdating = membershipStatusMutation.isPending && membershipStatusMutation.variables?.id === member.id
+        const isUpdating =
+          membershipStatusMutation.isPending &&
+          membershipStatusMutation.variables?.id === member.id
+
         return (
           <PermissionGuard
             permission="members.update"
-            fallback={<span className="text-sm font-medium">{member.membershipStatus}</span>}
+            fallback={
+              <span className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                isActive ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground"
+              )}>
+                <span className={cn("size-1.5 rounded-full", isActive ? "bg-emerald-500" : "bg-muted-foreground")} />
+                {member.membershipStatus}
+              </span>
+            }
           >
             <div className="flex items-center gap-2">
               <Switch
@@ -206,7 +300,12 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
                   }
                 }}
               />
-              <span className={isActive ? "text-sm font-semibold text-success" : "text-sm font-medium text-muted-foreground"}>
+              <span
+                className={cn(
+                  "text-xs font-semibold tracking-tight",
+                  isActive ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"
+                )}
+              >
                 {member.membershipStatus}
               </span>
             </div>
@@ -217,11 +316,14 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
     { accessorKey: "retireeStatus", header: "Retiree Status" },
     {
       id: "profileCompleteness",
-      header: draftsOnly ? "Draft Completion" : "Profile Completeness",
+      header: draftsOnly ? "Draft Completion" : "Completeness",
       enableSorting: false,
       cell: ({ row }) =>
         draftsOnly ? (
-          <DraftCompletionBar percentage={row.original.draftCompletionPercentage ?? 0} showLabel={false} />
+          <DraftCompletionBar
+            percentage={row.original.draftCompletionPercentage ?? 0}
+            showLabel={false}
+          />
         ) : (
           <ProfileCompleteness percentage={profileCompleteness(row.original)} />
         ),
@@ -233,27 +335,58 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
       cell: ({ row }) =>
         draftsOnly ? (
           <PermissionGuard permission="members.update">
-            <Button variant="outline" size="sm" render={<Link to={`/members/${row.original.id}/edit`} />}>
-              <PencilLine /> Continue Editing
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 rounded-lg text-xs"
+              render={<Link to={`/members/${row.original.id}/edit`} />}
+            >
+              <PencilLine className="size-3.5" /> Continue Editing
             </Button>
           </PermissionGuard>
         ) : (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon-sm" render={<Link to={`/members/${row.original.id}`} />} aria-label="View member">
-              <Eye />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-8 rounded-lg hover:bg-muted/80 active:scale-90"
+              render={<Link to={`/members/${row.original.id}`} />}
+              aria-label="View member profile"
+            >
+              <Eye className="size-3.5" />
             </Button>
             <PermissionGuard permission="members.update">
-              <Button variant="ghost" size="icon-sm" render={<Link to={`/members/${row.original.id}/edit`} />} aria-label="Edit member">
-                <PencilLine />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="size-8 rounded-lg hover:bg-muted/80 active:scale-90"
+                render={<Link to={`/members/${row.original.id}/edit`} />}
+                aria-label="Edit member"
+              >
+                <PencilLine className="size-3.5" />
               </Button>
             </PermissionGuard>
             {archived ? (
-              <PermissionButton permission="members.restore" variant="ghost" size="icon-sm" onClick={() => setRestoreTarget(row.original)} aria-label="Restore member">
-                <ArchiveRestore />
+              <PermissionButton
+                permission="members.restore"
+                variant="ghost"
+                size="icon-sm"
+                className="size-8 rounded-lg text-emerald-600 hover:bg-emerald-500/10 active:scale-90"
+                onClick={() => setRestoreTarget(row.original)}
+                aria-label="Restore member"
+              >
+                <ArchiveRestore className="size-3.5" />
               </PermissionButton>
             ) : (
-              <PermissionButton permission="members.archive" variant="ghost" size="icon-sm" onClick={() => setArchiveTarget(row.original)} aria-label="Archive member">
-                <Archive />
+              <PermissionButton
+                permission="members.archive"
+                variant="ghost"
+                size="icon-sm"
+                className="size-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90"
+                onClick={() => setArchiveTarget(row.original)}
+                aria-label="Archive member"
+              >
+                <Archive className="size-3.5" />
               </PermissionButton>
             )}
           </div>
@@ -262,90 +395,132 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
   ]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 pb-12">
+      {/* Page Header */}
       <PageHeader
-        title={title ?? (archived ? "Archived Members" : draftsOnly ? "Member Drafts" : "Member Management")}
+        title={
+          title ?? (archived ? "Archived Members" : draftsOnly ? "Member Drafts" : "Member Directory")
+        }
         description={
           description ??
           (archived
-            ? "Members that have been archived. Their financial records remain intact."
+            ? "Members that have been archived. Their historical records and ledgers remain intact."
             : draftsOnly
               ? "Incomplete registrations saved as drafts. Continue editing to finish and submit them."
-              : "Manage GCGEA member records, profiles, and beneficiaries.")
+              : "Comprehensive roster of GCGEA members, profiles, and associated records.")
         }
         actions={
           !archived &&
           !draftsOnly && (
-            <>
+            <div className="flex flex-wrap items-center gap-2">
               <PrintButton permission="members.print" label="Print List" />
               <ExportButtons permission="members.export" label="members" />
-              <PermissionButton permission="member_import.create" variant="outline" render={<Link to="/members/import" />}>
-                <UploadCloud />
-                Import Members
+              <PermissionButton
+                permission="member_import.create"
+                variant="outline"
+                render={<Link to="/members/import" />}
+              >
+                <UploadCloud className="size-4" />
+                Import
               </PermissionButton>
               <PermissionButton permission="members.create" render={<Link to="/members/new" />}>
-                <Plus />
+                <Plus className="size-4" />
                 Add Member
               </PermissionButton>
-            </>
+            </div>
           )
         }
       />
 
-      <div className="rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
-          <SearchInput
-            value={search}
-            onChange={(v) => { setSearch(v); setPage(1) }}
-            placeholder="Search by name, member #, office, position, contact…"
-            className="max-w-sm"
-          />
-          {!archived && !draftsOnly && (
-            <>
-              <OfficeSelect value={office} onValueChange={updateOfficeFilter} placeholder="All Offices" className="w-40" />
-              <CommandSelect
-                className="w-32"
-                value={sex || "all"}
-                onValueChange={(v) => { setSex(!v || v === "all" ? "" : v); setPage(1) }}
-                options={[
-                  { value: "all", label: "All Sexes" },
-                  { value: "Male", label: "Male" },
-                  { value: "Female", label: "Female" },
-                ]}
-                placeholder="Sex"
-                hideSearch
-              />
-              <CommandSelect
-                className="w-44"
-                value={membershipStatus || "all"}
-                onValueChange={(v) => { setMembershipStatus(!v || v === "all" ? "" : v); setPage(1) }}
-                options={[
-                  { value: "all", label: "All Statuses" },
-                  { value: "Active", label: "Active" },
-                  { value: "Inactive", label: "Inactive" },
-                  { value: "Suspended", label: "Suspended" },
-                  { value: "Terminated", label: "Terminated" },
-                  { value: "Deceased", label: "Deceased" },
-                ]}
-                placeholder="Membership Status"
-                hideSearch
-              />
-              <CommandSelect
-                className="w-40"
-                value={retireeStatus || "all"}
-                onValueChange={(v) => { setRetireeStatus(!v || v === "all" ? "" : v); setPage(1) }}
-                options={[
-                  { value: "all", label: "All" },
-                  { value: "Not Retired", label: "Not Retired" },
-                  { value: "Retired", label: "Retired" },
-                ]}
-                placeholder="Retiree Status"
-                hideSearch
-              />
-            </>
+      {/* Main Table Glass Card */}
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
+        {/* Filter Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-muted/15 p-4">
+          <div className="flex flex-1 flex-wrap items-center gap-2.5 min-w-[280px]">
+            <SearchInput
+              value={search}
+              onChange={(v) => {
+                setSearch(v)
+                setPage(1)
+              }}
+              placeholder="Search by name, member #, office, position…"
+              className="max-w-sm"
+            />
+            {!archived && !draftsOnly && (
+              <>
+                <OfficeSelect
+                  value={office}
+                  onValueChange={updateOfficeFilter}
+                  placeholder="All Offices"
+                  className="w-40"
+                />
+                <CommandSelect
+                  className="w-32"
+                  value={sex || "all"}
+                  onValueChange={(v) => {
+                    setSex(!v || v === "all" ? "" : v)
+                    setPage(1)
+                  }}
+                  options={[
+                    { value: "all", label: "All Sexes" },
+                    { value: "Male", label: "Male" },
+                    { value: "Female", label: "Female" },
+                  ]}
+                  placeholder="Sex"
+                  hideSearch
+                />
+                <CommandSelect
+                  className="w-44"
+                  value={membershipStatus || "all"}
+                  onValueChange={(v) => {
+                    setMembershipStatus(!v || v === "all" ? "" : v)
+                    setPage(1)
+                  }}
+                  options={[
+                    { value: "all", label: "All Statuses" },
+                    { value: "Active", label: "Active" },
+                    { value: "Inactive", label: "Inactive" },
+                    { value: "Suspended", label: "Suspended" },
+                    { value: "Terminated", label: "Terminated" },
+                    { value: "Deceased", label: "Deceased" },
+                  ]}
+                  placeholder="Status"
+                  hideSearch
+                />
+                <CommandSelect
+                  className="w-40"
+                  value={retireeStatus || "all"}
+                  onValueChange={(v) => {
+                    setRetireeStatus(!v || v === "all" ? "" : v)
+                    setPage(1)
+                  }}
+                  options={[
+                    { value: "all", label: "All Retirees" },
+                    { value: "Not Retired", label: "Not Retired" },
+                    { value: "Retired", label: "Retired" },
+                  ]}
+                  placeholder="Retiree Status"
+                  hideSearch
+                />
+              </>
+            )}
+          </div>
+
+          {/* Reset Filters Prompt */}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-8 gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground hover:text-foreground active:scale-95"
+            >
+              <RotateCcw className="size-3" />
+              Reset Filters
+            </Button>
           )}
         </div>
 
+        {/* Data Table */}
         <DataTable
           columns={columns}
           data={pagedMembers}
@@ -356,25 +531,49 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
           onSortingChange={setSorting}
           getRowId={(m) => m.id}
           enableColumnVisibility={false}
-          emptyTitle={archived ? "No archived members" : draftsOnly ? "No member drafts" : incompleteOnly ? "All profiles complete" : "No members found"}
+          emptyTitle={
+            archived
+              ? "No archived members"
+              : draftsOnly
+                ? "No member drafts"
+                : incompleteOnly
+                  ? "All profiles complete"
+                  : "No members found"
+          }
           emptyDescription={
             draftsOnly
               ? "Draft registrations you save will appear here so you can continue them later."
               : incompleteOnly
                 ? "Every member profile currently has complete information."
-                : "Try adjusting your search or filters."
+                : "Try adjusting your search query or removing active filters."
           }
         />
-        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+
+        {/* Pagination Bar */}
+        {!isLoading && !isError && (
+          <div className="border-t border-border/40 bg-muted/10 p-3">
+            <Pagination
+              meta={meta}
+              onPageChange={setPage}
+              onPerPageChange={(n) => {
+                setPerPage(n)
+                setPage(1)
+              }}
+            />
+          </div>
+        )}
       </div>
 
+      {/* Confirmation & Archive Dialogs */}
       <DeleteOrArchiveDialog
         open={!!archiveTarget}
         onOpenChange={(open) => !open && setArchiveTarget(null)}
         recordLabel={archiveTarget ? archiveTarget.fullName : "this member"}
         mode="archive"
         isLoading={archiveMutation.isPending}
-        onConfirm={(reason) => archiveTarget && archiveMutation.mutate({ id: archiveTarget.id, reason })}
+        onConfirm={(reason) =>
+          archiveTarget && archiveMutation.mutate({ id: archiveTarget.id, reason })
+        }
       />
       <DeleteOrArchiveDialog
         open={!!restoreTarget}
@@ -397,7 +596,10 @@ export default function MembersPage({ archived = false, incompleteOnly = false, 
         confirmingLabel="Updating..."
         destructive
         isLoading={membershipStatusMutation.isPending}
-        onConfirm={() => deactivateTarget && membershipStatusMutation.mutate({ id: deactivateTarget.id, status: "Inactive" })}
+        onConfirm={() =>
+          deactivateTarget &&
+          membershipStatusMutation.mutate({ id: deactivateTarget.id, status: "Inactive" })
+        }
       />
     </div>
   )

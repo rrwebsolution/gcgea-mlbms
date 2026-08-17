@@ -1089,7 +1089,7 @@ function DetailBody({
           <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Approval Timeline & Audit History</h3>
         </div>
         {historyLoading ? (
-          <EmptyState title="Loading approval history…" />
+          <EmptyState isLoading title="Loading approval history…" />
         ) : (
           <ApprovalTimeline history={history} />
         )}

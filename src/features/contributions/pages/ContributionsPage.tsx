@@ -3,7 +3,21 @@ import { Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Ban, Eye, History, Pencil, Plus, Wallet, Banknote, Users, UserX, CalendarClock } from "lucide-react"
+import {
+  Ban,
+  Eye,
+  History,
+  Pencil,
+  Plus,
+  Wallet,
+  Banknote,
+  Users,
+  UserX,
+  CalendarClock,
+  RotateCcw,
+  MoreHorizontal,
+  Calendar,
+} from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
 import { DataTable } from "@/components/shared/DataTable"
@@ -22,7 +36,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getContributionSummary, listContributionPeriods, listContributions, voidContribution } from "@/services/contributions.service"
+import {
+  getContributionSummary,
+  listContributionPeriods,
+  listContributions,
+  voidContribution,
+} from "@/services/contributions.service"
 import { CONTRIBUTION_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
@@ -55,15 +74,70 @@ export default function ContributionsPage() {
     return () => window.clearTimeout(timer)
   }, [search])
 
-  const filters = { page, perPage, search: debouncedSearch, period, contributionType: contributionType as ContributionType || undefined, office, paymentMethod, status, dateFrom, dateTo }
-  const { data: contributionPage, isLoading, isError, refetch } = useQuery({
+  const filters = {
+    page,
+    perPage,
+    search: debouncedSearch,
+    period,
+    contributionType: (contributionType as ContributionType) || undefined,
+    office,
+    paymentMethod,
+    status,
+    dateFrom,
+    dateTo,
+  }
+
+  const {
+    data: contributionPage,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ["contributions", filters],
     queryFn: () => listContributions(filters),
   })
-  const { data: summary = { totalContributions: 0, totalAmount: 0, paidMembers: 0, unpaidMembers: 0, contributionsThisMonth: 0 } } = useQuery({ queryKey: ["contributions", "summary"], queryFn: getContributionSummary })
-  const { data: periods = [] } = useQuery({ queryKey: ["contributions", "periods"], queryFn: listContributionPeriods })
+
+  const {
+    data: summary = {
+      totalContributions: 0,
+      totalAmount: 0,
+      paidMembers: 0,
+      unpaidMembers: 0,
+      contributionsThisMonth: 0,
+    },
+  } = useQuery({
+    queryKey: ["contributions", "summary"],
+    queryFn: getContributionSummary,
+  })
+
+  const { data: periods = [] } = useQuery({
+    queryKey: ["contributions", "periods"],
+    queryFn: listContributionPeriods,
+  })
+
   const pagedContributions = contributionPage?.data ?? []
-  const meta = contributionPage?.meta ?? { currentPage: page, perPage, totalRecords: 0, totalPages: 1 }
+  const meta = contributionPage?.meta ?? {
+    currentPage: page,
+    perPage,
+    totalRecords: 0,
+    totalPages: 1,
+  }
+
+  const hasActiveFilters = Boolean(
+    search || period || contributionType || office || paymentMethod || status || dateFrom || dateTo
+  )
+
+  function clearFilters() {
+    setSearch("")
+    setPeriod("")
+    setContributionType("")
+    setOffice("")
+    setPaymentMethod("")
+    setStatus("")
+    setDateFrom("")
+    setDateTo("")
+    setPage(1)
+  }
 
   async function handleVoid(reason: string) {
     if (!voidTarget || !user) return
@@ -86,56 +160,139 @@ export default function ContributionsPage() {
       header: "Reference #",
       meta: { sticky: "left" },
       cell: ({ row }) => (
-        <Link to={`/contributions/${row.original.id}`} className="font-semibold text-primary hover:text-primary/80 hover:underline tracking-tight transition-colors">
+        <Link
+          to={`/contributions/${row.original.id}`}
+          className="inline-flex items-center rounded-lg border border-border/60 bg-muted/40 px-2 py-0.5 font-mono text-xs font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/5"
+        >
           {row.original.referenceNumber}
         </Link>
       ),
     },
-    { accessorKey: "memberNumber", header: "Member #", meta: { sticky: "left" } },
-    { accessorKey: "memberName", header: "Member Name", meta: { sticky: "left" } },
-    { accessorKey: "officeName", header: "Office" },
-    { accessorKey: "contributionType", header: "Type" },
-    { accessorKey: "contributionPeriod", header: "Period" },
-    { accessorKey: "amount", header: "Amount", cell: ({ row }) => formatCurrency(row.original.amount) },
-    { accessorKey: "paymentMethod", header: "Payment Method" },
-    { accessorKey: "paymentDate", header: "Payment Date", cell: ({ row }) => formatDateShort(row.original.paymentDate) },
-    { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusBadge label={row.original.status} tone={CONTRIBUTION_STATUS_TONE[row.original.status]} /> },
-    { accessorKey: "encodedBy", header: "Encoded By" },
+    {
+      accessorKey: "memberNumber",
+      header: "Member ID",
+      meta: { sticky: "left" },
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">{row.original.memberNumber}</span>
+      ),
+    },
+    {
+      accessorKey: "memberName",
+      header: "Member Name",
+      meta: { sticky: "left" },
+      cell: ({ row }) => (
+        <span className="font-heading font-semibold text-foreground tracking-tight">
+          {row.original.memberName}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "officeName",
+      header: "Office",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">{row.original.officeName}</span>
+      ),
+    },
+    {
+      accessorKey: "contributionType",
+      header: "Type",
+      cell: ({ row }) => (
+        <span className="rounded-md bg-muted/60 px-2 py-0.5 text-xs font-medium text-foreground/90">
+          {row.original.contributionType}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "contributionPeriod",
+      header: "Period",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-foreground/80">{row.original.contributionPeriod}</span>
+      ),
+    },
+    {
+      accessorKey: "amount",
+      header: "Amount",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          {formatCurrency(row.original.amount)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "paymentMethod",
+      header: "Payment Method",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">{row.original.paymentMethod}</span>
+      ),
+    },
+    {
+      accessorKey: "paymentDate",
+      header: "Payment Date",
+      cell: ({ row }) => formatDateShort(row.original.paymentDate),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <StatusBadge
+          label={row.original.status}
+          tone={CONTRIBUTION_STATUS_TONE[row.original.status]}
+        />
+      ),
+    },
+    {
+      accessorKey: "encodedBy",
+      header: "Encoded By",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">{row.original.encodedBy || "—"}</span>
+      ),
+    },
     {
       id: "actions",
-      header: "",
+      header: "Actions",
       enableHiding: false,
       enableSorting: false,
       cell: ({ row }) => {
         const c = row.original
         return (
           <DropdownMenu>
-            <DropdownMenuTrigger 
-              render={
-                <Button 
-                  variant="ghost" 
-                  size="icon-sm" 
-                  className="size-8 hover:bg-accent/80 active:scale-95 transition-all duration-150" 
-                  aria-label="Row actions" 
-                />
-              }
-            >
-              <Eye className="size-4 text-muted-foreground/80" />
+            <DropdownMenuTrigger>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="size-8 rounded-lg hover:bg-muted/80 active:scale-90"
+                aria-label="Row actions"
+              >
+                <MoreHorizontal className="size-4 text-muted-foreground/80" />
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem render={<Link to={`/contributions/${c.id}`} />} className="text-xs">
+            <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-md p-1">
+              <DropdownMenuItem
+                className="rounded-lg text-xs font-medium"
+                render={<Link to={`/contributions/${c.id}`} />}
+              >
                 <Eye className="size-3.5 mr-2" /> View Details
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link to={`/contributions/${c.id}`} />} className="text-xs">
+              <DropdownMenuItem
+                className="rounded-lg text-xs font-medium"
+                render={<Link to={`/contributions/${c.id}`} />}
+              >
                 <History className="size-3.5 mr-2" /> View History
               </DropdownMenuItem>
               {c.status === "Posted" && (
-                <DropdownMenuItem render={<Link to={`/contributions/${c.id}/edit`} />} className="text-xs">
-                  <Pencil className="size-3.5 mr-2" /> Edit Records
+                <DropdownMenuItem
+                  className="rounded-lg text-xs font-medium"
+                  render={<Link to={`/contributions/${c.id}/edit`} />}
+                >
+                  <Pencil className="size-3.5 mr-2" /> Edit Record
                 </DropdownMenuItem>
               )}
               {c.status === "Posted" && (
-                <DropdownMenuItem variant="destructive" onClick={() => setVoidTarget(c)} className="text-xs">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setVoidTarget(c)}
+                  className="rounded-lg text-xs font-medium"
+                >
                   <Ban className="size-3.5 mr-2" /> Void Transaction
                 </DropdownMenuItem>
               )}
@@ -147,36 +304,58 @@ export default function ContributionsPage() {
   ]
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-6 pb-16">
+      {/* Page Header */}
       <PageHeader
         title="Contribution Records"
-        description="View and manage GCGEA member contribution records."
+        description="Comprehensive ledger of GCGEA member monthly dues, cash pabaon, and special collections."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <PermissionButton 
-              permission="contributions.create" 
-              className="h-9 gap-1.5 text-xs shadow-sm active:scale-97 transition-all" 
-              render={<Link to="/contributions/new" />}
-            >
-              <Plus className="size-4" /> Add Contribution
-            </PermissionButton>
-          </div>
+          <PermissionButton
+            permission="contributions.create"
+            className="h-9 gap-2 rounded-xl px-4 text-xs font-semibold shadow-xs active:scale-95 transition-all"
+            render={<Link to="/contributions/new" />}
+          >
+            <Plus className="size-4" /> Add Contribution
+          </PermissionButton>
         }
       />
 
-      {/* KPI Stats Panel */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Total Contributions" value={String(summary.totalContributions)} icon={Wallet} tone="primary" />
-        <StatCard label="Total Amount Collected" value={formatCurrency(summary.totalAmount)} icon={Banknote} tone="success" />
-        <StatCard label="Paid Members" value={String(summary.paidMembers)} icon={Users} tone="info" />
-        <StatCard label="Unpaid Members" value={String(summary.unpaidMembers)} icon={UserX} tone="warning" />
-        <StatCard label="Contributions This Month" value={String(summary.contributionsThisMonth)} icon={CalendarClock} tone="gold" />
+      {/* KPI Stats Ribbon */}
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard
+          label="Total Contributions"
+          value={String(summary.totalContributions)}
+          icon={Wallet}
+          tone="primary"
+        />
+        <StatCard
+          label="Total Amount Collected"
+          value={formatCurrency(summary.totalAmount)}
+          icon={Banknote}
+          tone="success"
+        />
+        <StatCard
+          label="Paid Members"
+          value={String(summary.paidMembers)}
+          icon={Users}
+          tone="info"
+        />
+        <StatCard
+          label="Unpaid Members"
+          value={String(summary.unpaidMembers)}
+          icon={UserX}
+          tone="warning"
+        />
+        <StatCard
+          label="Contributions This Month"
+          value={String(summary.contributionsThisMonth)}
+          icon={CalendarClock}
+          tone="gold"
+        />
       </div>
 
-      {/* Main Table view and Filter options */}
-      <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
-        
-        {/* Data list view with integrated filters and column selector */}
+      {/* Main Table Card */}
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
         <DataTable
           columns={columns}
           data={pagedContributions}
@@ -184,101 +363,154 @@ export default function ContributionsPage() {
           isError={isError}
           onRetry={refetch}
           emptyTitle="No contributions found"
-          emptyDescription="Try adjusting your search or filters."
+          emptyDescription="Try adjusting your search terms or filter selections."
           enableColumnVisibility={false}
           toolbar={
-            <>
-          <SearchInput 
-            value={search} 
-            onChange={(v) => { setSearch(v); setPage(1) }} 
-            placeholder="Search by member, reference #…" 
-            className="max-w-xs" 
-          />
-          <CommandSelect
-            size="sm"
-            className="w-40 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
-            value={period || "__all__"}
-            onValueChange={(v) => { setPeriod(v === "__all__" ? "" : v); setPage(1) }}
-            options={[{ value: "__all__", label: "All Periods" }, ...periods.map((p) => ({ value: p, label: p }))]}
-            placeholder="All Periods"
-          />
-          <CommandSelect
-            size="sm"
-            className="w-40 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
-            value={contributionType || "__all__"}
-            onValueChange={(v) => { setContributionType(v === "__all__" ? "" : v); setPage(1) }}
-            options={[{ value: "__all__", label: "All Types" }, ...CONTRIBUTION_TYPES.map((t) => ({ value: t, label: t }))]}
-            placeholder="All Types"
-            hideSearch
-          />
-          <OfficeSelect
-            value={office}
-            onValueChange={(v) => { setOffice(v); setPage(1) }} 
-            placeholder="All Offices" 
-            activeOnly={false} 
-            className="w-44 text-xs h-9 bg-background border-border/85 hover:bg-accent/40 active:scale-99 transition-all" 
-          />
-          <CommandSelect
-            size="sm"
-            className="w-44 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
-            value={paymentMethod || "__all__"}
-            onValueChange={(v) => { setPaymentMethod(v === "__all__" ? "" : v); setPage(1) }}
-            options={[{ value: "__all__", label: "All Payment Methods" }, ...PAYMENT_METHODS.map((m) => ({ value: m, label: m }))]}
-            placeholder="All Payment Methods"
-            hideSearch
-          />
-          <CommandSelect
-            size="sm"
-            className="w-32 text-xs bg-background h-9 border-border/85 hover:bg-accent/40 active:scale-99 transition-all"
-            value={status || "__all__"}
-            onValueChange={(v) => { setStatus(v === "__all__" ? "" : v); setPage(1) }}
-            options={[
-              { value: "__all__", label: "All Statuses" },
-              { value: "Posted", label: "Posted" },
-              { value: "Voided", label: "Voided" },
-            ]}
-            placeholder="All Statuses"
-            hideSearch
-          />
-          
-          {/* Custom Integrated Datepicker Box */}
-          <div className="flex items-center gap-1 bg-background border border-border/85 rounded-lg px-2.5 shadow-sm h-9">
-            <Input 
-              type="date" 
-              className="h-7 w-32 border-0 bg-transparent p-0 text-xs focus-visible:ring-0 shadow-none" 
-              value={dateFrom} 
-              onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} 
-              aria-label="Date from" 
-            />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-1">to</span>
-            <Input 
-              type="date" 
-              className="h-7 w-32 border-0 bg-transparent p-0 text-xs focus-visible:ring-0 shadow-none" 
-              value={dateTo} 
-              onChange={(e) => { setDateTo(e.target.value); setPage(1) }} 
-              aria-label="Date to" 
-            />
-          </div>
-          
-          {(period || contributionType || office || paymentMethod || status || dateFrom || dateTo) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-3 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive active:scale-97 transition-all duration-150"
-              onClick={() => { setPeriod(""); setContributionType(""); setOffice(""); setPaymentMethod(""); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1) }}
-            >
-              Clear Filters
-            </Button>
-          )}
-            </>
+            <div className="flex flex-1 flex-wrap items-center gap-2.5">
+              <SearchInput
+                value={search}
+                onChange={(v) => {
+                  setSearch(v)
+                  setPage(1)
+                }}
+                placeholder="Search member, reference #…"
+                className="w-full sm:max-w-xs"
+              />
+
+              <CommandSelect
+                size="sm"
+                className="w-36 h-9 rounded-xl border-border/70 bg-background/80 text-xs font-medium shadow-2xs hover:bg-muted"
+                value={period || "__all__"}
+                onValueChange={(v) => {
+                  setPeriod(v === "__all__" ? "" : v)
+                  setPage(1)
+                }}
+                options={[
+                  { value: "__all__", label: "All Periods" },
+                  ...periods.map((p) => ({ value: p, label: p })),
+                ]}
+                placeholder="All Periods"
+              />
+
+              <CommandSelect
+                size="sm"
+                className="w-36 h-9 rounded-xl border-border/70 bg-background/80 text-xs font-medium shadow-2xs hover:bg-muted"
+                value={contributionType || "__all__"}
+                onValueChange={(v) => {
+                  setContributionType(v === "__all__" ? "" : v)
+                  setPage(1)
+                }}
+                options={[
+                  { value: "__all__", label: "All Types" },
+                  ...CONTRIBUTION_TYPES.map((t) => ({ value: t, label: t })),
+                ]}
+                placeholder="All Types"
+                hideSearch
+              />
+
+              <OfficeSelect
+                value={office}
+                onValueChange={(v) => {
+                  setOffice(v)
+                  setPage(1)
+                }}
+                placeholder="All Offices"
+                activeOnly={false}
+                className="w-40 h-9 rounded-xl border-border/70 bg-background/80 text-xs font-medium shadow-2xs hover:bg-muted"
+              />
+
+              <CommandSelect
+                size="sm"
+                className="w-40 h-9 rounded-xl border-border/70 bg-background/80 text-xs font-medium shadow-2xs hover:bg-muted"
+                value={paymentMethod || "__all__"}
+                onValueChange={(v) => {
+                  setPaymentMethod(v === "__all__" ? "" : v)
+                  setPage(1)
+                }}
+                options={[
+                  { value: "__all__", label: "All Payment Methods" },
+                  ...PAYMENT_METHODS.map((m) => ({ value: m, label: m })),
+                ]}
+                placeholder="Payment Method"
+                hideSearch
+              />
+
+              <CommandSelect
+                size="sm"
+                className="w-32 h-9 rounded-xl border-border/70 bg-background/80 text-xs font-medium shadow-2xs hover:bg-muted"
+                value={status || "__all__"}
+                onValueChange={(v) => {
+                  setStatus(v === "__all__" ? "" : v)
+                  setPage(1)
+                }}
+                options={[
+                  { value: "__all__", label: "All Statuses" },
+                  { value: "Posted", label: "Posted" },
+                  { value: "Voided", label: "Voided" },
+                ]}
+                placeholder="All Statuses"
+                hideSearch
+              />
+
+              {/* Integrated Date-Range Selector */}
+              <div className="flex h-9 items-center gap-1.5 rounded-xl border border-border/70 bg-background/80 px-3 shadow-2xs backdrop-blur-xs">
+                <Calendar className="size-3.5 text-muted-foreground/70" />
+                <Input
+                  type="date"
+                  className="h-7 w-28 border-0 bg-transparent p-0 font-mono text-xs focus-visible:ring-0 shadow-none"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value)
+                    setPage(1)
+                  }}
+                  aria-label="Date from"
+                />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
+                  to
+                </span>
+                <Input
+                  type="date"
+                  className="h-7 w-28 border-0 bg-transparent p-0 font-mono text-xs focus-visible:ring-0 shadow-none"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value)
+                    setPage(1)
+                  }}
+                  aria-label="Date to"
+                />
+              </div>
+
+              {/* Reset Filter Button */}
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 gap-1.5 rounded-xl px-3 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive active:scale-95 transition-all"
+                  onClick={clearFilters}
+                >
+                  <RotateCcw className="size-3.5" /> Reset Filters
+                </Button>
+              )}
+            </div>
           }
         />
-        
-        {/* Pagination element */}
-        {!isLoading && !isError && <Pagination meta={meta} onPageChange={setPage} onPerPageChange={(n) => { setPerPage(n); setPage(1) }} />}
+
+        {/* Integrated Pagination Footer */}
+        {!isLoading && !isError && (
+          <div className="border-t border-border/40 bg-muted/10 p-3">
+            <Pagination
+              meta={meta}
+              onPageChange={setPage}
+              onPerPageChange={(n) => {
+                setPerPage(n)
+                setPage(1)
+              }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Transaction Cancellation Confirmation Overlay */}
+      {/* Transaction Cancellation Confirmation Dialog */}
       <VoidTransactionDialog
         open={!!voidTarget}
         onOpenChange={(open) => !open && setVoidTarget(null)}

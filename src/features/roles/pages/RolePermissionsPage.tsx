@@ -70,7 +70,7 @@ export default function RolePermissionsPage() {
     }
   }
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading role permissions…</p>
+  if (isLoading) return <EmptyState isLoading title="Loading role permissions…" />
   if (!role) return <EmptyState icon={ShieldCheck} title="Role not found" description="This role may have been deleted." />
 
   return (

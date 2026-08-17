@@ -56,7 +56,7 @@ export interface DataTableProps<TData> {
   enableColumnVisibility?: boolean
   maxHeight?: string
   toolbar?: React.ReactNode
-  /** Rendered as a summary bar below the table (e.g. running totals) — not shown while loading, in error, or empty. */
+  /** Rendered as a summary bar below the table (e.g. running totals). */
   footer?: React.ReactNode
   /** Final full-width row inside tbody, immediately below the data rows. */
   bodyEnd?: React.ReactNode
@@ -83,11 +83,12 @@ export function DataTable<TData>({
   bodyEnd,
 }: DataTableProps<TData>) {
   const { isRefreshing } = usePageRefresh()
-  const activeQueryCount = useIsFetching()
-  // Most pages pass their loading state explicitly. This fallback prevents a
-  // premature empty-state flash on query-backed tables that have not received
-  // their first row yet.
-  const showSkeleton = Boolean(isLoading || isRefreshing || (data.length === 0 && activeQueryCount > 0))
+  const initialQueryCount = useIsFetching({
+    predicate: (query) => query.state.data === undefined,
+  })
+  // Loading always wins over the empty state. The fallback covers query-backed
+  // tables whose page forgot to forward its initial isLoading flag.
+  const showSkeleton = Boolean(isLoading || isRefreshing || (data.length === 0 && initialQueryCount > 0))
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const rootRef = React.useRef<HTMLDivElement>(null)
   const [externalToolbar, setExternalToolbar] = React.useState<HTMLElement | null>(null)
@@ -102,9 +103,10 @@ export function DataTable<TData>({
     }
 
     const previous = rootRef.current?.previousElementSibling
-    const isFilterBar = previous instanceof HTMLElement
-      && previous.classList.contains("flex")
-      && previous.classList.contains("border-b")
+    const isFilterBar =
+      previous instanceof HTMLElement &&
+      previous.classList.contains("flex") &&
+      previous.classList.contains("border-b")
 
     setExternalToolbar(isFilterBar ? previous : null)
   }, [toolbar])
@@ -120,21 +122,33 @@ export function DataTable<TData>({
   const onRowSelectionChange = isSelectionControlled ? controlledOnRowSelectionChange! : setInternalRowSelection
 
   const usesAutomaticFilters = !toolbar && !externalToolbar
-  const availableStatuses = React.useMemo(() => Array.from(new Set(
-    data.flatMap((row) => {
-      if (typeof row !== "object" || row === null || !("status" in row)) return []
-      const status = (row as Record<string, unknown>).status
-      return typeof status === "string" && status ? [status] : []
-    })
-  )).sort(), [data])
+  const availableStatuses = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          data.flatMap((row) => {
+            if (typeof row !== "object" || row === null || !("status" in row)) return []
+            const status = (row as Record<string, unknown>).status
+            return typeof status === "string" && status ? [status] : []
+          })
+        )
+      ).sort(),
+    [data]
+  )
+
   const filteredData = React.useMemo(() => {
     if (!usesAutomaticFilters) return data
     const search = internalSearch.trim().toLowerCase()
     return data.filter((row) => {
-      const record = typeof row === "object" && row !== null ? row as Record<string, unknown> : {}
-      const matchesSearch = !search || Object.values(record).some((value) =>
-        value != null && typeof value !== "object" && String(value).toLowerCase().includes(search)
-      )
+      const record = typeof row === "object" && row !== null ? (row as Record<string, unknown>) : {}
+      const matchesSearch =
+        !search ||
+        Object.values(record).some(
+          (value) =>
+            value != null &&
+            typeof value !== "object" &&
+            String(value).toLowerCase().includes(search)
+        )
       const matchesStatus = internalStatus === "all" || record.status === internalStatus
       return matchesSearch && matchesStatus
     })
@@ -143,27 +157,29 @@ export function DataTable<TData>({
   const selectionColumn: ColumnDef<TData, unknown> = React.useMemo(
     () => ({
       id: "select",
-      header: ({ table }) => table.getRowModel().rows.some((row) => row.getCanSelect()) ? (
+      header: ({ table }) =>
+        table.getRowModel().rows.some((row) => row.getCanSelect()) ? (
           <Checkbox
             checked={table.getIsAllPageRowsSelected()}
             indeterminate={table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected()}
             onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
             aria-label="Select all rows"
+            className="translate-y-[1px]"
           />
         ) : null,
-      cell: ({ row }) => (
+      cell: ({ row }) =>
         row.getCanSelect() ? (
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
             aria-label="Select row"
             onClick={(e) => e.stopPropagation()}
+            className="translate-y-[1px]"
           />
-        ) : null
-      ),
+        ) : null,
       enableSorting: false,
       enableHiding: false,
-      size: 36,
+      size: 40,
     }),
     []
   )
@@ -184,10 +200,7 @@ export function DataTable<TData>({
     enableRowSelection,
   })
 
-  // Column widths are content-driven (no fixed `size`), so sticky columns can't use
-  // TanStack's built-in pinning offsets — those assume a fixed column size. Instead,
-  // measure each pinned header cell's rendered width and derive cumulative left/right
-  // offsets, same as any other content-driven "frozen column" implementation.
+  // Sticky column offsets calculation
   const headCellRefs = React.useRef<Map<string, HTMLTableCellElement>>(new Map())
   const [stickyOffsets, setStickyOffsets] = React.useState<Record<string, number>>({})
   const visibleLeafColumnIds = table.getVisibleLeafColumns().map((c) => c.id).join(",")
@@ -223,11 +236,11 @@ export function DataTable<TData>({
     resizeObserver.observe(container)
     resizeObserver.observe(tableElement)
     return () => resizeObserver.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.length, tableColumns.length, visibleLeafColumnIds])
 
   const hasHiddenColumns = Object.values(columnVisibility).some((isVisible) => isVisible === false)
   const showColumnVisibility = enableColumnVisibility && (hasHorizontalOverflow || hasHiddenColumns)
+
   const automaticToolbar = usesAutomaticFilters ? (
     <>
       <SearchInput
@@ -244,31 +257,37 @@ export function DataTable<TData>({
           <SelectContent align="start">
             <SelectItem value="all">All Statuses</SelectItem>
             {availableStatuses.map((status) => (
-              <SelectItem key={status} value={status}>{status}</SelectItem>
+              <SelectItem key={status} value={status}>
+                {status}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       )}
     </>
   ) : null
+
   const activeToolbar = toolbar ?? automaticToolbar
   const showToolbar = Boolean(activeToolbar) || (showColumnVisibility && !externalToolbar)
 
   const columnVisibilityMenu = showColumnVisibility ? (
     <DropdownMenu>
-      <DropdownMenuTrigger 
-        render={
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="ml-auto h-8 shrink-0 gap-2 px-3 text-xs font-medium border-border bg-background hover:bg-muted hover:text-foreground active:scale-98 transition-all duration-200 shadow-sm" 
+      <DropdownMenuTrigger
+        render={(
+          <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto h-8 shrink-0 gap-2 rounded-lg border-border/70 bg-background/80 px-3 text-xs font-semibold shadow-2xs backdrop-blur-sm transition-all duration-200 hover:bg-muted active:scale-95"
           />
-        }
+        )}
       >
-        <Columns3 className="size-3.5 text-muted-foreground/70" />
-        Columns
+          <Columns3 className="size-3.5 text-muted-foreground" />
+          <span>Columns</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 rounded-xl">
+      <DropdownMenuContent align="end" className="w-52 rounded-xl p-1.5 shadow-md">
+        <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Toggle Columns
+        </div>
         {table
           .getAllColumns()
           .filter((column) => column.getCanHide())
@@ -277,7 +296,7 @@ export function DataTable<TData>({
               key={column.id}
               checked={column.getIsVisible()}
               onCheckedChange={(value) => column.toggleVisibility(!!value)}
-              className="text-xs"
+              className="rounded-lg text-xs"
             >
               {typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}
             </DropdownMenuCheckboxItem>
@@ -287,30 +306,37 @@ export function DataTable<TData>({
   ) : null
 
   return (
-    <div ref={rootRef} className="flex flex-col overflow-hidden shadow-sm ">
+    <div
+      ref={rootRef}
+      className="relative flex flex-col overflow-hidden"
+      aria-busy={showSkeleton}
+    >
       {externalToolbar && columnVisibilityMenu && createPortal(columnVisibilityMenu, externalToolbar)}
+
       {showToolbar && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/15 px-5 py-3 transition-all duration-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-muted/10 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{activeToolbar}</div>
           {columnVisibilityMenu}
         </div>
       )}
+
       {showSkeleton && <IndeterminateBar className="rounded-none" />}
-      
-      {/* Scrollable Container with Custom Webkit scrollbars */}
-      <Table 
+
+      {/* Scrollable Table Viewport */}
+      <Table
         containerClassName={cn(
-          "overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15 [&::-webkit-scrollbar-thumb]:rounded-full", 
+          "data-table-scrollbar overflow-y-auto",
           maxHeight
         )}
       >
-        <TableHeader className="sticky top-0 z-10 border-b border-border bg-background">
+        <TableHeader className="sticky top-0 z-10 border-b border-border/60 bg-background/95 backdrop-blur-md">
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className="hover:bg-transparent border-b border-border/50">
+            <TableRow key={headerGroup.id} className="border-none hover:bg-transparent">
               {headerGroup.headers.map((header) => {
                 const canSort = header.column.getCanSort()
                 const sortDir = header.column.getIsSorted()
                 const sticky = header.column.columnDef.meta?.sticky
+
                 return (
                   <TableHead
                     key={header.id}
@@ -318,33 +344,41 @@ export function DataTable<TData>({
                       if (el) headCellRefs.current.set(header.column.id, el)
                       else headCellRefs.current.delete(header.column.id)
                     }}
-                    style={sticky ? { position: "sticky", [sticky]: stickyOffsets[header.column.id] ?? 0, zIndex: 20 } : undefined}
+                    style={
+                      sticky
+                        ? { position: "sticky", [sticky]: stickyOffsets[header.column.id] ?? 0, zIndex: 20 }
+                        : undefined
+                    }
                     className={cn(
-                      "h-10 px-4 text-left align-middle font-medium text-muted-foreground first:pl-5 last:pr-5 animate-none",
-                      sticky && "bg-background",
-                      sticky === "left" && "shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]",
-                      sticky === "right" && "shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
+                      "h-11 px-4 text-left align-middle font-medium first:pl-5 last:pr-5",
+                      sticky && "bg-background/95 backdrop-blur-md",
+                      sticky === "left" && "shadow-[2px_0_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_8px_-2px_rgba(0,0,0,0.3)]",
+                      sticky === "right" && "shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.3)]"
                     )}
                   >
                     {header.isPlaceholder ? null : canSort ? (
                       <button
                         type="button"
-                        className="group -ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90 hover:bg-muted/80 hover:text-foreground transition-all duration-200"
+                        className={cn(
+                          "group/sort -ml-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-all duration-200 outline-none",
+                          "focus-visible:ring-2 focus-visible:ring-primary/20",
+                          sortDir
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground/80 hover:bg-muted hover:text-foreground"
+                        )}
                         onClick={header.column.getToggleSortingHandler()}
                       >
-                        <span>
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                        </span>
+                        <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
                         {sortDir === "asc" ? (
                           <ArrowUp className="size-3 text-primary animate-in fade-in zoom-in duration-200" />
                         ) : sortDir === "desc" ? (
                           <ArrowDown className="size-3 text-primary animate-in fade-in zoom-in duration-200" />
                         ) : (
-                          <ArrowUpDown className="size-3 text-muted-foreground/30 group-hover:text-muted-foreground/70 transition-colors" />
+                          <ArrowUpDown className="size-3 text-muted-foreground/30 transition-colors group-hover/sort:text-foreground/70" />
                         )}
                       </button>
                     ) : (
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90 select-none">
+                      <span className="select-none text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
                         {flexRender(header.column.columnDef.header, header.getContext())}
                       </span>
                     )}
@@ -354,21 +388,18 @@ export function DataTable<TData>({
             </TableRow>
           ))}
         </TableHeader>
+
         <TableBody>
           {showSkeleton ? (
             Array.from({ length: 6 }).map((_, i) => (
-              <TableRow key={`skeleton-${i}`} className="border-b border-border/45 last:border-0">
+              <TableRow key={`skeleton-${i}`} className="border-b border-border/30 last:border-0">
                 {tableColumns.map((_, ci) => {
-                  const widthClass = ci % 3 === 0 
-                    ? "w-2/3" 
-                    : ci % 3 === 1 
-                    ? "w-11/12" 
-                    : "w-1/2"
+                  const widthClass = ci % 3 === 0 ? "w-2/3" : ci % 3 === 1 ? "w-11/12" : "w-1/2"
                   return (
-                    <TableCell key={ci} className="py-4 px-4 first:pl-5 last:pr-5">
-                      <Skeleton className={cn("h-4 rounded-md", widthClass)} />
+                    <TableCell key={ci} className="py-3.5 px-4 first:pl-5 last:pr-5">
+                      <Skeleton className={cn("h-4 rounded-md bg-muted/60", widthClass)} />
                     </TableCell>
-                  );
+                  )
                 })}
               </TableRow>
             ))
@@ -386,46 +417,57 @@ export function DataTable<TData>({
             </TableRow>
           ) : (
             <>
-            {table.getRowModel().rows.map((row) => (
-              <TableRow 
-                key={row.id} 
-                data-state={row.getIsSelected() ? "selected" : undefined}
-                className="transition-all border-b border-border/40 last:border-0 data-[state=selected]:bg-primary/[0.03] hover:data-[state=selected]:bg-primary/[0.06] hover:bg-muted/30 duration-150"
-              >
-                {row.getVisibleCells().map((cell) => {
-                  const sticky = cell.column.columnDef.meta?.sticky
-                  return (
-                    <TableCell
-                      key={cell.id}
-                      style={sticky ? { position: "sticky", [sticky]: stickyOffsets[cell.column.id] ?? 0, zIndex: 1 } : undefined}
-                      className={cn(
-                        "py-3.5 px-4 text-xs md:text-sm font-normal text-foreground/90 first:pl-5 last:pr-5",
-                        sticky && "bg-background",
-                        sticky === "left" && "shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]",
-                        sticky === "right" && "shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
-                      )}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  )
-                })}
-              </TableRow>
-            ))}
-            {bodyEnd && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={tableColumns.length} className="whitespace-normal border-t bg-muted/20 px-5 py-3">
-                  {bodyEnd}
-                </TableCell>
-              </TableRow>
-            )}
+              {table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
+                  className={cn(
+                    "border-b border-border/35 transition-colors duration-150 last:border-0",
+                    "hover:bg-muted/30",
+                    "data-[state=selected]:bg-primary/[0.04] hover:data-[state=selected]:bg-primary/[0.07]"
+                  )}
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    const sticky = cell.column.columnDef.meta?.sticky
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        style={
+                          sticky
+                            ? { position: "sticky", [sticky]: stickyOffsets[cell.column.id] ?? 0, zIndex: 1 }
+                            : undefined
+                        }
+                        className={cn(
+                          "py-3.5 px-4 text-xs md:text-sm text-foreground/90 first:pl-5 last:pr-5",
+                          sticky && "bg-background",
+                          sticky === "left" && "shadow-[2px_0_8px_-2px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_8px_-2px_rgba(0,0,0,0.25)]",
+                          sticky === "right" && "shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.06)] dark:shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.25)]"
+                        )}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    )
+                  })}
+                </TableRow>
+              ))}
+              {bodyEnd && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell
+                    colSpan={tableColumns.length}
+                    className="whitespace-normal border-t border-border/40 bg-muted/20 px-5 py-3"
+                  >
+                    {bodyEnd}
+                  </TableCell>
+                </TableRow>
+              )}
             </>
           )}
         </TableBody>
       </Table>
 
-      {/* Styled Premium Table Footer */}
+      {/* Styled Summary Footer */}
       {footer && !showSkeleton && !isError && table.getRowModel().rows.length > 0 && (
-        <div className="flex flex-col gap-1 border-t border-border/60 bg-muted/20 dark:bg-muted/10 px-5 py-3.5 text-xs font-semibold select-none text-muted-foreground/95 rounded-b-xl">
+        <div className="flex flex-col gap-1 border-t border-border/50 bg-muted/20 px-5 py-3.5 text-xs font-semibold text-muted-foreground select-none">
           {footer}
         </div>
       )}

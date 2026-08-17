@@ -1,0 +1,606 @@
+<title>GCGEA MLBMS User Manual</title>
+<style>
+:root{
+  --ink:#1c2330; --sub:#4b5568; --muted:#6b7488; --line:#e2e6ee;
+  --paper:#ffffff; --panel:#f6f8fb; --accent:#8a1f2b; --accent-soft:#f6e6e4;
+  --accent-ink:#5c1119; --gold:#b8862c;
+}
+@media print {
+  @page { size: Letter; margin: 16mm 14mm 16mm 14mm; }
+  a[href^="#"]::after { content: ""; }
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--paper);}
+body{
+  font-family: "Segoe UI", Calibri, Georgia, "Times New Roman", serif;
+  font-family: Georgia, "Cambria", "Times New Roman", serif;
+  color:var(--ink);
+  font-size:11.5pt;
+  line-height:1.55;
+}
+.page{max-width:670px;margin:0 auto;padding:0 6px;}
+
+/* COVER */
+.cover{
+  min-height:100vh;
+  display:flex; flex-direction:column; justify-content:space-between;
+  padding:26mm 16mm 18mm 16mm;
+  page-break-after:always;
+  background:
+    radial-gradient(circle at 85% 8%, rgba(184,134,44,0.10), transparent 45%),
+    radial-gradient(circle at 10% 92%, rgba(138,31,43,0.08), transparent 40%),
+    var(--paper);
+}
+.cover-top{display:flex;align-items:center;gap:14px;}
+.crest{
+  width:56px;height:56px;border-radius:50%;
+  background:linear-gradient(145deg,var(--accent),var(--accent-ink));
+  display:flex;align-items:center;justify-content:center;
+  color:#f4e8c8;font-family:Georgia,serif;font-weight:700;font-size:20px;
+  box-shadow:0 4px 14px rgba(92,17,25,0.35);
+  flex-shrink:0;
+}
+.org-block{line-height:1.3;}
+.org-name{font-size:12.5pt;font-weight:700;color:var(--accent-ink);letter-spacing:.01em;}
+.org-sub{font-size:9pt;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-top:2px;}
+
+.cover-mid{margin-top:16mm;}
+.eyebrow{
+  display:inline-block;font-size:8.5pt;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--gold);border:1px solid rgba(184,134,44,0.4);
+  padding:5px 12px;border-radius:999px;background:rgba(184,134,44,0.08);
+}
+.cover-title{
+  font-family:Georgia,serif;font-weight:700;font-size:34pt;line-height:1.12;
+  color:var(--ink);margin:16px 0 6px 0;max-width:9.5in;
+}
+.cover-title .accent{color:var(--accent);}
+.cover-subtitle{font-size:14pt;color:var(--sub);font-weight:400;margin-top:6px;}
+.cover-rule{height:3px;width:64px;background:linear-gradient(90deg,var(--accent),var(--gold));margin:20px 0;border-radius:2px;}
+.cover-desc{font-size:10.5pt;color:var(--sub);max-width:5.6in;line-height:1.6;}
+
+.cover-bottom{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  border-top:1px solid var(--line);padding-top:12px;margin-top:16mm;
+  font-size:9pt;color:var(--muted);
+}
+.cover-bottom .label{text-transform:uppercase;letter-spacing:.08em;font-size:7.5pt;color:var(--muted);display:block;margin-bottom:2px;}
+.cover-bottom .val{color:var(--ink);font-weight:600;font-size:9.5pt;}
+
+/* TOC */
+h2#table-of-contents{page-break-before:always;}
+#table-of-contents + ol{
+  list-style:none;counter-reset:toc;padding:0;margin:18px 0 0 0;
+  columns:1; font-size:10.8pt;
+}
+#table-of-contents + ol li{
+  counter-increment:toc;
+  display:flex;align-items:baseline;gap:8px;
+  padding:7px 0;border-bottom:1px dotted var(--line);
+}
+#table-of-contents + ol li::before{
+  content:counter(toc);
+  font-family:Georgia,serif;font-weight:700;color:var(--accent);
+  font-size:9.5pt;min-width:20px;
+}
+#table-of-contents + ol li a{flex:1;color:var(--ink);text-decoration:none;font-weight:600;}
+
+/* BODY TYPE */
+h1{font-family:Georgia,serif;font-size:22pt;color:var(--ink);margin:0 0 4px 0;line-height:1.2;}
+h2{
+  font-family:Georgia,serif;font-weight:700;font-size:17pt;color:var(--accent-ink);
+  margin:34px 0 4px 0;padding-bottom:8px;border-bottom:2px solid var(--accent);
+  page-break-before:always;
+  break-before:page;
+}
+h2:first-of-type, #table-of-contents{page-break-before:auto;}
+h3{font-family:Georgia,serif;font-weight:700;font-size:12.5pt;color:var(--accent-ink);margin:22px 0 6px 0;}
+h3::before{content:"";}
+p{margin:8px 0;color:var(--ink);}
+p.italic{font-style:italic;color:var(--muted);font-size:10pt;}
+strong{color:var(--ink);font-weight:700;}
+em{color:var(--sub);}
+code{
+  background:var(--panel);border:1px solid var(--line);border-radius:4px;
+  padding:1px 5px;font-family:Consolas,monospace;font-size:9.5pt;color:var(--accent-ink);
+}
+ul,ol{margin:8px 0 12px 0;padding-left:22px;}
+li{margin:5px 0;}
+ol > li::marker{color:var(--accent);font-weight:700;}
+ul > li::marker{color:var(--gold);}
+hr{border:none;border-top:1px solid var(--line);margin:22px 0;}
+blockquote{
+  margin:14px 0;padding:10px 16px;border-left:3px solid var(--gold);
+  background:var(--panel);border-radius:0 6px 6px 0;
+}
+blockquote p{margin:4px 0;font-size:10.5pt;color:var(--sub);}
+a{color:var(--accent);}
+
+table{
+  width:100%;border-collapse:collapse;margin:14px 0 18px 0;font-size:10pt;
+  border:1px solid var(--line);border-radius:6px;overflow:hidden;
+}
+thead th{
+  background:var(--accent-ink);color:#f4e8c8;text-align:left;
+  padding:8px 10px;font-weight:700;font-size:9.5pt;letter-spacing:.02em;
+}
+tbody td{padding:7px 10px;border-top:1px solid var(--line);vertical-align:top;}
+tbody tr:nth-child(even){background:var(--panel);}
+
+/* Section number badge before H2 (visual only) */
+.footer-note{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);font-size:9pt;color:var(--muted);text-align:center;}
+
+figure.screenshot{
+  margin:14px 0 18px 0; padding:0; break-inside:avoid; page-break-inside:avoid;
+  text-align:center;
+}
+figure.screenshot img{
+  width:100%; max-width:100%; height:auto; display:block;
+  border:1px solid var(--line); border-radius:8px;
+  box-shadow:0 2px 8px rgba(28,35,48,0.10);
+}
+figure.screenshot figcaption{
+  margin-top:7px; font-size:8.8pt; color:var(--muted); font-style:italic;
+  font-family:"Segoe UI",sans-serif;
+}
+</style>
+
+<section class="cover">
+  <div class="cover-top">
+    <div class="crest">G</div>
+    <div class="org-block">
+      <div class="org-name">Gingoog City Government Employees Association</div>
+      <div class="org-sub">GCGEA &middot; Gingoog City, Misamis Oriental</div>
+    </div>
+  </div>
+  <div class="cover-mid">
+    <span class="eyebrow">User Manual</span>
+    <h1 class="cover-title">GCGEA <span class="accent">Membership, Loan</span><br/>and Benefits Management System</h1>
+    <div class="cover-subtitle">A staff guide to the association's member, contribution, loan, benefit, and financial records system.</div>
+    <div class="cover-rule"></div>
+    <p class="cover-desc">This manual walks GCGEA staff through every module of the system &mdash; from signing in and registering members, to recording contributions and loan payments, processing benefit claims, and administering roles and approvals.</p>
+  </div>
+  <div class="cover-bottom">
+    <div>
+      <span class="label">Prepared for</span>
+      <span class="val">GCGEA Staff &amp; Administrators</span>
+    </div>
+    <div>
+      <span class="label">Version</span>
+      <span class="val">1.0</span>
+    </div>
+    <div>
+      <span class="label">Issued</span>
+      <span class="val">August 2026</span>
+    </div>
+  </div>
+</section>
+
+<div class="page">
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#1-introduction">Introduction</a></li>
+<li><a href="#2-getting-started">Getting Started</a></li>
+<li><a href="#3-dashboard">Dashboard</a></li>
+<li><a href="#4-member-management">Member Management</a></li>
+<li><a href="#5-contributions">Contributions</a></li>
+<li><a href="#6-loan-management">Loan Management</a></li>
+<li><a href="#7-benefits">Benefits</a></li>
+<li><a href="#8-financial-management">Financial Management</a></li>
+<li><a href="#9-approval-inbox-my-approvals">Approval Inbox (My Approvals)</a></li>
+<li><a href="#10-reports">Reports</a></li>
+<li><a href="#11-administration">Administration</a></li>
+<li><a href="#12-notifications--my-profile">Notifications &amp; My Profile</a></li>
+<li><a href="#13-glossary-of-statuses">Glossary of Statuses</a></li>
+<li><a href="#14-frequently-asked-questions">Frequently Asked Questions</a></li>
+</ol>
+<hr/>
+<h2 id="1-introduction">1. Introduction</h2>
+<p>The <strong>GCGEA Membership, Loan and Benefits Management System (GCGEA MLBMS)</strong> is the association's web-based system for managing member records, contributions, loans, benefit claims, and the association's finances. It replaces manual, paper-based record keeping with a single system that:</p>
+<ul>
+<li>Keeps one accurate record per member — personal details, contributions, loans, and benefits in one place.</li>
+<li>Routes applications (loans, benefits, member registrations, budgets, disbursements) through the correct approval steps automatically.</li>
+<li>Produces official receipts, statements, checks, and reports.</li>
+<li>Keeps a complete audit trail of who did what and when.</li>
+</ul>
+<h3 id="who-this-manual-is-for">Who this manual is for</h3>
+<p>This manual is written for <strong>end users</strong> — Membership Officers, Loan Officers, Treasury/Bookkeeping staff, Approving Officers, and Administrators who use the system day to day. Screens and menu items you see depend on the <strong>permissions</strong> assigned to your user account by an administrator; if a menu item described here does not appear for you, you likely don't have that permission — contact your system administrator.</p>
+<h3 id="how-the-menu-is-organized">How the menu is organized</h3>
+<p>The left-hand sidebar is your main way of moving around the system. It is grouped into:</p>
+<table><thead><tr><th>Menu Group</th><th>What it's for</th></tr></thead><tbody>
+<tr><td><strong>Dashboard</strong></td><td>At-a-glance overview of the whole association</td></tr>
+<tr><td><strong>Member Management</strong></td><td>Member records, registration, import</td></tr>
+<tr><td><strong>Contributions</strong></td><td>Monthly dues and other member contributions</td></tr>
+<tr><td><strong>Loan Management</strong></td><td>Loan applications, active/overdue loans, loan payments</td></tr>
+<tr><td><strong>Benefits</strong></td><td>Benefit claims (retirement, mortuary, etc.)</td></tr>
+<tr><td><strong>Approval Inbox</strong></td><td>Items waiting for your review/approval/release</td></tr>
+<tr><td><strong>Financial Management</strong></td><td>Over-the-counter payments, annual budgets, disbursements</td></tr>
+<tr><td><strong>Reports</strong></td><td>All printable/exportable reports</td></tr>
+<tr><td><strong>Administration</strong></td><td>Offices, Users, Roles &amp; Permissions, Approval Workflow setup, Audit Logs, System Settings</td></tr>
+</tbody></table>
+<hr/>
+<h2 id="2-getting-started">2. Getting Started</h2>
+<h3 id="21-signing-in">2.1 Signing In</h3>
+<ol>
+<li>Open the system in your browser. You will see the <strong>Sign In</strong> page.</li>
+<li>Enter your <strong>Username or Email</strong> and <strong>Password</strong>.</li>
+<li>Optionally check <strong>Remember Me</strong> to stay signed in on that device.</li>
+<li>Click <strong>Sign In</strong>.</li>
+</ol>
+<figure class="screenshot"><img src="screenshots/01-login.png" alt="The GCGEA MLBMS sign-in screen" loading="lazy"/><figcaption>The GCGEA MLBMS sign-in screen</figcaption></figure>
+<p>If your administrator has required a password change (for example, on a newly created account), you will be sent straight to the <strong>Change Password</strong> screen and must set a new password before you can use the rest of the system.</p>
+<h3 id="22-forgot-your-password">2.2 Forgot Your Password</h3>
+<ol>
+<li>On the Sign In page, click <strong>Forgot Password</strong>.</li>
+<li>Enter your registered email address and submit.</li>
+<li>You'll see a "Check Your Email" confirmation. Follow the link in the email to set a new password.</li>
+</ol>
+<h3 id="23-changing-your-password-voluntarily">2.3 Changing Your Password Voluntarily</h3>
+<p>Go to <strong>Change Password</strong> (accessible from your account menu). Enter your <strong>Current Password</strong>, then your <strong>New Password</strong> (minimum 8 characters) and <strong>Confirm Password</strong>. You remain signed in on this device after changing it.</p>
+<h3 id="24-what-youll-see-after-signing-in">2.4 What You'll See After Signing In</h3>
+<p>You are taken to your <strong>landing page</strong> — for most staff this is the Dashboard; some roles with narrower permissions may land on a more specific screen. The sidebar on the left only shows the menu items your account has permission to use.</p>
+<hr/>
+<h2 id="3-dashboard">3. Dashboard</h2>
+<p>The Dashboard is the system's home screen — an "executive cockpit" summarizing the whole association's activity. What you see here depends on your permissions; each section below only appears if you have the matching module permission.</p>
+<figure class="screenshot"><img src="screenshots/02-dashboard.png" alt="The Dashboard home screen with quick actions and key metrics" loading="lazy"/><figcaption>The Dashboard home screen with quick actions and key metrics</figcaption></figure>
+<h3 id="31-quick-launch-actions">3.1 Quick Launch Actions</h3>
+<p>Shortcut buttons at the top of the Dashboard let you jump straight into common tasks (e.g., Add Member, Record Contribution, Create Loan) without navigating the menu.</p>
+<h3 id="32-approval-workflow-summary">3.2 Approval Workflow Summary</h3>
+<p>If you are an approver for any module, you'll see:</p>
+<ul>
+<li><strong>Pending My Action</strong>, <strong>Awaiting Review</strong>, <strong>Awaiting Approval</strong>, <strong>Awaiting Release</strong> counters.</li>
+<li>A <strong>Recent Approvals</strong> list of items you've recently acted on, each linking to its detail page.</li>
+</ul>
+<h3 id="33-key-metric-indicators">3.3 Key Metric Indicators</h3>
+<p>A tabbed panel with three views:</p>
+<ul>
+<li><strong>Overview &amp; Members</strong> — Total/Active/Retired Members, Pending Loan Applications, Pending Benefit Applications.</li>
+<li><strong>Financials &amp; Balances</strong> — Active Loans, Outstanding Loan Balance, Total Collections, Benefits Released, Monthly Contributions, and Fund Balances.</li>
+<li><strong>Reloans &amp; Pipeline</strong> — Pending, Awaiting Review, Approved, and Awaiting Release counts specifically for reloan (renewal) applications, plus members newly eligible to reloan this month.</li>
+</ul>
+<h3 id="34-analytical-workspace">3.4 Analytical Workspace</h3>
+<p>Charts under two tabs:</p>
+<ul>
+<li><strong>Financial Trends</strong> — Monthly Loan Releases, Monthly Collections, Loan Status Distribution.</li>
+<li><strong>Membership &amp; Scope</strong> — Benefit Distribution by Type, Members per Office, Membership Growth by Year.</li>
+</ul>
+<h3 id="35-activity-monitoring-hub">3.5 Activity &amp; Monitoring Hub</h3>
+<p>Filterable activity feed (All / Loans &amp; Payments / Alerts &amp; Overdue / Members &amp; Benefits) showing: Recent Loan Applications, Recent Payments, Upcoming Loan Due Dates, Overdue Accounts, Recent Benefit Applications, Recently Added Members, and Incomplete Member Profiles. Each card links to its full list ("View All").</p>
+<hr/>
+<h2 id="4-member-management">4. Member Management</h2>
+<h3 id="41-all-members">4.1 All Members</h3>
+<p><strong>Menu: Member Management → All Members</strong></p>
+<p>The main member directory — every registered member, searchable and filterable.</p>
+<ul>
+<li><strong>Search</strong> by name, member number, office, position, or phone number.</li>
+<li><strong>Filters</strong>: Office, Sex, Membership Status (Active/Inactive/Suspended/Terminated/Deceased), Retiree Status.</li>
+<li><strong>Table</strong> shows photo, name, position, sex, birthdate, auto-calculated age, office, contact info, date joined, tenure, membership status (with a toggle switch to set Active/Inactive), retiree status, and a <strong>Profile Completeness</strong> progress bar.</li>
+<li><strong>Row actions</strong>: View, Edit, Archive (requires a typed reason).</li>
+<li><strong>Toolbar</strong>: Print List, Export, Import, and <strong>Add Member</strong>.</li>
+</ul>
+<figure class="screenshot"><img src="screenshots/03-members-list.png" alt="The Member Directory list, searchable and filterable" loading="lazy"/><figcaption>The Member Directory list, searchable and filterable</figcaption></figure>
+<h3 id="42-adding-registering-a-member">4.2 Adding / Registering a Member</h3>
+<p><strong>Menu: Member Management → Add Member</strong></p>
+<p>The registration form is organized into five sections, all on one page:</p>
+<ol>
+<li><strong>Personal Information</strong> — Employee #, full name, sex, birthdate (age is calculated automatically), civil status, spouse name (if applicable), contact number, email, address, and a profile photo upload.</li>
+<li><strong>Employment Information</strong> — office, position, date of regular appointment (length of service is auto-calculated), employment status.</li>
+<li><strong>Membership Information</strong> — membership type, date became a GCGEA member (length of membership auto-calculated), membership status, retiree status, and optional monthly net pay.</li>
+<li><strong>Beneficiaries</strong> — add one or more beneficiaries (name, relationship, birthdate, contact, share %).</li>
+<li><strong>Supporting Documents</strong> — upload required documents: <strong>Valid ID</strong>, <strong>Appointment Document</strong>, <strong>Membership Form</strong>. If you entered a monthly net pay, a <strong>Payslip / Net Take-Home Pay</strong> document also becomes required.</li>
+</ol>
+<figure class="screenshot"><img src="screenshots/04-member-registration.png" alt="The Member Registration form" loading="lazy"/><figcaption>The Member Registration form</figcaption></figure>
+<p><strong>Saving your work:</strong></p>
+<ul>
+<li><strong>Save as Draft</strong> — keeps your progress and can be resumed later; the system also auto-saves every ~30 seconds while you're editing a draft. A completion-percentage bar shows how much is filled in.</li>
+<li><strong>Submit Registration / Register Member</strong> — finalizes the record. Missing required fields or documents will be flagged before you can submit.</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> After registering a member, if the required membership fee has not yet been posted, the system reminds staff to post it under <strong>Financial Management → Payments</strong> before the member can be fully approved/activated.</p>
+</blockquote>
+<h3 id="43-member-profile">4.3 Member Profile</h3>
+<p><strong>Menu: click any member's name from the directory</strong></p>
+<p>Shows the member's complete record:</p>
+<ul>
+<li>Header with photo, name, member #, position, office, status badges, and completeness meter.</li>
+<li>Summary tiles: <strong>Outstanding Loan Balance</strong>, <strong>Total Contributions</strong>, <strong>Total Benefits Received</strong>.</li>
+<li>Quick-action buttons: <strong>Record Contribution</strong>, <strong>Create Loan</strong>, <strong>Record Payment</strong>, <strong>Create Benefit Request</strong> — each opens the relevant form pre-filled with this member.</li>
+<li>Tabs: Overview, Employment, Beneficiaries, Contributions (with a Void option), Contribution Allocation, deduction-type tabs (e.g., Cash Pabaon), Loans (with a Reloan button when eligible), Loan Payments, Benefits, Documents, and Activity History.</li>
+</ul>
+<figure class="screenshot"><img src="screenshots/05-member-profile.png" alt="A member's profile page with summary tiles and quick actions" loading="lazy"/><figcaption>A member's profile page with summary tiles and quick actions</figcaption></figure>
+<h3 id="44-importing-members-in-bulk">4.4 Importing Members in Bulk</h3>
+<p><strong>Menu: Member Management → Import Members</strong></p>
+<p>An 11-step guided wizard for loading many members at once from an existing spreadsheet (Excel/CSV), instead of registering them one by one:</p>
+<ol>
+<li><strong>Upload Workbook</strong> (.xlsx, .xls, .csv)</li>
+<li><strong>Select Worksheet</strong></li>
+<li><strong>Detect Header Row</strong> — the system finds your column headers automatically</li>
+<li><strong>Map Columns</strong> — match your spreadsheet's columns to system fields</li>
+<li><strong>Preview Records &amp; Validation</strong> — every row is tagged New / Exact Duplicate / Probable Match / Possible Match / Invalid; invalid rows must be fixed before continuing</li>
+<li><strong>Validate &amp; Clean</strong> — summary of fixes and warnings</li>
+<li><strong>Resolve Offices</strong> — match office names in your file to the offices already set up in the system</li>
+<li><strong>Review Beneficiaries</strong> — check the beneficiary names detected per member</li>
+<li><strong>Review Legacy Loan Data</strong> — any old loan balances found in the file are staged for review, not created as live loans yet</li>
+<li><strong>Confirm Import</strong> — final counts; you must check an acknowledgment box before importing</li>
+<li><strong>Import Summary</strong> — results, with a downloadable audit report (CSV)</li>
+</ol>
+<figure class="screenshot"><img src="screenshots/06-member-import-wizard.png" alt="The Member Import Wizard" loading="lazy"/><figcaption>The Member Import Wizard</figcaption></figure>
+<p>Use <strong>Import History</strong> to see past import batches, download their audit reports, or <strong>Undo Import</strong> — but only the single most recently completed batch can be undone, and doing so permanently deletes the members it created.</p>
+<h3 id="45-incomplete-profiles-drafts-and-archived-members">4.5 Incomplete Profiles, Drafts, and Archived Members</h3>
+<ul>
+<li><strong>Incomplete Profiles</strong> — members whose profile completeness is below 100%; a worklist for following up on missing information.</li>
+<li><strong>Member Drafts</strong> — registrations started but not yet submitted; continue editing from here.</li>
+<li><strong>Archived Members</strong> — members who have been archived (with a reason), kept for record-keeping.</li>
+</ul>
+<hr/>
+<h2 id="5-contributions">5. Contributions</h2>
+<p>Contributions cover Monthly Dues and related deductions like Cash Pabaon.</p>
+<h3 id="51-contribution-records">5.1 Contribution Records</h3>
+<p><strong>Menu: Contributions → Contribution Records</strong></p>
+<p>The ledger of all contribution transactions.</p>
+<ul>
+<li>KPI tiles: Total Contributions, Total Amount Collected, Paid Members, Unpaid Members, Contributions This Month.</li>
+<li>Filters: search, Period, Type, Office, Payment Method, Status, and a date range.</li>
+<li>Row actions: View Details, View History, Edit Record (Posted only), Void Transaction (requires a reason).</li>
+</ul>
+<figure class="screenshot"><img src="screenshots/07-contributions-list.png" alt="The Contribution Records ledger" loading="lazy"/><figcaption>The Contribution Records ledger</figcaption></figure>
+<h3 id="52-recording-a-contribution">5.2 Recording a Contribution</h3>
+<p><strong>Menu: Contributions → Record Contribution</strong></p>
+<ol>
+<li><strong>Select the member.</strong> The system shows their contribution total, outstanding loan balance, and loan counts, plus their last recorded contribution.</li>
+<li><strong>Enter payment details:</strong> contribution period, the Monthly Dues amount (fixed by system settings), Cash Pabaon amount (auto-linked, if applicable), payment method, payment date, official receipt number, payroll reference, and remarks. You can add several period entries at once when creating new records.</li>
+</ol>
+<p>The system blocks duplicate entries for the same member/period, and flags unresolved voided periods with a shortcut to fix them. On save, you'll get a generated reference number (e.g. <code>GCGEA-CON-2026-000001</code>).</p>
+<figure class="screenshot"><img src="screenshots/08-contribution-form.png" alt="The Record Contribution form" loading="lazy"/><figcaption>The Record Contribution form</figcaption></figure>
+<h3 id="53-bulk-contributions">5.3 Bulk Contributions</h3>
+<p><strong>Menu: Contributions → Bulk Contributions</strong></p>
+<p>For posting Monthly Dues across many members at once (e.g., a payroll run):</p>
+<ol>
+<li>Set up the batch: contribution period, office(s), membership status filter, payment date/method, and payroll reference.</li>
+<li>Click <strong>Load Unpaid Members</strong> — the system pulls all matching members and automatically excludes anyone already paid for that period.</li>
+<li>Review/edit the roster grid — amounts, paid/unpaid status, and remarks per member. Use the toolbar to Apply Rate, Mark Paid/Unpaid, Reset Rates, or Exclude selected rows.</li>
+<li>Click <strong>Save &amp; Post [N] Contribution Entries</strong>, confirm in the dialog, and the batch is posted. A results banner shows dues saved, deductions created, duplicates skipped, and any failures.</li>
+</ol>
+<figure class="screenshot"><img src="screenshots/09-bulk-contributions.png" alt="The Bulk Contributions batch entry screen" loading="lazy"/><figcaption>The Bulk Contributions batch entry screen</figcaption></figure>
+<h3 id="54-contribution-detail-void">5.4 Contribution Detail &amp; Void</h3>
+<p>Opening a record shows tabs for Overview (with Fund Allocations), Member Profile (their other contributions), Payment Data, Audit Timestamps, and Activity History. <strong>Voiding</strong> a record requires a reason and, for Monthly Dues, also voids the linked Cash Pabaon deduction for that period; you can then re-contribute for that month via a shortcut.</p>
+<h3 id="55-contribution-reports">5.5 Contribution Reports</h3>
+<p><strong>Menu: Contributions → Contribution Reports</strong> <em>(or via the Reports Center)</em></p>
+<p>Set your filters (date range, period, office, member, status, payment method) and click <strong>Generate</strong> to produce:</p>
+<ul>
+<li>KPI tiles: Total Records, Total Collected, Paid/Unpaid Members, Average Paid, Peak Single Receipt.</li>
+<li>Charts: Monthly Collections Trend, Collections per Office, Payment Method Breakdown.</li>
+<li>A detailed, exportable results table (Print, CSV, Excel, PDF).</li>
+</ul>
+<hr/>
+<h2 id="6-loan-management">6. Loan Management</h2>
+<h3 id="61-loan-applications">6.1 Loan Applications</h3>
+<p><strong>Menu: Loan Management → Loan Applications</strong></p>
+<p>The master list of all loan applications, in any status.</p>
+<ul>
+<li>KPI ribbon: Total Applications, Active Loan Accounts, Outstanding Portfolio, Overdue Accounts.</li>
+<li>Filters: search, Status, Type (New/Reloan), Reset Filters.</li>
+<li>Draft rows can be <strong>Continued</strong> (edited) or deleted; fully-paid/active/released loans show a <strong>Reloan</strong> button.</li>
+</ul>
+<figure class="screenshot"><img src="screenshots/10-loans-list.png" alt="The Loan Applications list" loading="lazy"/><figcaption>The Loan Applications list</figcaption></figure>
+<h3 id="62-creating-a-loan-application">6.2 Creating a Loan Application</h3>
+<p><strong>Menu: Loan Management → Create Loan</strong></p>
+<p>A 6-step wizard:</p>
+<ol>
+<li><strong>Select Member</strong> — the member must meet minimum membership length and have fully paid dues, or the system blocks you with an explanation.</li>
+<li><strong>Loan Details</strong> — application date, assigned loan officer, and (after saving the member's financial profile — net pay and Net Take-Home Pay document) the loan product, requested amount, repayment term, payment method, and purpose. A <strong>Product Matrix</strong> panel shows that loan type's amount range, interest rate, method, maximum term, processing fee, and required contribution months.</li>
+<li><strong>Eligibility Check</strong> — the system runs an automatic checklist and shows Eligible / Not Eligible / Eligible with Warning. If a user has override permission, a <strong>Not Eligible</strong> result can be overridden with a written justification and a board resolution reference — this is logged in the audit trail.</li>
+<li><strong>Loan Computation</strong> — principal, net proceeds, total interest, monthly amortization, processing fee, total payable, first due date, maturity date, and the full <strong>amortization schedule</strong>.</li>
+<li><strong>Requirements</strong> — upload the 5 required documents: Loan Application Form, Latest Net Take-Home Pay, Valid Government ID, Salary Deduction Authorization, and Promissory Note.</li>
+<li><strong>Review &amp; Submit</strong> — a read-only summary; check the confirmation box and click <strong>Submit Loan Application</strong>.</li>
+</ol>
+<p>You can <strong>Save as Draft</strong> at any step (auto-saves every 30 seconds).</p>
+<figure class="screenshot"><img src="screenshots/11-loan-create-wizard.png" alt="The Create Loan Application wizard" loading="lazy"/><figcaption>The Create Loan Application wizard</figcaption></figure>
+<h3 id="63-loan-detail-page">6.3 Loan Detail Page</h3>
+<p>Opening any loan shows its full account: application details, computation breakdown, full amortization schedule, payment history, requirements/eligibility, and approval history — plus buttons to <strong>Record Payment</strong>, <strong>Reloan</strong> (when eligible), <strong>Print Application</strong>, <strong>Print Check</strong> (once released by check), and view its <strong>Loan Statement</strong>.</p>
+<figure class="screenshot"><img src="screenshots/12-loan-detail.png" alt="A Loan Detail page for an active, released loan" loading="lazy"/><figcaption>A Loan Detail page for an active, released loan</figcaption></figure>
+<h3 id="64-active-loans-overdue-loans-loan-drafts">6.4 Active Loans / Overdue Loans / Loan Drafts</h3>
+<p>Pre-filtered views of the same loan list:</p>
+<ul>
+<li><strong>Draft Applications</strong> — unfinished applications you can resume.</li>
+<li><strong>Active Loans</strong> — loans currently being repaid (Released/Active/Overdue/Restructured).</li>
+<li><strong>Overdue Loans</strong> — a collections follow-up worklist of accounts past due.</li>
+</ul>
+<h3 id="65-loan-types">6.5 Loan Types</h3>
+<p><strong>Menu: Loan Management → Loan Types</strong></p>
+<p>Admin-level screen to configure the loan products offered (name, interest rate, amount range, max term, processing fee, minimum membership/contribution months, etc.). <strong>Add Loan Type</strong> opens a form dialog; each existing type can be edited or deleted.</p>
+<h3 id="66-importing-existing-legacy-loans">6.6 Importing Existing (Legacy) Loans</h3>
+<p><strong>Menu: Loan Management → Import Existing Loans</strong></p>
+<p>Used to bring members' pre-existing loan balances from a legacy system into GCGEA MLBMS:</p>
+<ol>
+<li>Choose the <strong>Month of Balance</strong> and upload your workbook (.xlsx/.xls/.csv).</li>
+<li>Click <strong>Generate Loan Preview</strong> — the system matches each row to a system member automatically where possible; ambiguous matches show a searchable dropdown of candidates with a match score. Rows already imported for that balance month are automatically skipped.</li>
+<li>Review the preview table (principal, interest, prior/recent payments, balances, status) and resolve any unmatched rows.</li>
+<li>Click <strong>Commit [N] Loan(s)</strong> to create the loan and payment history records.</li>
+</ol>
+<p>Use <strong>Loan Import History</strong> to review past batches, download audit reports, or <strong>Undo Import</strong> on the most recent batch (destructive — deletes the loans and payment history it created).</p>
+<h3 id="67-reloan-renewal-wizard">6.7 Reloan (Renewal) Wizard</h3>
+<p>Available from a member's eligible existing loan via the <strong>Reloan</strong> button. A 7-step wizard: Previous Loan Summary → Member &amp; Eligibility → Current Financial Info → New Loan Details → Computation (which nets out the previous loan's remaining balance) → Requirements → Review &amp; Submit. Works the same way as a new loan application, but is linked to the original loan and does not alter it.</p>
+<h3 id="68-loan-statement">6.8 Loan Statement</h3>
+<p><strong>From a loan's detail page → Loan Statement</strong></p>
+<p>A printable "Statement of Loan" formatted like GCGEA's paper template: member/loan details, an installment-by-installment breakdown (with a date-range and payment-status filter for what's displayed), a balance summary, and signature lines for verification. Click <strong>Print Statement</strong> to print.</p>
+<h3 id="69-loan-payments">6.9 Loan Payments</h3>
+<p><strong>Menu: Loan Management → Loan Payments</strong></p>
+<ul>
+<li><strong>Loan Payments list</strong> — search all posted loan payments by member, payment reference, or application number.</li>
+<li><strong>Record Payment</strong> — pick the member, then the specific loan account (only loans with a balance show up). If an installment was only partially paid, the shortfall is flagged and can be included in the suggested amount. Enter payment date, amount paid, penalty (auto-computed if the loan is overdue), payment method, and OR number (auto-generated or manual). The system will not let you overpay past the outstanding balance.</li>
+</ul>
+<figure class="screenshot"><img src="screenshots/13-loan-payments.png" alt="The Loan Payments ledger" loading="lazy"/><figcaption>The Loan Payments ledger</figcaption></figure>
+<h3 id="610-printing-a-loan-check">6.10 Printing a Loan Check</h3>
+<p>Once a loan is released by check, use <strong>Print Check</strong> from the loan detail page. The check layout is sized for standard 8.5×3.5 in check stock — print at 100% (actual size) and adjust your printer's margins for alignment with your pre-printed check forms.</p>
+<hr/>
+<h2 id="7-benefits">7. Benefits</h2>
+<p>Benefits cover programs such as Retirement, Mortuary Cash Assistance, and similar member claims.</p>
+<h3 id="71-benefit-applications">7.1 Benefit Applications</h3>
+<p><strong>Menu: Benefits → Benefit Applications</strong></p>
+<p>Master list of every benefit application. Search by member/application number, filter by status. <strong>Create Application</strong> starts a new one; draft rows can be continued or deleted (including in bulk).</p>
+<figure class="screenshot"><img src="screenshots/14-benefits-list.png" alt="The Benefit Applications list" loading="lazy"/><figcaption>The Benefit Applications list</figcaption></figure>
+<h3 id="72-creating-a-benefit-application">7.2 Creating a Benefit Application</h3>
+<p><strong>Menu: Benefits → Create Application</strong></p>
+<p>A 4-step wizard:</p>
+<ol>
+<li><strong>Select Member</strong> — shows their contributions, loan balance, and recent benefit history.</li>
+<li><strong>Benefit Details &amp; Purpose</strong> — application date, benefit type (only types the member currently qualifies for are shown — e.g. Retirement only appears if their Retiree Status is "Retired"), requested amount (auto-computed for formula-based benefits), incident date, recipient, assigned Benefits Officer, purpose, and required document uploads for that benefit type.</li>
+<li><strong>Eligibility &amp; Requirements</strong> — an automatic eligibility checklist with an overall Eligible/Not Eligible result. If not eligible, an authorized user can apply an <strong>override</strong> with a written justification (logged in the audit trail).</li>
+<li><strong>Review &amp; Submit</strong> — confirm all physical documents have been verified, then submit.</li>
+</ol>
+<p><strong>Save Draft</strong> works at any step. On submission you'll receive the generated application number.</p>
+<figure class="screenshot"><img src="screenshots/15-benefit-create-wizard.png" alt="The Create Benefit Application wizard" loading="lazy"/><figcaption>The Create Benefit Application wizard</figcaption></figure>
+<h3 id="73-benefit-detail-release">7.3 Benefit Detail &amp; Release</h3>
+<p>Each application's detail page shows: requested/approved/released amounts, release date/reference, four tabs (Application Summary, Payment Status, Requirements, Approval History), and — once released — a <strong>Print Check</strong> button. If only partially released, the system will not let you release the remaining balance directly; contact an administrator.</p>
+<figure class="screenshot"><img src="screenshots/16-benefit-detail.png" alt="A Benefit Application detail page" loading="lazy"/><figcaption>A Benefit Application detail page</figcaption></figure>
+<h3 id="74-draft-applications-released-benefits">7.4 Draft Applications / Released Benefits</h3>
+<p>Pre-filtered views of the Benefit Applications list showing only <strong>Drafts</strong> (to continue/delete) or only <strong>Released</strong> benefits (a worklist for check printing/verification).</p>
+<h3 id="75-benefit-types">7.5 Benefit Types</h3>
+<p><strong>Menu: Benefits → Benefit Types</strong></p>
+<p>Admin screen listing each benefit program with its default/maximum amount, frequency limit, minimum membership requirement, required documents, and whether approval is required. <strong>Add Benefit Type</strong> opens a configuration form. Note: certain "Core Benefit" types (Retirement/Separation and the two Mortuary benefits) share one policy — editing one syncs the proration schedule across all three.</p>
+<h3 id="76-printing-a-benefit-check">7.6 Printing a Benefit Check</h3>
+<p>From a Released application's detail page → <strong>Print Check</strong>. Same 8.5×3.5 in check-stock layout and printing instructions as loan checks (see §6.10).</p>
+<hr/>
+<h2 id="8-financial-management">8. Financial Management</h2>
+<h3 id="81-payments-over-the-counter">8.1 Payments (Over-the-Counter)</h3>
+<p><strong>Menu: Financial Management → Payments</strong></p>
+<p>The Treasurer's hub for recording walk-in payments and issuing a receipt on the spot. Choose a payment type card (only types you have permission for appear):</p>
+<ul>
+<li><strong>Contribution Payment</strong> — select member, then period, amount, method, date, and OR number. Warns on duplicate period entries.</li>
+<li><strong>Loan Payment</strong> — select member, then their loan account; amount/penalty auto-suggested; blocks overpayment.</li>
+<li><strong>Benefit Payment</strong> — select member, then their approved application; for Cash Pabaon-type benefits, shows a settlement ledger (approved amount minus prior contributions = net payable).</li>
+<li><strong>Membership Fee</strong> — posts the one-time membership fee for a member who hasn't paid it yet.</li>
+</ul>
+<p>Each posts immediately to the member's ledger and the association's cash balances — double-check the amount and OR number before saving.</p>
+<figure class="screenshot"><img src="screenshots/17-financial-payments.png" alt="The Payments (Over-the-Counter) hub" loading="lazy"/><figcaption>The Payments (Over-the-Counter) hub</figcaption></figure>
+<h3 id="82-annual-budgets">8.2 Annual Budgets</h3>
+<p><strong>Menu: Financial Management → Annual Budgets</strong></p>
+<p>One record per fiscal year, moving through <strong>Draft → For Approval → Approved</strong> (or <strong>Rejected</strong>). List shows Fiscal Year, Estimated Revenue, Proposed Budget, Unallocated Balance, and Status. The <strong>Treasurer</strong> prepares and submits a budget; the <strong>Approving Officer/President</strong> approves it; an <strong>Auditor</strong> has read-only access. Click <strong>Create Annual Budget</strong>, or <strong>Open</strong>/<strong>View</strong> an existing one depending on your permissions and its status.</p>
+<figure class="screenshot"><img src="screenshots/18-annual-budgets.png" alt="The Annual Budgets list" loading="lazy"/><figcaption>The Annual Budgets list</figcaption></figure>
+<h3 id="83-disbursements">8.3 Disbursements</h3>
+<p><strong>Menu: Financial Management → Disbursements</strong></p>
+<p>Expenses charged against an approved annual budget's line items.</p>
+<ol>
+<li><strong>New Disbursement</strong> — choose the approved budget and its particular/account line (the system shows that line's remaining balance), then enter date, payee, amount, payment method, and reference.</li>
+<li>The record moves through its lifecycle with buttons that appear based on its current status and your permissions: <strong>Save Draft → Submit for Approval → (approval happens in the Approval Inbox) → Mark as Paid → Print Check</strong> (if paid by check) <strong>→ Void Disbursement</strong> (if needed, with a required reason).</li>
+</ol>
+<p>A disbursement cannot be created until at least one annual budget has been approved.</p>
+<figure class="screenshot"><img src="screenshots/19-disbursements.png" alt="The Disbursements list" loading="lazy"/><figcaption>The Disbursements list</figcaption></figure>
+<h3 id="84-printing-disbursement-checks">8.4 Printing Disbursement Checks</h3>
+<p>From a Paid disbursement → <strong>Print Check</strong>, same check-stock format and instructions as loan/benefit checks.</p>
+<hr/>
+<h2 id="9-approval-inbox-my-approvals">9. Approval Inbox (My Approvals)</h2>
+<p><strong>Menu: Approval Inbox</strong> <em>(only visible if you are an approver for at least one module)</em></p>
+<p>Your personal worklist for anything routed to you for review, approval, release, rejection, or return — covering member registrations, loan applications, benefit applications, annual budgets, and disbursements.</p>
+<ul>
+<li><strong>Tabs</strong>: Pending, For Approval, Approved, Rejected, Returned, Released.</li>
+<li>Search by reference/title/member/stage, and filter by date range.</li>
+<li>Click any item to open its <strong>Approval Detail</strong> page, where the full record (loan computation, benefit eligibility, budget line items, etc.) is shown alongside the applicant's profile and document uploads.</li>
+<li><strong>Actions available depend on the item's current stage and your permission</strong>: Mark Reviewed, Approve, Release, Return for Revision (requires a reason), Reject (requires a reason).</li>
+<li>Once a loan is Approved or later, you can <strong>Print / Save as PDF</strong> an official approval sheet with signature lines.</li>
+</ul>
+<figure class="screenshot"><img src="screenshots/20-approval-inbox.png" alt="The Approval Inbox" loading="lazy"/><figcaption>The Approval Inbox</figcaption></figure>
+<blockquote>
+<p>How approval chains are configured (who reviews/approves/releases each module) is set up under <strong>Administration → Approval Workflow</strong> — see §11.4.</p>
+</blockquote>
+<hr/>
+<h2 id="10-reports">10. Reports</h2>
+<p><strong>Menu: Reports</strong></p>
+<p>The Report Center groups all available reports by category (only categories you have permission for are shown):</p>
+<table><thead><tr><th>Category</th><th>Example Reports</th></tr></thead><tbody>
+<tr><td>Member Reports</td><td>Master List of Members, Active Members, Retired Members, Members by Office/Sex, New Members, Incomplete Profiles</td></tr>
+<tr><td>Contribution Reports</td><td>Monthly Contributions, Contributions by Office, Unpaid Contributions, Member Contribution History, Payroll Deduction Summary, Fund Allocation Report</td></tr>
+<tr><td>Loan Reports</td><td>Loan Applications, Approved/Rejected/Released/Active/Fully Paid Loans, Outstanding Balances, Overdue Loans, Loan Collections, Loan Aging Report, Member Loan Ledger</td></tr>
+<tr><td>Benefit Reports</td><td>Benefit Applications, Approved/Released Benefits, Benefits by Type/Office, Member Benefit History</td></tr>
+<tr><td>Financial Reports</td><td>Transaction Report, Financial Statement, Daily/Monthly Collection Report, Remittance Breakdown, Annual Budget, Monthly Disbursements, Cash Flow Summary, and more</td></tr>
+</tbody></table>
+<p>Click a report name to open its preview, then generate, print, or export it (CSV, Excel, PDF depending on the report).</p>
+<figure class="screenshot"><img src="screenshots/21-report-center.png" alt="The Report Center" loading="lazy"/><figcaption>The Report Center</figcaption></figure>
+<hr/>
+<h2 id="11-administration">11. Administration</h2>
+<p class="italic">Visible only to Administrators and roles with the matching permission.</p>
+<h3 id="111-offices">11.1 Offices</h3>
+<p><strong>Menu: Administration → Offices</strong></p>
+<p>Manage the branch/office list members and staff belong to — Office Code, Name, Description, member count (click to jump to that office's members), and an Active/Inactive toggle. <strong>Add Office</strong> or the row <strong>Edit</strong> icon opens the same form dialog.</p>
+<figure class="screenshot"><img src="screenshots/24-admin-offices.png" alt="The Offices management screen" loading="lazy"/><figcaption>The Offices management screen</figcaption></figure>
+<h3 id="112-users">11.2 Users</h3>
+<p><strong>Menu: Administration → Users</strong></p>
+<p>Manage staff accounts.</p>
+<ul>
+<li><strong>Users list</strong> — name, username, email, primary/additional roles, effective permission count, account status, last login. Row actions: View, Edit, Manage Roles, Manage Permissions, Reset Password, View Login History, Activate/Deactivate.</li>
+<li><strong>Add/Edit User</strong> — account details (name, username, email, password), Primary Role and Additional Roles, account status, "Require Password Change on First Login," and remarks. From here you can also grant <strong>Additional Allowed Permissions</strong> or <strong>Explicitly Denied Permissions</strong> on top of the assigned role(s) — a deny always overrides an allow.</li>
+<li><strong>User Permissions</strong> — a detailed view of a user's effective access: which permissions come from their role vs. a direct override, with a <strong>Sidebar Access Preview</strong> showing exactly what menu they'll see. You can also <strong>Copy Permissions from Another User</strong> or <strong>Reset to Role Defaults</strong>.</li>
+</ul>
+<figure class="screenshot"><img src="screenshots/22-admin-users.png" alt="The User Management list" loading="lazy"/><figcaption>The User Management list</figcaption></figure>
+<h3 id="113-roles-permissions">11.3 Roles &amp; Permissions</h3>
+<p><strong>Menu: Administration → Roles &amp; Permissions</strong></p>
+<ul>
+<li><strong>Roles list</strong> — every role (built-in "System Roles" and custom ones), with assigned-user counts and permission counts. Actions: View, Edit, Manage Permissions, Duplicate, Activate/Deactivate, Delete (custom roles only).</li>
+<li><strong>Add/Edit Role</strong> — name, code, description, status, and a full permission matrix; you can start from a preset or copy another role's permissions.</li>
+<li><strong>Manage Permissions</strong> — dedicated screen with quick presets (View Only, Encoder, Approver, Full Access, Clear All) plus the granular matrix; shows how many currently-assigned users will be affected before you save.</li>
+</ul>
+<blockquote>
+<p>The <strong>Super Administrator</strong> role is protected — its permissions cannot be reduced.</p>
+</blockquote>
+<figure class="screenshot"><img src="screenshots/23-admin-roles.png" alt="The Roles &amp; Permissions list" loading="lazy"/><figcaption>The Roles &amp; Permissions list</figcaption></figure>
+<h3 id="114-approval-workflow">11.4 Approval Workflow</h3>
+<p><strong>Menu: Administration → Approval Workflow</strong></p>
+<p>This is where you define <strong>who</strong> reviews, approves, and releases each module's submissions — Member Registration, Loan Application, Benefit Application, Annual Budget, and Disbursement each have their own card:</p>
+<ul>
+<li>Toggle a module's workflow <strong>on/off</strong> — if off, submissions in that module are auto-approved immediately with no review steps (a warning is shown).</li>
+<li>Add/remove <strong>stages</strong> after the fixed "Submission" starting stage; each stage is set to Review, Approve, or Release, and assigned to a specific <strong>Role</strong>, a specific <strong>User</strong>, or tied to an <strong>Office</strong>.</li>
+<li>Click <strong>Save Workflow Setup</strong> to apply.</li>
+</ul>
+<figure class="screenshot"><img src="screenshots/25-admin-approval-workflow.png" alt="The Approval Workflow configuration screen" loading="lazy"/><figcaption>The Approval Workflow configuration screen</figcaption></figure>
+<h3 id="115-audit-logs">11.5 Audit Logs</h3>
+<p><strong>Menu: Administration → Audit Logs</strong></p>
+<p>A read-only, searchable trail of system activity: date/time, user, role, module, action, record reference, IP address, device, and success/failure. Click the eye icon on any row to see a side-by-side comparison of the old and new values for that change.</p>
+<figure class="screenshot"><img src="screenshots/26-admin-audit-logs.png" alt="The Audit Logs viewer" loading="lazy"/><figcaption>The Audit Logs viewer</figcaption></figure>
+<h3 id="116-system-settings">11.6 System Settings</h3>
+<p><strong>Menu: Administration → System Settings</strong></p>
+<p>Organized into sections down a side menu: General Settings (system name), Association Profile, Membership Settings, Employment Statuses, Numbering Formats (how reference numbers like <code>GCGEA-CON-2026-000001</code> are generated), Loan Settings, Contribution Settings, Deduction Types, Benefit Settings, Notification Settings, Security Settings, Report Template (customize how printed reports look), Backup, and Appearance (logo, theme, sidebar branding). Each section has its own <strong>Save</strong> and <strong>Reset to Default</strong> controls. The <strong>Backup</strong> section lets you create, download, and restore full settings backups.</p>
+<figure class="screenshot"><img src="screenshots/27-admin-settings.png" alt="The System Settings screen" loading="lazy"/><figcaption>The System Settings screen</figcaption></figure>
+<hr/>
+<h2 id="12-notifications-my-profile">12. Notifications &amp; My Profile</h2>
+<h3 id="121-notifications">12.1 Notifications</h3>
+<p>Click the bell icon (or <strong>Menu → Notifications</strong>) to see system alerts relevant to your role. Toggle <strong>Show unread only</strong>, click a notification to open the related record (it's automatically marked read), or use <strong>Mark all as read</strong>.</p>
+<figure class="screenshot"><img src="screenshots/28-notifications.png" alt="The Notifications panel" loading="lazy"/><figcaption>The Notifications panel</figcaption></figure>
+<h3 id="122-my-profile">12.2 My Profile</h3>
+<p><strong>Account menu → My Profile</strong></p>
+<p>View and update your own account: profile photo (upload/remove — JPG/PNG/WebP, up to 5 MB), your assigned role, and your <strong>recent login activity</strong> (device, time) for your own security awareness.</p>
+<figure class="screenshot"><img src="screenshots/29-my-profile.png" alt="The My Profile screen" loading="lazy"/><figcaption>The My Profile screen</figcaption></figure>
+<hr/>
+<h2 id="13-glossary-of-statuses">13. Glossary of Statuses</h2>
+<table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><strong>Draft</strong></td><td>Saved but not yet submitted; can still be edited or deleted</td></tr>
+<tr><td><strong>Submitted / Under Review</strong></td><td>Sent in and awaiting the first approval stage</td></tr>
+<tr><td><strong>For Approval</strong></td><td>Passed review, awaiting an approving officer's decision</td></tr>
+<tr><td><strong>Approved</strong></td><td>Approved but not yet released/paid</td></tr>
+<tr><td><strong>Released / Active</strong></td><td>Funds have been released to the member; loan is now being repaid</td></tr>
+<tr><td><strong>Rejected</strong></td><td>Declined, with a reason recorded</td></tr>
+<tr><td><strong>Returned</strong></td><td>Sent back to the encoder for revision, with a reason</td></tr>
+<tr><td><strong>Fully Paid</strong></td><td>Loan balance fully settled</td></tr>
+<tr><td><strong>Overdue</strong></td><td>Loan has one or more missed/late installments</td></tr>
+<tr><td><strong>Restructured</strong></td><td>Loan terms were formally revised</td></tr>
+<tr><td><strong>Posted</strong></td><td>Contribution/payment transaction is finalized</td></tr>
+<tr><td><strong>Voided</strong></td><td>Transaction cancelled, with a reason recorded (does not delete the record)</td></tr>
+</tbody></table>
+<hr/>
+<h2 id="14-frequently-asked-questions">14. Frequently Asked Questions</h2>
+<p><strong>Q: A menu item I need isn't showing up. What do I do?</strong></p>
+<p>A: Menu visibility is controlled by permissions. Contact your system administrator to review your role or user-level permissions under Administration → Users/Roles.</p>
+<p><strong>Q: I made a mistake on a Posted contribution/loan payment — can I just delete it?</strong></p>
+<p>A: No — posted financial records are not deleted. Use <strong>Void</strong> (with a reason) instead; this preserves the audit trail. You can then re-record the correct transaction.</p>
+<p><strong>Q: A loan/benefit application says the member is "Not Eligible." Can I still proceed?</strong></p>
+<p>A: Only if your account has override permission. You'll need to provide a written justification (and, for loans, a board resolution reference); this is recorded in the audit trail for accountability.</p>
+<p><strong>Q: How do I undo a bulk import?</strong></p>
+<p>A: Go to the module's Import History page. Only the <strong>most recently completed</strong> batch can be undone, via <strong>Undo Import</strong> — this permanently deletes the records that batch created, so use it carefully.</p>
+<p><strong>Q: Where do I go to print a check for a released loan/benefit/disbursement?</strong></p>
+<p>A: Open the record's detail page — a <strong>Print Check</strong> button appears once it's Released/Paid. Always print at 100% (actual size) on your pre-printed check stock and adjust printer margins as needed.</p>
+<p><strong>Q: Who configures the approval chain (who approves what)?</strong></p>
+<p>A: Administrators, under <strong>Administration → Approval Workflow</strong> (§11.4).</p>
+<hr/>
+<p class="italic">End of manual. For issues not covered here, contact your GCGEA system administrator.</p>
+<p class="footer-note">GCGEA Membership, Loan and Benefits Management System &mdash; User Manual v1.0 &mdash; For internal association use.</p>
+</div>

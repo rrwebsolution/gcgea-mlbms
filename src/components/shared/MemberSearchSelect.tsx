@@ -11,6 +11,7 @@ import type { Member } from "@/types"
 interface MemberSearchSelectProps {
   value?: string
   onSelect: (memberId: string) => void
+  className?: string
   disabled?: boolean
   placeholder?: string
   selectedMember?: Member
@@ -27,6 +28,7 @@ interface MemberSearchSelectProps {
 export function MemberSearchSelect({
   value,
   onSelect,
+  className,
   disabled,
   placeholder = "Search by name or member number…",
   selectedMember,
@@ -54,7 +56,7 @@ export function MemberSearchSelect({
         render={
           <Button
             variant="outline"
-            className="w-full justify-between font-normal"
+            className={cn("w-full justify-between font-normal", className)}
           />
         }
       >

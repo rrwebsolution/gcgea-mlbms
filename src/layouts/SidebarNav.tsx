@@ -73,7 +73,7 @@ function NavLink({
         isChild ? "px-3 text-[13px]" : "px-3 text-sm",
         isActive
           ? isChild
-            ? "bg-gold/15 font-semibold text-gold-foreground dark:text-gold shadow-2xs"
+            ? "bg-primary/15 font-semibold text-primary shadow-2xs dark:bg-primary/20"
             : "bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-sm shadow-sidebar-primary/10"
           : cn(
               "font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",

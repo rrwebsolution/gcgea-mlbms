@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { ChevronLeft, ChevronRight, Database, Loader2, LogOut } from "lucide-react"
+import { ChevronLeft, ChevronRight, HardDrive, Loader2, LogOut } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
@@ -48,61 +48,75 @@ export function Sidebar() {
     }
   }
 
+  // Storage calculations
+  const percentUsed = storageUsage && storageUsage.totalBytes > 0 
+    ? (storageUsage.usedBytes / storageUsage.totalBytes) * 100 
+    : 0
+  const isDanger = percentUsed >= 90
+  const isWarning = !isDanger && percentUsed >= 75
+
   const logoutButton = (
     <Button
       variant="ghost"
       size="sm"
       className={cn(
-        "w-full rounded-xl text-sidebar-foreground/75 hover:bg-destructive/12 hover:text-destructive transition-all duration-300 font-medium group/btn shadow-none",
-        isCollapsed ? "justify-center px-0 h-10 w-10 mx-auto" : "justify-start px-3.5 gap-3 h-10"
+        "group/btn relative w-full overflow-hidden rounded-xl font-medium transition-all duration-300",
+        "text-sidebar-foreground/70 hover:text-destructive hover:bg-destructive/10 active:scale-[0.98]",
+        isCollapsed ? "h-10 w-10 justify-center p-0 mx-auto" : "h-10 justify-start px-3 gap-3"
       )}
       onClick={handleLogout}
       disabled={isLoggingOut}
       aria-label="Logout"
     >
       {isLoggingOut ? (
-        <Loader2 className="size-4 animate-spin shrink-0 text-destructive" aria-hidden="true" />
+        <Loader2 className="size-4 shrink-0 animate-spin text-destructive" aria-hidden="true" />
       ) : (
         <LogOut 
-          className="size-4 shrink-0 transition-transform duration-300 group-hover/btn:-translate-x-0.5 group-hover/btn:scale-105" 
+          className="size-4 shrink-0 transition-transform duration-300 group-hover/btn:-translate-x-0.5 group-hover/btn:rotate-[-6deg]" 
           aria-hidden="true" 
         />
       )}
-      {!isCollapsed && <span className="truncate text-xs font-semibold">Logout</span>}
+      {!isCollapsed && <span className="truncate text-xs font-semibold tracking-wide">Log out</span>}
     </Button>
   )
 
   return (
-    <TooltipProvider delay={100}>
+    <TooltipProvider delay={150}>
       <aside
         className={cn(
-          "group/sidebar sticky top-0 hidden h-svh shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar/90 text-sidebar-foreground backdrop-blur-xl shadow-lg shadow-black/5 transition-[width] duration-300 ease-in-out lg:flex z-30",
-          isCollapsed ? "w-[76px]" : "w-[270px]"
+          "group/sidebar relative sticky top-0 hidden h-svh shrink-0 flex-col",
+          "border-r border-sidebar-border/60 bg-sidebar/95 backdrop-blur-2xl text-sidebar-foreground",
+          "shadow-[1px_0_24px_rgba(0,0,0,0.03)] dark:shadow-[1px_0_24px_rgba(0,0,0,0.2)]",
+          "transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:flex z-30",
+          isCollapsed ? "w-[76px]" : "w-[272px]"
         )}
       >
         {/* Brand Header */}
         <div 
           className={cn(
-            "flex h-16 items-center gap-3 border-b border-sidebar-border/40 px-5 transition-all duration-300 bg-gradient-to-b from-sidebar-accent/15 via-transparent to-transparent", 
-            isCollapsed && "justify-center px-0"
+            "relative flex h-16 shrink-0 items-center border-b border-sidebar-border/40 transition-all duration-300",
+            "bg-gradient-to-b from-sidebar-accent/25 via-transparent to-transparent",
+            isCollapsed ? "justify-center px-2" : "justify-between px-4"
           )}
         >
           <SidebarBrand collapsed={isCollapsed} />
         </div>
 
-        {/* Navigation Links Area */}
-        <div className="flex-1 overflow-y-auto py-5 px-3 scrollbar-thin scrollbar-thumb-sidebar-border/60 scrollbar-track-transparent">
+        {/* Navigation Area */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 scrollbar-thin scrollbar-thumb-sidebar-border/60 scrollbar-track-transparent">
           <SidebarNav collapsed={isCollapsed} />
         </div>
 
-        {/* Footer Area with Logos & Logout Action */}
-        <div className="border-t border-sidebar-border/40 bg-sidebar-accent/10 p-3.5 flex flex-col gap-3">
-          {/* Association footer logos are optional and hidden by default. */}
+        {/* Footer Area */}
+        <div className="relative shrink-0 border-t border-sidebar-border/40 bg-sidebar-accent/10 p-3 flex flex-col gap-2.5 backdrop-blur-md">
+          {/* Association Footer Logos */}
           {footerBranding.showSidebarFooterLogos && (
             <div
               className={cn(
-                "flex items-center justify-center rounded-2xl border border-sidebar-border/30 bg-sidebar-accent/20 p-2.5 backdrop-blur-md transition-all duration-300",
-                isCollapsed ? "flex-col gap-2.5 bg-transparent border-transparent p-0" : "flex-row gap-4"
+                "rounded-xl border border-sidebar-border/40 bg-sidebar-accent/20 transition-all duration-300",
+                isCollapsed 
+                  ? "flex flex-col items-center gap-2 p-1.5 bg-transparent border-transparent" 
+                  : "grid grid-cols-2 gap-2 p-2"
               )}
               aria-label="Association logos"
             >
@@ -112,12 +126,9 @@ export function Sidebar() {
               ].map((logo, index) => (
                 <div
                   key={index}
-                  className={cn(
-                    "flex min-w-0 flex-col items-center gap-1.5 transition-all duration-300",
-                    isCollapsed ? "scale-95" : "scale-100 flex-1"
-                  )}
+                  className="group/logo flex min-w-0 flex-col items-center gap-1.5 transition-transform duration-200 hover:scale-[1.02]"
                 >
-                  <div className="relative flex items-center justify-center rounded-xl bg-background/80 p-2 shadow-2xs ring-1 ring-border/10 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-xs">
+                  <div className="relative flex items-center justify-center rounded-lg bg-background/80 p-1.5 shadow-xs ring-1 ring-border/20 backdrop-blur-xs transition-shadow duration-200 group-hover/logo:shadow-sm">
                     <img
                       src={logo.src}
                       alt={`${logo.label} logo`}
@@ -129,13 +140,13 @@ export function Sidebar() {
                           : footerBranding.logoSize === "small"
                             ? "size-6"
                             : footerBranding.logoSize === "large"
-                              ? "size-10"
-                              : "size-8"
+                              ? "size-9"
+                              : "size-7"
                       )}
                     />
                   </div>
                   {!isCollapsed && (
-                    <span className="max-w-[90px] truncate text-center text-[9px] font-bold uppercase tracking-wider text-sidebar-foreground/50">
+                    <span className="w-full truncate text-center text-[9px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
                       {logo.label}
                     </span>
                   )}
@@ -144,42 +155,81 @@ export function Sidebar() {
             </div>
           )}
 
-          {/* Disk Usage */}
-          {!isCollapsed && storageUsage && (() => {
-            const percent = (storageUsage.usedBytes / storageUsage.totalBytes) * 100
-            const isDanger = percent >= 90
-            const isWarning = !isDanger && percent >= 75
-            return (
-            <div className="rounded-xl border border-sidebar-border/30 bg-sidebar-accent/15 p-2.5">
-              <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/60">
-                <Database className="size-3" aria-hidden="true" />
-                Disk Usage
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-sidebar-border/40">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-[width] duration-500",
-                    isDanger ? "bg-destructive" : isWarning ? "bg-warning" : "bg-primary"
+          {/* Storage Meter */}
+          {storageUsage && (
+            isCollapsed ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={(
+                    <div className="flex size-10 mx-auto items-center justify-center rounded-xl border border-sidebar-border/50 bg-sidebar-accent/25 hover:bg-sidebar-accent/40 transition-colors cursor-pointer" />
                   )}
-                  style={{
-                    width: `${storageUsage.usedBytes > 0 ? Math.max(2, Math.min(100, percent)) : 0}%`,
-                  }}
-                />
+                >
+                  <HardDrive className={cn(
+                    "size-4 transition-colors",
+                    isDanger ? "text-destructive" : isWarning ? "text-amber-500" : "text-sidebar-foreground/70"
+                  )} />
+                </TooltipTrigger>
+                <TooltipContent side="right" align="center" className="text-xs p-2.5">
+                  <p className="font-semibold mb-1">Storage Usage ({percentUsed.toFixed(0)}%)</p>
+                  <p className="text-muted-foreground text-[11px]">
+                    {formatBytes(storageUsage.usedBytes)} / {formatBytes(storageUsage.totalBytes)}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <div className="relative overflow-hidden rounded-xl border border-sidebar-border/50 bg-sidebar-accent/20 p-2.5 shadow-2xs backdrop-blur-xs transition-all duration-200 hover:border-sidebar-border/80">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-sidebar-foreground/75">
+                    <span className={cn(
+                      "size-1.5 rounded-full animate-pulse",
+                      isDanger ? "bg-destructive" : isWarning ? "bg-amber-500" : "bg-emerald-500"
+                    )} />
+                    <span className="font-semibold tracking-tight">Disk Usage</span>
+                  </div>
+                  <span className={cn(
+                    "rounded-md px-1.5 py-0.5 text-[10px] font-bold font-mono tracking-tight",
+                    isDanger 
+                      ? "bg-destructive/15 text-destructive" 
+                      : isWarning 
+                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" 
+                        : "bg-sidebar-accent/50 text-sidebar-foreground/70"
+                  )}>
+                    {percentUsed.toFixed(0)}%
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-sidebar-border/40 p-[1px]">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-700 ease-out",
+                      isDanger 
+                        ? "bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.5)]" 
+                        : isWarning 
+                          ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]" 
+                          : "bg-primary shadow-[0_0_8px_var(--color-primary)]"
+                    )}
+                    style={{
+                      width: `${storageUsage.usedBytes > 0 ? Math.max(3, Math.min(100, percentUsed)) : 0}%`,
+                    }}
+                  />
+                </div>
+
+                <div className="mt-1.5 flex items-center justify-between text-[10px] font-medium text-sidebar-foreground/55 font-mono">
+                  <span>{formatBytes(storageUsage.usedBytes)}</span>
+                  <span>{formatBytes(storageUsage.totalBytes)}</span>
+                </div>
               </div>
-              <p className={cn("mt-1.5 text-[10px] font-medium", isDanger ? "text-destructive" : "text-sidebar-foreground/60")}>
-                {formatBytes(storageUsage.usedBytes)} / {formatBytes(storageUsage.totalBytes)} used
-              </p>
-            </div>
             )
-          })()}
+          )}
 
           {/* Logout Action */}
           <div className="w-full">
             {isCollapsed ? (
               <Tooltip>
                 <TooltipTrigger render={logoutButton} />
-                <TooltipContent side="right" align="center" className="font-semibold text-xs">
-                  Logout
+                <TooltipContent side="right" align="center" className="font-medium text-xs">
+                  Log out
                 </TooltipContent>
               </Tooltip>
             ) : (
@@ -188,20 +238,23 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Edge toggle control button */}
+        {/* Sleek Edge Collapse Toggle Button */}
         <button
           type="button"
           onClick={toggleCollapsed}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={cn(
-            "absolute top-1/2 -right-3.5 z-40 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-background/95 text-sidebar-foreground/70 shadow-md ring-1 ring-black/5 backdrop-blur-sm transition-all duration-300 hover:text-foreground hover:bg-sidebar-accent hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            "opacity-0 group-hover/sidebar:opacity-100"
+            "absolute top-1/2 -right-3.5 z-40 flex size-7 -translate-y-1/2 items-center justify-center rounded-full",
+            "border border-border/80 bg-background text-foreground/70 shadow-md ring-1 ring-black/5 dark:ring-white/10 backdrop-blur-md",
+            "transition-all duration-200 hover:scale-110 hover:text-foreground hover:bg-accent active:scale-95",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "opacity-0 group-hover/sidebar:opacity-100 focus-visible:opacity-100"
           )}
         >
           {isCollapsed ? (
-            <ChevronRight className="size-4 text-sidebar-foreground" />
+            <ChevronRight className="size-3.5" strokeWidth={2.5} />
           ) : (
-            <ChevronLeft className="size-4 text-sidebar-foreground" />
+            <ChevronLeft className="size-3.5" strokeWidth={2.5} />
           )}
         </button>
       </aside>

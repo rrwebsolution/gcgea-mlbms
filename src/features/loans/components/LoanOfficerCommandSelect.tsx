@@ -37,8 +37,15 @@ export function LoanOfficerCommandSelect({ value, onValueChange, disabled }: Loa
   const selected = officers.find((officer) => officer.fullName === value)
   const isLoading = isLoadingUsers || isLoadingRoles
 
+  function handleOpenChange(nextOpen: boolean) {
+    const scrollX = window.scrollX
+    const scrollY = window.scrollY
+    setOpen(nextOpen)
+    requestAnimationFrame(() => window.scrollTo(scrollX, scrollY))
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange} modal={false}>
       <PopoverTrigger
         disabled={disabled}
         render={<Button type="button" variant="outline" className="w-full justify-between font-normal" />}

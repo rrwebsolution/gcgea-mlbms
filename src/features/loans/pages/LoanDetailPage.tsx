@@ -22,11 +22,9 @@ import {
   Wallet,
   Printer,
 } from "lucide-react"
-import { PageHeader } from "@/components/shared/PageHeader"
 import { DataTable } from "@/components/shared/DataTable"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { StatusBadge } from "@/components/shared/StatusBadge"
-import { StatCard } from "@/components/shared/StatCard"
 import { PrintButton } from "@/components/shared/PrintButton"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { ApprovalTimeline } from "@/components/shared/ApprovalTimeline"
@@ -36,7 +34,13 @@ import { EmptyState } from "@/components/shared/EmptyState"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { getLoan, getLoanApprovalHistory, getLoanSchedule, getReloanEligibility } from "@/services/loans.service"
+import { Button } from "@/components/ui/button"
+import {
+  getLoan,
+  getLoanApprovalHistory,
+  getLoanSchedule,
+  getReloanEligibility,
+} from "@/services/loans.service"
 import { getAllLoanPayments } from "@/services/loan-payments.service"
 import { ReloanButton } from "@/features/loans/components/ReloanButton"
 import { ReloanEligibilityCard } from "@/features/loans/components/ReloanEligibilityCard"
@@ -50,33 +54,69 @@ const SETTLEMENT_METHOD_LABEL: Record<PreviousObligationSettlementMethod, string
   deducted: "Deducted From New Loan Proceeds",
 }
 
-/**
- * Built per-render from the full schedule (not a static array) so the "Amount Due"
- * column can look at the *previous* row — a Partially Paid installment's shortfall
- * carries forward and is collected from whatever payment comes in next (see
- * LoanPaymentPoster::applyPaymentToSchedule on the backend), so the row right after
- * it should visibly show that it owes more than its own scheduled amount.
- */
 function buildAmortizationColumns(schedule: AmortizationEntry[]): ColumnDef<AmortizationEntry, unknown>[] {
   return [
-    { accessorKey: "installmentNumber", header: "#" },
-    { accessorKey: "dueDate", header: "Due Date", cell: ({ row }) => formatDateShort(row.original.dueDate) },
-    { accessorKey: "beginningBalance", header: "Beginning Balance", cell: ({ row }) => formatCurrency(row.original.beginningBalance) },
-    { accessorKey: "principal", header: "Principal", cell: ({ row }) => formatCurrency(row.original.principal) },
-    { accessorKey: "interest", header: "Interest", cell: ({ row }) => formatCurrency(row.original.interest) },
-    { accessorKey: "penalty", header: "Penalty", cell: ({ row }) => formatCurrency(row.original.penalty) },
+    {
+      accessorKey: "installmentNumber",
+      header: "#",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs font-semibold text-muted-foreground">
+          {row.original.installmentNumber}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "dueDate",
+      header: "Due Date",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">{formatDateShort(row.original.dueDate)}</span>
+      ),
+    },
+    {
+      accessorKey: "beginningBalance",
+      header: "Beginning Balance",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs">{formatCurrency(row.original.beginningBalance)}</span>
+      ),
+    },
+    {
+      accessorKey: "principal",
+      header: "Principal",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs font-semibold text-foreground">
+          {formatCurrency(row.original.principal)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "interest",
+      header: "Interest",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">{formatCurrency(row.original.interest)}</span>
+      ),
+    },
+    {
+      accessorKey: "penalty",
+      header: "Penalty",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">{formatCurrency(row.original.penalty)}</span>
+      ),
+    },
     {
       accessorKey: "amountDue",
       header: "Amount Due",
       cell: ({ row }) => {
         const index = schedule.findIndex((entry) => entry.installmentNumber === row.original.installmentNumber)
         const previous = index > 0 ? schedule[index - 1] : undefined
-        const carriedShortfall = previous?.status === "Partially Paid" ? previous.amountDue - previous.amountPaid : 0
+        const carriedShortfall =
+          previous?.status === "Partially Paid" ? previous.amountDue - previous.amountPaid : 0
         return (
           <div>
-            {formatCurrency(row.original.amountDue)}
+            <span className="font-mono text-xs font-bold text-primary">
+              {formatCurrency(row.original.amountDue)}
+            </span>
             {carriedShortfall > 0 && (
-              <div className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+              <div className="font-mono text-[10px] font-semibold text-amber-600 dark:text-amber-400">
                 + {formatCurrency(carriedShortfall)} shortfall (#{previous!.installmentNumber})
               </div>
             )}
@@ -84,12 +124,33 @@ function buildAmortizationColumns(schedule: AmortizationEntry[]): ColumnDef<Amor
         )
       },
     },
-    { accessorKey: "amountPaid", header: "Amount Paid", cell: ({ row }) => formatCurrency(row.original.amountPaid) },
-    { accessorKey: "remainingBalance", header: "Remaining Balance", cell: ({ row }) => formatCurrency(row.original.remainingBalance) },
+    {
+      accessorKey: "amountPaid",
+      header: "Amount Paid",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          {formatCurrency(row.original.amountPaid)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "remainingBalance",
+      header: "Remaining Balance",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs font-semibold text-foreground">
+          {formatCurrency(row.original.remainingBalance)}
+        </span>
+      ),
+    },
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <StatusBadge label={row.original.status} tone={AMORTIZATION_STATUS_TONE[row.original.status]} />,
+      cell: ({ row }) => (
+        <StatusBadge
+          label={row.original.status}
+          tone={AMORTIZATION_STATUS_TONE[row.original.status]}
+        />
+      ),
     },
   ]
 }
@@ -106,8 +167,6 @@ export default function LoanDetailPage() {
   const { data: history = [] } = useQuery({ queryKey: ["loans", id, "history"], queryFn: () => getLoanApprovalHistory(id) })
   const payments = getAllLoanPayments().filter((p) => p.loanApplicationId === id)
 
-  // Fetched at page level (not just inside the Requirements tab) so the Reloan button in the header
-  // always has a specific blockedReason ready, even if the user hasn't opened that tab yet.
   const { data: reloanEligibility } = useQuery({
     queryKey: ["reloan-eligibility", id],
     queryFn: () => getReloanEligibility(id),
@@ -119,9 +178,19 @@ export default function LoanDetailPage() {
   useBreadcrumbExtra(loan?.applicationNumber)
 
   if (isLoading) return <ProfileSkeleton cards={4} />
-  if (!loan) return <EmptyState icon={Landmark} title="Loan application not found" description="This loan application may have been removed or deleted." />
+  if (!loan) {
+    return (
+      <EmptyState
+        icon={Landmark}
+        title="Loan application not found"
+        description="This loan application may have been removed or deleted."
+      />
+    )
+  }
 
-  const hasReachedApproval = ["Approved", "Released", "Active", "Fully Paid", "Overdue", "Restructured"].includes(loan.status)
+  const hasReachedApproval = ["Approved", "Released", "Active", "Fully Paid", "Overdue", "Restructured"].includes(
+    loan.status
+  )
   const approvedAmount = loan.approvedAmount ?? (hasReachedApproval ? loan.requestedAmount : undefined)
   const serviceCharge = Math.max(0, loan.principal - loan.processingFee - loan.netProceeds)
   const postedPayments = payments.filter((payment) => payment.status === "Posted")
@@ -141,197 +210,301 @@ export default function LoanDetailPage() {
       : "Not Eligible"
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto pb-16">
-      {/* Top Navigation Back Anchor */}
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Link to="/loans" className="inline-flex items-center gap-1.5 font-semibold text-muted-foreground hover:text-foreground transition-colors group">
-          <ArrowLeft className="size-3.5 transition-transform duration-200 group-hover:-translate-x-1" />
-          <span>Back to Loan Applications</span>
-        </Link>
+    <div className="space-y-6 pb-16 max-w-[1600px] mx-auto">
+      {/* Back Navigation */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground hover:text-foreground active:scale-95"
+          render={<Link to="/loans" />}
+        >
+          <ArrowLeft className="size-3.5" /> Back to Loan Applications
+        </Button>
       </div>
 
-      {/* Header */}
-      <PageHeader
-        title={loan.applicationNumber}
-        description={`${loan.memberName} · ${loan.loanTypeName}`}
-        actions={
-          <div className="flex flex-wrap items-center gap-2.5">
-            <StatusBadge label={loan.status} tone={LOAN_STATUS_TONE[loan.status]} className="h-9 px-3.5 text-xs font-semibold rounded-xl" />
-            {loan.applicationType === "reloan" && (
-              <StatusBadge label={`Reloan #${loan.reloanSequence ?? 1}`} tone="gold" className="h-9 px-3.5 text-xs font-semibold rounded-xl" />
-            )}
+      {/* Hero Header Card */}
+      <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-card via-card/95 to-primary/5 p-6 shadow-xs backdrop-blur-xs">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+              <Landmark className="size-7" strokeWidth={2.2} />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="font-mono text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+                  {loan.applicationNumber}
+                </h1>
+                <StatusBadge label={loan.status} tone={LOAN_STATUS_TONE[loan.status]} />
+                {loan.applicationType === "reloan" && (
+                  <StatusBadge label={`Reloan #${loan.reloanSequence ?? 1}`} tone="gold" />
+                )}
+              </div>
+
+              <p className="text-xs font-medium text-muted-foreground flex flex-wrap items-center gap-1.5">
+                <Link
+                  to={`/members/${loan.memberId}`}
+                  className="font-heading font-semibold text-foreground hover:text-primary hover:underline"
+                >
+                  {loan.memberName}
+                </Link>
+                <span>·</span>
+                <span className="font-mono text-muted-foreground">{loan.memberNumber}</span>
+                <span>·</span>
+                <span>{loan.loanTypeName}</span>
+                <span>·</span>
+                <span className="text-foreground/80 font-semibold">{loan.officeName}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Action Toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
             {loan.releaseDate && loan.releaseMethod === "Check" && (
               <PermissionButton
                 permission="loans.print"
                 size="sm"
                 variant="outline"
-                className="h-9 gap-1.5 rounded-xl text-xs"
+                className="h-9 gap-1.5 rounded-xl px-3.5 text-xs font-semibold shadow-2xs hover:bg-muted active:scale-95 transition-all"
                 render={<Link to={`/loans/${loan.id}/check`} />}
               >
                 <Printer className="size-3.5" /> Print Check
               </PermissionButton>
             )}
+
             <ReloanButton loan={loan} eligible={reloanEligible} blockedReason={reloanBlockedReason} />
-            {["Released", "Active", "Overdue", "Restructured"].includes(loan.status) && loan.outstandingBalance > 0 && (
-              <PermissionButton
-                permission="loan_payments.create"
-                size="sm"
-                className="h-9 text-xs gap-1.5 rounded-xl"
-                render={<Link to={`/loan-payments/new?member=${loan.memberId}&loan=${loan.id}`} target="_blank" rel="noopener noreferrer" />}
-              >
-                <Wallet className="size-3.5" /> Record Payment
-              </PermissionButton>
-            )}
+
+            {["Released", "Active", "Overdue", "Restructured"].includes(loan.status) &&
+              loan.outstandingBalance > 0 && (
+                <PermissionButton
+                  permission="loan_payments.create"
+                  size="sm"
+                  className="h-9 gap-1.5 rounded-xl px-4 text-xs font-semibold shadow-xs active:scale-95 transition-all"
+                  render={
+                    <Link
+                      to={`/loan-payments/new?member=${loan.memberId}&loan=${loan.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  }
+                >
+                  <Wallet className="size-3.5" /> Record Payment
+                </PermissionButton>
+              )}
+
             <PrintButton permission="loans.print" label="Print Application" />
           </div>
-        }
-      />
+        </div>
 
-      {/* Always-visible status alerts — surfaced regardless of which tab is active */}
-      {loan.rejectionReason && (
-        <AlertBanner tone="danger" title="This application was rejected." description={loan.rejectionReason} />
-      )}
-      {loan.cancellationReason && (
-        <AlertBanner tone="warning" title="This application was cancelled." description={loan.cancellationReason} />
-      )}
-      {loan.eligibilityOverridden && (
-        <AlertBanner
-          tone="warning"
-          title="Released under an eligibility override."
-          description={loan.eligibilityOverrideReason || "One or more eligibility checks failed but an authorized override was applied."}
-        />
-      )}
-
-      {/* Summary Metric Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Requested Amount" value={formatCurrency(loan.requestedAmount)} icon={DollarSign} tone="primary" />
-        <StatCard
-          label="Approved Amount"
-          value={approvedAmount != null ? formatCurrency(approvedAmount) : "—"}
-          icon={CheckCircle2}
-          tone={approvedAmount != null ? "success" : "primary"}
-        />
-        <StatCard label="Monthly Amortization" value={formatCurrency(loan.monthlyAmortization)} icon={Calendar} tone="primary" />
-        <StatCard
-          label="Outstanding Balance"
-          value={formatCurrency(loan.outstandingBalance)}
-          icon={Banknote}
-          tone={loan.outstandingBalance > 0 ? "warning" : "primary"}
-        />
-      </div>
-
-      {/* Interactive Workspace Navigation Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="flex flex-wrap h-auto gap-1.5 bg-muted/50 p-1.5 w-full md:w-auto border border-border/50 rounded-2xl">
-          <TabsTrigger value="overview" className="flex items-center gap-2 py-2 px-3.5 text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all">
-            <LayoutGrid className="size-3.5 text-primary" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="computation" className="flex items-center gap-2 py-2 px-3.5 text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all">
-            <Receipt className="size-3.5 text-primary" />
-            Computation
-          </TabsTrigger>
-          <TabsTrigger value="schedule" className="flex items-center gap-2 py-2 px-3.5 text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all">
-            <Calendar className="size-3.5 text-primary" />
-            Amortization Schedule
-          </TabsTrigger>
-          <TabsTrigger value="payments" className="flex items-center gap-2 py-2 px-3.5 text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all">
-            <Banknote className="size-3.5 text-primary" />
-            Payment History
-          </TabsTrigger>
-          <TabsTrigger value="requirements" className="flex items-center gap-2 py-2 px-3.5 text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all">
-            <ClipboardCheck className="size-3.5 text-primary" />
-            Requirements &amp; Eligibility
-          </TabsTrigger>
-          <TabsTrigger value="approvals" className="flex items-center gap-2 py-2 px-3.5 text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all">
-            <Clock className="size-3.5 text-primary" />
-            Approval History
-          </TabsTrigger>
-        </TabsList>
-
-        {/* TAB: Overview */}
-        <TabsContent value="overview" className="mt-4 outline-none focus-visible:ring-0 space-y-6">
-          {loan.termMonths > 0 && (
+        {/* Status Notification Alerts */}
+        <div className="mt-5 space-y-3">
+          {loan.rejectionReason && (
+            <AlertBanner tone="danger" title="This application was rejected." description={loan.rejectionReason} />
+          )}
+          {loan.cancellationReason && (
+            <AlertBanner tone="warning" title="This application was cancelled." description={loan.cancellationReason} />
+          )}
+          {loan.eligibilityOverridden && (
             <AlertBanner
-              tone={paidMonths >= loan.termMonths ? "success" : "info"}
-              title={`${paidMonths} of ${loan.termMonths} months paid`}
+              tone="warning"
+              title="Released under an administrative eligibility override."
               description={
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="w-full max-w-xs">
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-current/15">
-                      <div
-                        className="h-full rounded-full bg-current transition-[width] duration-500"
-                        style={{ width: `${monthsProgressPercent}%` }}
-                      />
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-[11px] font-semibold">
-                      <span>{monthsProgressPercent.toFixed(0)}%</span>
-                      <span>{Math.max(0, loan.termMonths - paidMonths)} left</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs sm:justify-end sm:text-right">
-                    <TimelineStat label="Application" value={formatMonthYear(loan.applicationDate)} />
-                    <TimelineStat label="First Due" value={formatDateShort(loan.firstDueDate)} />
-                    <TimelineStat label="Maturity" value={formatDateShort(loan.maturityDate)} />
-                  </div>
-                </div>
+                loan.eligibilityOverrideReason ||
+                "One or more eligibility criteria failed, but an authorized override was sanctioned."
               }
             />
           )}
+        </div>
+
+        {/* Summary Metric Ribbon */}
+        <div className="mt-6 grid grid-cols-2 gap-3.5 border-t border-border/50 pt-6 sm:grid-cols-4">
+          <SummaryStat
+            label="Requested Principal"
+            value={formatCurrency(loan.requestedAmount)}
+            icon={DollarSign}
+          />
+          <SummaryStat
+            label="Approved Principal"
+            value={approvedAmount != null ? formatCurrency(approvedAmount) : "—"}
+            tone={approvedAmount != null ? "success" : undefined}
+            icon={CheckCircle2}
+          />
+          <SummaryStat
+            label="Monthly Amortization"
+            value={formatCurrency(loan.monthlyAmortization)}
+            tone="primary"
+            icon={Calendar}
+          />
+          <SummaryStat
+            label="Outstanding Balance"
+            value={formatCurrency(loan.outstandingBalance)}
+            tone={loan.outstandingBalance > 0 ? "warning" : undefined}
+            icon={Banknote}
+          />
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <Tabs defaultValue="overview" className="space-y-4">
+        <div className="overflow-x-auto pb-1 scrollbar-none">
+          <TabsList className="inline-flex h-11 items-center gap-1 rounded-2xl border border-border/60 bg-muted/30 p-1 backdrop-blur-xs">
+            <TabsTrigger value="overview" className="rounded-xl px-4 text-xs font-semibold gap-1.5">
+              <LayoutGrid className="size-3.5 text-primary" /> Overview
+            </TabsTrigger>
+            <TabsTrigger value="computation" className="rounded-xl px-4 text-xs font-semibold gap-1.5">
+              <Receipt className="size-3.5 text-primary" /> Computation Breakdown
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="rounded-xl px-4 text-xs font-semibold gap-1.5">
+              <Calendar className="size-3.5 text-primary" /> Amortization Schedule
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="rounded-xl px-4 text-xs font-semibold gap-1.5">
+              <Banknote className="size-3.5 text-primary" /> Payment History
+            </TabsTrigger>
+            <TabsTrigger value="requirements" className="rounded-xl px-4 text-xs font-semibold gap-1.5">
+              <ClipboardCheck className="size-3.5 text-primary" /> Requirements &amp; Reloan Hub
+            </TabsTrigger>
+            <TabsTrigger value="approvals" className="rounded-xl px-4 text-xs font-semibold gap-1.5">
+              <Clock className="size-3.5 text-primary" /> Approval History
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        {/* TAB 1: Overview */}
+        <TabsContent value="overview" className="mt-0 space-y-6">
+          {loan.termMonths > 0 && (
+            <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="w-full max-w-sm space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-foreground">
+                      Repayment Progress ({paidMonths} of {loan.termMonths} months paid)
+                    </span>
+                    <span className="font-mono text-primary font-bold">{monthsProgressPercent.toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/60 p-[1px]">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-500 shadow-2xs"
+                      style={{ width: `${monthsProgressPercent}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground font-medium">
+                    {Math.max(0, loan.termMonths - paidMonths)} installment(s) remaining
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs sm:justify-end">
+                  <TimelineStat label="Applied" value={formatMonthYear(loan.applicationDate)} />
+                  <TimelineStat label="First Due" value={formatDateShort(loan.firstDueDate)} />
+                  <TimelineStat label="Maturity" value={formatDateShort(loan.maturityDate)} />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Application Details */}
-            <Section icon={User} title="Application Details">
-              <DetailGroup heading="Member & Assignment">
-                <DetailRow label="Member Number" value={loan.memberNumber} />
-                <DetailRow label="Office / Branch" value={loan.officeName} />
+            <Section icon={User} title="Application Parameters">
+              <DetailGroup heading="Member Identification & Assignment">
+                <DetailRow label="Member Number" value={loan.memberNumber} isMono />
+                <DetailRow label="Office / Agency" value={loan.officeName} />
                 <DetailRow label="Assigned Officer" value={loan.assignedOfficer} />
               </DetailGroup>
-              <DetailGroup heading="Loan Parameters">
-                <DetailRow label="Loan Type" value={loan.loanTypeName || "Not specified"} />
-                <DetailRow label="Application Type" value={loan.applicationType === "reloan" ? `Reloan (#${loan.reloanSequence ?? 1})` : "New Loan"} />
-                <DetailRow label="Term" value={`${loan.termMonths} months`} />
-                <DetailRow label="Interest Rate" value={`${loan.interestRate}% / month`} />
+              <DetailGroup heading="Loan Terms">
+                <DetailRow label="Loan Product" value={loan.loanTypeName || "Not specified"} />
+                <DetailRow
+                  label="Application Type"
+                  value={
+                    loan.applicationType === "reloan" ? `Reloan (#${loan.reloanSequence ?? 1})` : "New Loan"
+                  }
+                />
+                <DetailRow label="Repayment Term" value={`${loan.termMonths} months`} isMono />
+                <DetailRow label="Monthly Interest" value={`${loan.interestRate}% / month`} isMono />
                 <DetailRow label="Payment Method" value={loan.paymentMethod} />
                 <DetailRow label="Purpose" value={loan.purpose} />
               </DetailGroup>
             </Section>
 
-            {/* Release (Timeline now lives in the months-paid alert above) */}
+            {/* Release Details */}
             <div className="space-y-6">
-              {loan.releaseDate && (
-                <Section icon={Building2} title="Release Information" tone="success">
+              {loan.releaseDate ? (
+                <Section icon={Building2} title="Disbursement & Release Data" tone="success">
                   <DetailGroup>
                     <DetailRow label="Release Date" value={formatDateShort(loan.releaseDate)} />
-                    <DetailRow label="Reference #" value={loan.releaseReferenceNumber ?? "—"} />
+                    <DetailRow label="Disbursement Reference" value={loan.releaseReferenceNumber ?? "—"} isMono />
                     <DetailRow label="Release Method" value={loan.releaseMethod ?? "—"} />
-                    <DetailRow label="Released Amount" value={loan.actualReleasedAmount != null ? formatCurrency(loan.actualReleasedAmount) : "—"} />
-                    {loan.releaseRemarks && <DetailRow label="Remarks" value={loan.releaseRemarks} />}
+                    <DetailRow
+                      label="Actual Released"
+                      value={loan.actualReleasedAmount != null ? formatCurrency(loan.actualReleasedAmount) : "—"}
+                      isMono
+                    />
+                    {loan.releaseRemarks && <DetailRow label="Release Remarks" value={loan.releaseRemarks} />}
                   </DetailGroup>
                 </Section>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-xs text-muted-foreground">
+                  This loan is pending release and disbursement.
+                </div>
               )}
             </div>
           </div>
 
-          {/* Reloan Lineage — only relevant when this application is itself a reloan */}
+          {/* Reloan Lineage */}
           {loan.applicationType === "reloan" && (
-            <Section icon={RotateCw} title="Reloan Lineage" tone="gold">
+            <Section icon={RotateCw} title="Reloan Lineage & Previous Balances" tone="gold">
               <DetailGroup>
                 <DetailRow
-                  label="Previous Loan"
-                  value={loan.previousLoanId
-                    ? <Link to={`/loans/${loan.previousLoanId}`} className="font-bold text-primary hover:underline">{loan.previousLoanReference ?? "View loan"}</Link>
-                    : (loan.previousLoanReference ?? "—")}
+                  label="Previous Loan Reference"
+                  value={
+                    loan.previousLoanId ? (
+                      <Link
+                        to={`/loans/${loan.previousLoanId}`}
+                        className="font-mono font-bold text-primary hover:underline"
+                      >
+                        {loan.previousLoanReference ?? "View Previous Loan"}
+                      </Link>
+                    ) : (
+                      loan.previousLoanReference ?? "—"
+                    )
+                  }
                 />
-                <DetailRow label="Reloan Sequence" value={`#${loan.reloanSequence ?? 1}`} />
-                {loan.currentNetTakeHomePay != null && <DetailRow label="Net Take-Home Pay at Filing" value={formatCurrency(loan.currentNetTakeHomePay)} />}
+                <DetailRow label="Reloan Sequence" value={`#${loan.reloanSequence ?? 1}`} isMono />
+                {loan.currentNetTakeHomePay != null && (
+                  <DetailRow
+                    label="Net Take-Home Pay at Filing"
+                    value={formatCurrency(loan.currentNetTakeHomePay)}
+                    isMono
+                  />
+                )}
               </DetailGroup>
+
               {(loan.previousObligationAmount ?? 0) > 0 && (
-                <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.03] p-3.5 space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">Previous Obligation</p>
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                    Previous Obligation Settle Status
+                  </p>
                   <DetailGroup>
-                    <DetailRow label="Amount" value={formatCurrency(loan.previousObligationAmount ?? 0)} />
-                    <DetailRow label="Settlement Method" value={loan.previousObligationSettlementMethod ? SETTLEMENT_METHOD_LABEL[loan.previousObligationSettlementMethod] : "Not specified"} />
-                    <DetailRow label="Settled" value={loan.previousObligationSettledAt ? formatDateShort(loan.previousObligationSettledAt) : "Not yet settled"} />
+                    <DetailRow
+                      label="Obligation Amount"
+                      value={formatCurrency(loan.previousObligationAmount ?? 0)}
+                      isMono
+                    />
+                    <DetailRow
+                      label="Settlement Method"
+                      value={
+                        loan.previousObligationSettlementMethod
+                          ? SETTLEMENT_METHOD_LABEL[loan.previousObligationSettlementMethod]
+                          : "Not specified"
+                      }
+                    />
+                    <DetailRow
+                      label="Settlement Timestamp"
+                      value={
+                        loan.previousObligationSettledAt
+                          ? formatDateShort(loan.previousObligationSettledAt)
+                          : "Pending Settlement"
+                      }
+                    />
                   </DetailGroup>
                 </div>
               )}
@@ -339,125 +512,233 @@ export default function LoanDetailPage() {
           )}
         </TabsContent>
 
-        {/* TAB: Computation Breakdown */}
-        <TabsContent value="computation" className="mt-4 outline-none focus-visible:ring-0">
-          <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
-            <div className="border-b border-border/50 bg-muted/20 px-6 py-4 flex items-center justify-between">
+        {/* TAB 2: Computation Breakdown */}
+        <TabsContent value="computation" className="mt-0 space-y-6">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs sm:p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-border/40 pb-3">
               <div className="flex items-center gap-2.5">
-                <span className="p-2 rounded-xl bg-primary/10 text-primary">
-                  <Receipt className="size-4" />
-                </span>
-                <h3 className="text-sm font-bold text-foreground">Loan Computation Breakdown</h3>
+                <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                  <Receipt className="size-4" strokeWidth={2.2} />
+                </div>
+                <h3 className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                  Official Calculation Breakdown
+                </h3>
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-1 rounded-full">
-                Official Calculation
+              <span className="rounded-md bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-primary">
+                Audited Matrix
               </span>
             </div>
 
-            <div className="space-y-6 p-6">
-              {/* Parameter Grid */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <ComputationDetail label="Loan Type" value={loan.loanTypeName || "Not specified"} />
-                <ComputationDetail label="Loan Term" value={`${loan.termMonths} month(s)`} />
-                <ComputationDetail label="Requested Amount" value={formatCurrency(loan.requestedAmount)} />
-                <ComputationDetail label="Approved Amount" value={approvedAmount != null ? formatCurrency(approvedAmount) : "Pending approval"} />
-                <ComputationDetail label="Principal Used in Computation" value={formatCurrency(loan.principal)} />
-                <ComputationDetail label="Interest Rate" value={`${loan.interestRate}% per month`} />
-                <ComputationDetail label="Payment Method" value={loan.paymentMethod} />
-                <ComputationDetail label="First Due / Maturity" value={`${formatDateShort(loan.firstDueDate)} – ${formatDateShort(loan.maturityDate)}`} />
-              </div>
+            {/* Parameter Matrix */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <ComputationDetail label="Loan Product" value={loan.loanTypeName || "Not specified"} />
+              <ComputationDetail label="Repayment Term" value={`${loan.termMonths} month(s)`} isMono />
+              <ComputationDetail label="Requested Amount" value={formatCurrency(loan.requestedAmount)} isMono />
+              <ComputationDetail
+                label="Approved Principal"
+                value={approvedAmount != null ? formatCurrency(approvedAmount) : "Pending approval"}
+                isMono
+              />
+              <ComputationDetail label="Computation Principal" value={formatCurrency(loan.principal)} isMono />
+              <ComputationDetail label="Monthly Interest Rate" value={`${loan.interestRate}% / month`} isMono />
+              <ComputationDetail label="Payment Method" value={loan.paymentMethod} />
+              <ComputationDetail
+                label="Maturity Range"
+                value={`${formatDateShort(loan.firstDueDate)} – ${formatDateShort(loan.maturityDate)}`}
+              />
+            </div>
 
-              {/* Interest Section */}
-              <div className="rounded-2xl border border-border/60 bg-muted/15 p-5 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                  <Calculator className="size-3.5 text-primary" /> Interest &amp; Payable Schedule
-                </h4>
-                <div className="space-y-2 pt-1">
-                  <ComputationLine label="Principal" formula="Base amount borrowed" value={formatCurrency(loan.principal)} />
-                  <ComputationLine label="Total Interest" formula={`${loan.interestRate}% monthly rate over ${loan.termMonths} month(s)`} value={`+ ${formatCurrency(loan.totalInterest)}`} tone="positive" />
-                  <ComputationLine label="Average Interest per Month" formula={`Total interest ÷ ${loan.termMonths || 1}`} value={formatCurrency(averageMonthlyInterest)} />
-                  <ComputationLine label="Effective Interest over Full Term" formula="Total interest ÷ principal × 100" value={`${effectiveInterestPercent.toFixed(2)}%`} />
-                  <div className="border-t border-border/50 pt-2">
-                    <ComputationLine label="Total Amount Payable" formula="Principal + total interest" value={formatCurrency(loan.totalAmountPayable)} strong />
-                  </div>
-                  <ComputationLine label="Monthly Amortization" formula={`Scheduled payable amount for each of ${loan.termMonths} month(s)`} value={formatCurrency(loan.monthlyAmortization)} strong />
+            {/* Interest & Amortization Calculations */}
+            <div className="rounded-2xl border border-border/60 bg-muted/15 p-5 space-y-3 shadow-2xs">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+                <Calculator className="size-3.5 text-primary" /> Interest &amp; Payable Schedule
+              </h4>
+              <div className="space-y-2 pt-1">
+                <ComputationLine
+                  label="Principal Amount"
+                  formula="Base borrowed principal"
+                  value={formatCurrency(loan.principal)}
+                />
+                <ComputationLine
+                  label="Total Interest"
+                  formula={`${loan.interestRate}% monthly rate across ${loan.termMonths} month(s)`}
+                  value={`+ ${formatCurrency(loan.totalInterest)}`}
+                  tone="positive"
+                />
+                <ComputationLine
+                  label="Average Monthly Interest"
+                  formula={`Total interest ÷ ${loan.termMonths || 1}`}
+                  value={formatCurrency(averageMonthlyInterest)}
+                />
+                <ComputationLine
+                  label="Effective Term Interest"
+                  formula="Total interest ÷ principal × 100"
+                  value={`${effectiveInterestPercent.toFixed(2)}%`}
+                />
+                <div className="border-t border-border/50 pt-2">
+                  <ComputationLine
+                    label="Total Amount Payable"
+                    formula="Principal + total computed interest"
+                    value={formatCurrency(loan.totalAmountPayable)}
+                    strong
+                  />
                 </div>
+                <ComputationLine
+                  label="Monthly Amortization"
+                  formula={`Scheduled amortization payable for ${loan.termMonths} month(s)`}
+                  value={formatCurrency(loan.monthlyAmortization)}
+                  strong
+                />
               </div>
+            </div>
 
-              {/* Release and Deductions Section */}
-              <div className="rounded-2xl border border-border/60 bg-muted/15 p-5 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                  <Banknote className="size-3.5 text-primary" /> Upfront Deductions &amp; Net Proceeds
-                </h4>
-                <div className="space-y-2 pt-1">
-                  <ComputationLine label="Principal" formula="Approved computation principal" value={formatCurrency(loan.principal)} />
-                  <ComputationLine label="Processing Fee" formula="Deducted before release" value={`− ${formatCurrency(loan.processingFee)}`} tone="negative" />
-                  {serviceCharge > 0 && <ComputationLine label="Service Charge" formula="Additional charge deducted before release" value={`− ${formatCurrency(serviceCharge)}`} tone="negative" />}
-                  <ComputationLine label="Total Upfront Deductions" formula="Processing fee + service charge" value={`− ${formatCurrency(totalDeductions)}`} tone="negative" />
-                  <div className="border-t border-border/50 pt-2">
-                    <ComputationLine label="Net Proceeds" formula="Principal − upfront deductions" value={formatCurrency(loan.netProceeds)} tone="positive" strong />
-                  </div>
-                  {loan.actualReleasedAmount != null && <ComputationLine label="Actual Released Amount" formula="Amount confirmed during release" value={formatCurrency(loan.actualReleasedAmount)} strong />}
-                  {(loan.previousObligationAmount ?? 0) > 0 && <ComputationLine label="Previous Obligation" formula={`Settlement: ${loan.previousObligationSettlementMethod ? SETTLEMENT_METHOD_LABEL[loan.previousObligationSettlementMethod] : "Not specified"}`} value={`− ${formatCurrency(loan.previousObligationAmount ?? 0)}`} tone="negative" />}
+            {/* Upfront Deductions & Net Proceeds */}
+            <div className="rounded-2xl border border-border/60 bg-muted/15 p-5 space-y-3 shadow-2xs">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+                <Banknote className="size-3.5 text-primary" /> Upfront Fees &amp; Net Proceeds
+              </h4>
+              <div className="space-y-2 pt-1">
+                <ComputationLine
+                  label="Principal Amount"
+                  formula="Approved computation principal"
+                  value={formatCurrency(loan.principal)}
+                />
+                <ComputationLine
+                  label="Processing Fee"
+                  formula="Administrative processing deduction"
+                  value={`− ${formatCurrency(loan.processingFee)}`}
+                  tone="negative"
+                />
+                {serviceCharge > 0 && (
+                  <ComputationLine
+                    label="Service Charge"
+                    formula="Additional pre-release service deduction"
+                    value={`− ${formatCurrency(serviceCharge)}`}
+                    tone="negative"
+                  />
+                )}
+                <ComputationLine
+                  label="Total Deductions"
+                  formula="Processing fee + service charges"
+                  value={`− ${formatCurrency(totalDeductions)}`}
+                  tone="negative"
+                />
+                <div className="border-t border-border/50 pt-2">
+                  <ComputationLine
+                    label="Net Proceeds"
+                    formula="Principal − upfront deductions"
+                    value={formatCurrency(loan.netProceeds)}
+                    tone="positive"
+                    strong
+                  />
                 </div>
+                {loan.actualReleasedAmount != null && (
+                  <ComputationLine
+                    label="Actual Released Amount"
+                    formula="Confirmed disbursement total"
+                    value={formatCurrency(loan.actualReleasedAmount)}
+                    strong
+                  />
+                )}
+                {(loan.previousObligationAmount ?? 0) > 0 && (
+                  <ComputationLine
+                    label="Previous Obligation Deducted"
+                    formula={`Settlement: ${
+                      loan.previousObligationSettlementMethod
+                        ? SETTLEMENT_METHOD_LABEL[loan.previousObligationSettlementMethod]
+                        : "Not specified"
+                    }`}
+                    value={`− ${formatCurrency(loan.previousObligationAmount ?? 0)}`}
+                    tone="negative"
+                  />
+                )}
               </div>
+            </div>
 
-              {/* Current Position */}
-              <div className="rounded-2xl border border-primary/20 bg-primary/[0.02] p-5 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-primary">Current Repayment Position</h4>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1">
-                  <ComputationDetail label="Posted Payments" value={formatCurrency(totalPaid)} />
-                  <ComputationDetail label="Outstanding Balance" value={formatCurrency(loan.outstandingBalance)} />
-                  <ComputationDetail label="Installments Posted" value={`${postedPayments.length}`} />
-                </div>
+            {/* Current Repayment Position */}
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-primary">
+                Current Repayment Position
+              </h4>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1">
+                <ComputationDetail label="Total Payments Collected" value={formatCurrency(totalPaid)} isMono />
+                <ComputationDetail label="Outstanding Principal" value={formatCurrency(loan.outstandingBalance)} isMono />
+                <ComputationDetail label="Posted Installment Count" value={`${postedPayments.length}`} isMono />
               </div>
             </div>
           </div>
         </TabsContent>
 
-        {/* TAB: Amortization Schedule */}
-        <TabsContent value="schedule" className="mt-4 outline-none focus-visible:ring-0">
-          <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+        {/* TAB 3: Amortization Schedule */}
+        <TabsContent value="schedule" className="mt-0">
+          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <DataTable
               columns={buildAmortizationColumns(schedule)}
               data={schedule}
               isLoading={isLoadingSchedule}
               isError={isScheduleError}
               onRetry={refetchSchedule}
-              emptyTitle="No amortization schedule"
+              emptyTitle="No amortization schedule available"
               emptyDescription="The amortization schedule has not been generated for this loan."
               maxHeight="max-h-[min(80vh,82rem)]"
             />
           </div>
         </TabsContent>
 
-        {/* TAB: Payment History */}
-        <TabsContent value="payments" className="mt-4 outline-none focus-visible:ring-0">
+        {/* TAB 4: Payment History */}
+        <TabsContent value="payments" className="mt-0">
           {payments.length === 0 ? (
-            <EmptyState icon={Banknote} title="No payments recorded" description="No payments have been posted for this loan yet." />
+            <EmptyState
+              icon={Banknote}
+              title="No payments recorded"
+              description="No payments have been posted for this loan application yet."
+            />
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
               <Table>
-                <TableHeader className="bg-muted/40 border-b border-border/50">
+                <TableHeader className="bg-muted/20 border-b border-border/40">
                   <TableRow>
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Reference #</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Payment Date</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Amount Paid</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">O.R. Number</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Received By</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-right">Status</TableHead>
+                    <TableHead className="pl-5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Reference #
+                    </TableHead>
+                    <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Payment Date
+                    </TableHead>
+                    <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Amount Paid
+                    </TableHead>
+                    <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Official Receipt #
+                    </TableHead>
+                    <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Received By
+                    </TableHead>
+                    <TableHead className="pr-5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Status
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody className="divide-y divide-border/40">
+                <TableBody className="divide-y divide-border/30">
                   {payments.map((p) => (
-                    <TableRow key={p.id} className="hover:bg-muted/10 transition-colors">
-                      <TableCell className="font-semibold text-foreground">{p.paymentReferenceNumber}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatDateShort(p.paymentDate)}</TableCell>
-                      <TableCell className="font-mono font-semibold text-foreground">{formatCurrency(p.amountPaid)}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{p.officialReceiptNumber}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{p.receivedBy}</TableCell>
-                      <TableCell className="text-right">
-                        <StatusBadge label={p.status} tone={p.status === "Posted" ? "success" : "danger"} />
+                    <TableRow key={p.id} className="hover:bg-muted/20 transition-colors">
+                      <TableCell className="pl-5 font-mono text-xs font-semibold text-foreground">
+                        {p.paymentReferenceNumber}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {formatDateShort(p.paymentDate)}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(p.amountPaid)}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {p.officialReceiptNumber || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{p.receivedBy}</TableCell>
+                      <TableCell className="pr-5 text-right">
+                        <StatusBadge
+                          label={p.status}
+                          tone={p.status === "Posted" ? "success" : "danger"}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -467,28 +748,31 @@ export default function LoanDetailPage() {
           )}
         </TabsContent>
 
-        {/* TAB: Requirements & ReLoan Eligibility Hub */}
-        <TabsContent value="requirements" className="mt-4 outline-none focus-visible:ring-0 space-y-6">
-          {/* Dynamic ReLoan Evaluation */}
-          <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
-            <div className="flex items-center gap-2.5 border-b border-border/50 bg-muted/20 px-6 py-4">
-              <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                <ClipboardCheck className="size-4" />
-              </span>
+        {/* TAB 5: Requirements & Reloan Hub */}
+        <TabsContent value="requirements" className="mt-0 space-y-6">
+          {/* Dynamic ReLoan Evaluation Hub */}
+          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
+            <div className="flex items-center gap-2.5 border-b border-border/40 bg-muted/15 px-6 py-4">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <ClipboardCheck className="size-4" strokeWidth={2.2} />
+              </div>
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">ReLoan Evaluation Engine</h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Automated compliance evaluation tracking outstanding parameters.</p>
+                <h3 className="font-heading text-xs font-bold uppercase tracking-wider text-foreground">
+                  Automated ReLoan Evaluation Engine
+                </h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Evaluates eligibility parameters and thresholds in real-time.
+                </p>
               </div>
             </div>
-            <div className="bg-card p-6">
+            <div className="p-6">
               <ReloanEligibilityCard loanId={id} />
             </div>
           </div>
 
-          {/* Requirement Checklists */}
+          {/* Documentary Requirements & Eligibility Checks */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Documentary Requirements */}
-            <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-xs space-y-4">
+            <div className="rounded-2xl border border-border/60 bg-card/90 p-6 shadow-xs space-y-4">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border/40 pb-3">
                 <FileText className="size-4 text-primary" />
                 Documentary Requirements
@@ -507,12 +791,14 @@ export default function LoanDetailPage() {
                     <span className={req.completed ? "font-semibold text-foreground" : "text-muted-foreground"}>
                       {req.label}
                     </span>
-                    <span className={cn(
-                      "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                      req.completed
-                        ? "bg-emerald-500 text-white dark:bg-emerald-500/20 dark:text-emerald-400"
-                        : "bg-muted-foreground/15 text-muted-foreground"
-                    )}>
+                    <span
+                      className={cn(
+                        "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                        req.completed
+                          ? "bg-emerald-500 text-white dark:bg-emerald-500/20 dark:text-emerald-400"
+                          : "bg-muted-foreground/15 text-muted-foreground"
+                      )}
+                    >
                       {req.completed ? "✓" : "—"}
                     </span>
                   </li>
@@ -520,20 +806,19 @@ export default function LoanDetailPage() {
               </ul>
             </div>
 
-            {/* Eligibility Checklist (as evaluated at submission/approval time) */}
-            <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-xs space-y-4">
+            <div className="rounded-2xl border border-border/60 bg-card/90 p-6 shadow-xs space-y-4">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border/40 pb-3">
                 <ShieldCheck className="size-4 text-primary" />
-                Eligibility Checklist
+                Eligibility Verification Matrix
               </h3>
               <EligibilityChecklist items={loan.eligibility} result={eligibilityResult} />
             </div>
           </div>
         </TabsContent>
 
-        {/* TAB: Approvals Timeline */}
-        <TabsContent value="approvals" className="mt-4 outline-none focus-visible:ring-0">
-          <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-xs">
+        {/* TAB 6: Approval History */}
+        <TabsContent value="approvals" className="mt-0">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-6 shadow-xs backdrop-blur-xs">
             <ApprovalTimeline history={history} />
           </div>
         </TabsContent>
@@ -541,8 +826,6 @@ export default function LoanDetailPage() {
     </div>
   )
 }
-
-/* Local UI Helpers */
 
 function Section({
   icon: Icon,
@@ -556,18 +839,18 @@ function Section({
   children: React.ReactNode
 }) {
   const toneClasses = {
-    primary: "bg-primary/10 text-primary",
-    success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    gold: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    primary: "border-primary/20 bg-primary/10 text-primary",
+    success: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    gold: "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
   }[tone]
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-card shadow-xs overflow-hidden">
-      <div className="px-5 py-4 flex items-center gap-2.5 border-b border-border/50 bg-muted/20">
-        <span className={cn("p-1.5 rounded-lg", toneClasses)}>
-          <Icon className="size-4" />
+    <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs overflow-hidden backdrop-blur-xs">
+      <div className="px-5 py-3.5 flex items-center gap-2.5 border-b border-border/40 bg-muted/15">
+        <span className={cn("flex size-7 items-center justify-center rounded-lg border shadow-2xs", toneClasses)}>
+          <Icon className="size-3.5" />
         </span>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">{title}</h3>
+        <h3 className="font-heading text-xs font-bold uppercase tracking-wider text-foreground">{title}</h3>
       </div>
       <div className="p-5 space-y-4">{children}</div>
     </div>
@@ -577,8 +860,8 @@ function Section({
 function TimelineStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">{label}</p>
-      <p className="text-xs font-semibold">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="font-mono text-xs font-semibold text-foreground">{value}</p>
     </div>
   )
 }
@@ -586,26 +869,53 @@ function TimelineStat({ label, value }: { label: string; value: string }) {
 function DetailGroup({ heading, children }: { heading?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      {heading && <div className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider">{heading}</div>}
+      {heading && (
+        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider pb-0.5">
+          {heading}
+        </div>
+      )}
       <dl className="text-xs space-y-0">{children}</dl>
     </div>
   )
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailRow({
+  label,
+  value,
+  isMono,
+}: {
+  label: string
+  value: React.ReactNode
+  isMono?: boolean
+}) {
   return (
-    <div className="flex items-center justify-between py-2 first:pt-0 last:pb-0 gap-4 border-b border-border/30 last:border-0">
+    <div className="flex items-center justify-between py-2 border-b border-border/30 last:border-0 gap-4">
       <dt className="text-muted-foreground text-[11px] font-semibold shrink-0">{label}</dt>
-      <dd className="font-bold text-foreground text-right text-xs truncate max-w-[220px]">{value}</dd>
+      <dd
+        className={cn(
+          "font-bold text-foreground text-right text-xs truncate max-w-[240px]",
+          isMono && "font-mono"
+        )}
+      >
+        {value}
+      </dd>
     </div>
   )
 }
 
-function ComputationDetail({ label, value }: { label: string; value: string }) {
+function ComputationDetail({
+  label,
+  value,
+  isMono,
+}: {
+  label: string
+  value: string
+  isMono?: boolean
+}) {
   return (
-    <div className="rounded-xl border border-border/60 bg-background/50 p-3.5 space-y-1">
+    <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-1 shadow-2xs">
       <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="text-sm font-bold text-foreground">{value}</p>
+      <p className={cn("text-xs font-bold text-foreground", isMono && "font-mono")}>{value}</p>
     </div>
   )
 }
@@ -623,19 +933,65 @@ function ComputationLine({
   tone?: "default" | "positive" | "negative"
   strong?: boolean
 }) {
-  const valueTone = tone === "positive"
-    ? "text-emerald-600 dark:text-emerald-400"
-    : tone === "negative"
-      ? "text-destructive"
-      : "text-foreground"
+  const valueTone =
+    tone === "positive"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : tone === "negative"
+        ? "text-destructive"
+        : "text-foreground"
 
   return (
     <div className="flex items-start justify-between gap-4 py-1.5">
       <div className="min-w-0">
-        <p className={strong ? "text-sm font-bold text-foreground" : "text-sm font-semibold text-foreground"}>{label}</p>
-        <p className="text-[11px] leading-relaxed text-muted-foreground">{formula}</p>
+        <p className={strong ? "text-xs font-bold text-foreground" : "text-xs font-semibold text-foreground"}>
+          {label}
+        </p>
+        <p className="text-[11px] text-muted-foreground">{formula}</p>
       </div>
-      <span className={cn("shrink-0 text-right font-mono", strong ? "text-base font-bold" : "text-sm font-semibold", valueTone)}>{value}</span>
+      <span
+        className={cn(
+          "shrink-0 text-right font-mono",
+          strong ? "text-sm font-bold" : "text-xs font-semibold",
+          valueTone
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function SummaryStat({
+  label,
+  value,
+  tone,
+  icon: Icon,
+}: {
+  label: string
+  value: string
+  tone?: "primary" | "success" | "warning"
+  icon?: React.ComponentType<{ className?: string }>
+}) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-2xs backdrop-blur-xs space-y-1">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">{label}</p>
+        {Icon && <Icon className="size-3.5 text-muted-foreground/60" />}
+      </div>
+      <p
+        className={cn(
+          "font-heading text-lg font-bold tracking-tight",
+          tone === "primary"
+            ? "text-primary font-mono"
+            : tone === "success"
+              ? "text-emerald-600 dark:text-emerald-400 font-mono"
+              : tone === "warning"
+                ? "text-amber-600 dark:text-amber-400 font-mono"
+                : "text-foreground font-mono"
+        )}
+      >
+        {value}
+      </p>
     </div>
   )
 }

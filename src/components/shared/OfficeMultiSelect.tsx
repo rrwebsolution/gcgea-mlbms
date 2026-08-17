@@ -13,9 +13,10 @@ interface OfficeMultiSelectProps {
   onValuesChange: (values: string[]) => void
   placeholder?: string
   error?: boolean
+  className?: string
 }
 
-export function OfficeMultiSelect({ values, onValuesChange, placeholder = "Select offices", error = false }: OfficeMultiSelectProps) {
+export function OfficeMultiSelect({ values, onValuesChange, placeholder = "Select offices", error = false, className }: OfficeMultiSelectProps) {
   const [open, setOpen] = React.useState(false)
   const { data: allOffices = [] } = useQuery({ queryKey: ["offices", "all"], queryFn: listAllOffices })
   const offices = allOffices.filter((office) => office.status === "Active")
@@ -36,7 +37,7 @@ export function OfficeMultiSelect({ values, onValuesChange, placeholder = "Selec
               type="button"
               variant="outline"
               aria-invalid={error}
-              className={cn("h-auto min-h-10 w-full items-start justify-between py-2 font-normal", error && "border-destructive ring-1 ring-destructive/20")}
+              className={cn("h-auto min-h-10 w-full items-start justify-between py-2 font-normal", error && "border-destructive ring-1 ring-destructive/20", className)}
             />
           }
         >

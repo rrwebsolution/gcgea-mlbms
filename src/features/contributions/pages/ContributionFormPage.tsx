@@ -2,7 +2,18 @@ import * as React from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { AlertTriangle, CheckCircle2, Loader2, Save, User, Calendar, Coins, Receipt } from "lucide-react"
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Save,
+  User,
+  Calendar,
+  Coins,
+  Receipt,
+  Sparkles,
+  Plus,
+} from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
 import { MemberSelectionStep } from "@/components/shared/MemberSelectionStep"
@@ -18,9 +29,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { getMember } from "@/services/members.service"
-import { getAllContributions, getContribution, hasExistingContribution, createContribution, updateContribution, defaultContributionAmountForType } from "@/services/contributions.service"
+import {
+  getAllContributions,
+  getContribution,
+  hasExistingContribution,
+  createContribution,
+  updateContribution,
+  defaultContributionAmountForType,
+} from "@/services/contributions.service"
 import { getMemberLoans } from "@/services/loans.service"
 import { listDeductionTypes } from "@/services/deduction-types.service"
 import { formatCurrency } from "@/utils/format"
@@ -30,6 +55,7 @@ import { cn } from "@/lib/utils"
 import type { Contribution, ContributionType, ContributionSettings, PaymentMethod } from "@/types"
 
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
+
 function currentPeriod(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -98,10 +124,9 @@ export default function ContributionFormPage() {
     if (paramMemberId && paramMemberId !== memberId && !isEditMode) {
       setMemberId(paramMemberId)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+  }, [searchParams, memberId, isEditMode])
 
-  // Edit mode operates on exactly one existing record — kept as flat fields.
+  // Edit mode fields
   const [editPeriod, setEditPeriod] = React.useState("")
   const [editType, setEditType] = React.useState<ContributionType>("Monthly Dues")
   const [editAmount, setEditAmount] = React.useState<number>()
@@ -111,9 +136,6 @@ export default function ContributionFormPage() {
   const [editPaymentDate, setEditPaymentDate] = React.useState(() => new Date().toISOString().slice(0, 10))
   const [editRemarks, setEditRemarks] = React.useState("")
 
-  // Contribution types are fixed to Monthly Dues; Cash Pabaon belongs to deductions.
-  // A voided period is re-contributable — its detail page deep-links here with
-  // ?period=YYYY-MM so the re-contribution defaults to the same period.
   const [entries, setEntries] = React.useState<ContributionEntry[]>(() => {
     const period = searchParams.get("period")
     return [makeEntry(period ? { contributionPeriod: period } : undefined)]
@@ -124,9 +146,9 @@ export default function ContributionFormPage() {
   const [successDialog, setSuccessDialog] = React.useState<{ created: Contribution[] } | null>(null)
   const [pendingAddAnother, setPendingAddAnother] = React.useState(false)
 
-  // Contribution Settings, kept live: a save from the Settings page (this tab
-  // or another) should immediately reflect here without needing a reload.
-  const [contributionSettings, setContributionSettings] = React.useState<ContributionSettings>(() => getSettings().contribution)
+  const [contributionSettings, setContributionSettings] = React.useState<ContributionSettings>(
+    () => getSettings().contribution
+  )
 
   React.useEffect(() => {
     void loadSystemSettings().then((loaded) => setContributionSettings(loaded.settings.contribution))
@@ -136,9 +158,13 @@ export default function ContributionFormPage() {
       if (detail.section !== "contribution") return
       const value = detail.value as ContributionSettings
       setContributionSettings(value)
-      setEntries((prev) => prev.map((entry) =>
-        entry.contributionType === "Monthly Dues" ? { ...entry, amount: value.defaultMonthlyContribution } : entry
-      ))
+      setEntries((prev) =>
+        prev.map((entry) =>
+          entry.contributionType === "Monthly Dues"
+            ? { ...entry, amount: value.defaultMonthlyContribution }
+            : entry
+        )
+      )
     }
 
     window.addEventListener("gcgea:settings-changed", handleSettingsChanged)
@@ -164,63 +190,83 @@ export default function ContributionFormPage() {
     }
   }, [isEditMode, editType, contributionSettings.defaultMonthlyContribution])
 
-  const { data: member } = useQuery({ queryKey: ["members", memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
-  const { data: deductionTypes = [] } = useQuery({ queryKey: ["deduction-types"], queryFn: listDeductionTypes })
-  const globalPabaonAmount = deductionTypes.find((t) => t.code.toLowerCase() === "pabaon" && t.isActive)?.defaultAmount
+  const { data: member } = useQuery({
+    queryKey: ["members", memberId],
+    queryFn: () => getMember(memberId),
+    enabled: !!memberId,
+  })
+  const { data: deductionTypes = [] } = useQuery({
+    queryKey: ["deduction-types"],
+    queryFn: listDeductionTypes,
+  })
+  const globalPabaonAmount = deductionTypes.find(
+    (t) => t.code.toLowerCase() === "pabaon" && t.isActive
+  )?.defaultAmount
 
-  const memberContributions = memberId ? getAllContributions().filter((c) => c.memberId === memberId && c.status === "Posted" && c.id !== id) : []
+  const memberContributions = memberId
+    ? getAllContributions().filter((c) => c.memberId === memberId && c.status === "Posted" && c.id !== id)
+    : []
   const totalContributions = memberContributions.reduce((sum, c) => sum + c.amount, 0)
-  const lastContribution = memberContributions.slice().sort((a, b) => b.paymentDate.localeCompare(a.paymentDate))[0]
+  const lastContribution = memberContributions
+    .slice()
+    .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate))[0]
   const memberLoans = memberId ? getMemberLoans(memberId) : []
   const activeLoans = memberLoans.filter((l) => ["Active", "Overdue", "Released"].includes(l.status))
   const overdueLoans = memberLoans.filter((l) => l.status === "Overdue")
   const outstandingLoanBalance = activeLoans.reduce((sum, l) => sum + l.outstandingBalance, 0)
 
-  // --- Edit mode duplicate/validity ---
+  // Edit mode duplicate check
   const isEditDuplicate =
     !!memberId &&
     !!editPeriod &&
     hasExistingContribution(memberId, editPeriod, editType) &&
     (existing?.contributionPeriod !== editPeriod || existing?.contributionType !== editType)
-  const canSaveEdit = !!member && !!editPeriod && !!editAmount && editAmount > 0 && !!editPaymentDate && !isEditDuplicate
+  const canSaveEdit =
+    !!member && !!editPeriod && !!editAmount && editAmount > 0 && !!editPaymentDate && !isEditDuplicate
 
-  // --- Create mode: per-entry duplicate check (against posted records AND other entries in this same form) ---
+  // Create mode duplicate check
   function isEntryDuplicate(entry: ContributionEntry): boolean {
     if (!memberId || !entry.contributionPeriod) return false
     const dupWithinForm = entries.some(
-      (e) => e.key !== entry.key && e.contributionPeriod === entry.contributionPeriod && e.contributionType === entry.contributionType
+      (e) =>
+        e.key !== entry.key &&
+        e.contributionPeriod === entry.contributionPeriod &&
+        e.contributionType === entry.contributionType
     )
-    return dupWithinForm || hasExistingContribution(memberId, entry.contributionPeriod, entry.contributionType)
+    return (
+      dupWithinForm || hasExistingContribution(memberId, entry.contributionPeriod, entry.contributionType)
+    )
   }
 
-  // A voided record for this exact period/type doesn't block saving (hasExistingContribution
-  // only looks at Posted records) — but the encoder should still see that it was voided.
   function findVoidedEntryContribution(entry: ContributionEntry) {
     if (!memberId || !entry.contributionPeriod) return undefined
     return getAllContributions().find(
-      (c) => c.memberId === memberId && c.contributionPeriod === entry.contributionPeriod && c.contributionType === entry.contributionType && c.status === "Voided"
+      (c) =>
+        c.memberId === memberId &&
+        c.contributionPeriod === entry.contributionPeriod &&
+        c.contributionType === entry.contributionType &&
+        c.status === "Voided"
     )
   }
 
-  // --- Create mode: advisory-only checks against Contribution Settings (warn, never block Save) ---
   function isEntryAdvance(entry: ContributionEntry): boolean {
     return !!entry.contributionPeriod && entry.contributionPeriod > currentPeriod()
   }
 
-  // Require Resolved Voided Months: find the earliest voided period before this
-  // entry's period, for this member/type, that has no Posted re-contribution yet.
   function findUnresolvedVoidedPeriod(entry: ContributionEntry): string | undefined {
     if (!memberId || !entry.contributionPeriod) return undefined
     const memberTypeContributions = getAllContributions().filter(
       (c) => c.memberId === memberId && c.contributionType === entry.contributionType
     )
-    const voidedPeriods = Array.from(new Set(
-      memberTypeContributions
-        .filter((c) => c.status === "Voided" && c.contributionPeriod < entry.contributionPeriod)
-        .map((c) => c.contributionPeriod)
-    )).sort()
-    return voidedPeriods.find((period) =>
-      !memberTypeContributions.some((c) => c.contributionPeriod === period && c.status === "Posted")
+    const voidedPeriods = Array.from(
+      new Set(
+        memberTypeContributions
+          .filter((c) => c.status === "Voided" && c.contributionPeriod < entry.contributionPeriod)
+          .map((c) => c.contributionPeriod)
+      )
+    ).sort()
+    return voidedPeriods.find(
+      (period) => !memberTypeContributions.some((c) => c.contributionPeriod === period && c.status === "Posted")
     )
   }
 
@@ -290,9 +336,6 @@ export default function ContributionFormPage() {
         created.push(result)
       }
 
-      // A Monthly Dues / Payroll Deduction contribution auto-posts a matching
-      // Cash Pabaon deduction server-side — refresh so it shows immediately
-      // wherever deductions are displayed (e.g. the member's profile).
       queryClient.invalidateQueries({ queryKey: ["deductions"] })
 
       toast.success(
@@ -316,38 +359,47 @@ export default function ContributionFormPage() {
     return <FormSkeleton fields={["text", "date", "select", "select"]} columns={2} />
   }
   if (isEditMode && !isLoadingExisting && !existing) {
-    return <EmptyState icon={AlertTriangle} title="Contribution record not found" description="This record may have been removed." />
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Contribution record not found"
+        description="This record may have been removed or voided."
+      />
+    )
   }
   if (isEditMode && existing?.status === "Voided") {
     return (
       <AlertBanner
         tone="warning"
         title="This contribution has been voided"
-        description="Voided records cannot be edited. View the record to see its void reason and history."
+        description="Voided records cannot be edited. View the record to see its audit history."
       />
     )
   }
 
   return (
-    <div className="space-y-6 pb-20 mx-auto px-4 md:px-0">
+    <div className="space-y-8 pb-28 mx-auto">
+      {/* Page Header */}
       <PageHeader
-        title={isEditMode ? "Edit Contribution" : "Add Contribution"}
+        title={isEditMode ? "Edit Contribution Record" : "Encode Contribution"}
         description={
           isEditMode
-            ? "Update the payment details for this contribution record."
-            : "Encode a Monthly Dues contribution payment for a member."
+            ? "Update payment metadata, official receipt numbers, and remarks for this entry."
+            : "Record Monthly Dues and associated deduction allocations for an active member."
         }
       />
 
       {/* Step 1: Member Selection */}
-      <FormSection 
+      <FormSection
         title={
-          <span className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-              <User className="size-4 text-primary" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+              <User className="size-4" strokeWidth={2.2} />
             </div>
-            <span className="text-sm font-semibold tracking-tight text-foreground">Step 1 · Select Member</span>
-          </span>
+            <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+              Step 1 · Member Identification
+            </span>
+          </div>
         }
       >
         {isEditMode && member ? (
@@ -368,17 +420,18 @@ export default function ContributionFormPage() {
             activeLoanCount={activeLoans.length}
             overdueLoanCount={overdueLoans.length}
             extra={
-              /* Styled KPI-like Sub-card for last contribution status */
-              <div className="rounded-xl border border-border/40 bg-muted/20 p-4 text-xs shadow-inner flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-background border border-border/60">
-                  <Calendar className="size-4 text-primary animate-pulse" />
+              <div className="flex items-center gap-3.5 rounded-2xl border border-border/60 bg-muted/20 p-4 shadow-2xs backdrop-blur-xs">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background/80 text-primary shadow-2xs">
+                  <Calendar className="size-5" strokeWidth={2} />
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Last Recorded Contribution</p>
-                  <p className="font-semibold text-foreground mt-0.5">
-                    {lastContribution 
-                      ? `${lastContribution.contributionType} · ${lastContribution.contributionPeriod} · ${formatCurrency(lastContribution.amount)}` 
-                      : "No contributions on record"}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Last Recorded Contribution
+                  </p>
+                  <p className="mt-0.5 truncate font-heading text-xs font-semibold text-foreground">
+                    {lastContribution
+                      ? `${lastContribution.contributionType} · ${lastContribution.contributionPeriod} · ${formatCurrency(lastContribution.amount)}`
+                      : "No historical contributions found for this member"}
                   </p>
                 </div>
               </div>
@@ -387,35 +440,43 @@ export default function ContributionFormPage() {
         )}
       </FormSection>
 
-      {/* Step 2: Contribution details form (EDIT MODE) */}
+      {/* Step 2: Contribution Details (EDIT MODE) */}
       {member && isEditMode && (
-        <FormSection 
+        <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <Coins className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <Coins className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Step 2 · Contribution Details</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Step 2 · Payment Details
+              </span>
+            </div>
           }
         >
           {isEditDuplicate && (
             <AlertBanner
               tone="danger"
-              title="Duplicate contribution warning"
-              description={`A posted ${editType} contribution already exists for ${member.fullName} for period ${editPeriod}. Change the period, type, or amount to proceed.`}
-              className="mb-4 animate-in fade-in slide-in-from-top-2 duration-200"
+              title="Duplicate contribution conflict"
+              description={`A posted ${editType} contribution already exists for ${member.fullName} for period ${editPeriod}. Change the period to proceed.`}
+              className="mb-4"
             />
           )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
                 Contribution Period <span className="text-destructive font-bold">*</span>
               </Label>
-              <Input type="month" value={editPeriod} onChange={(e) => setEditPeriod(e.target.value)} className="h-10 text-sm" />
+              <Input
+                type="month"
+                value={editPeriod}
+                onChange={(e) => setEditPeriod(e.target.value)}
+                className="h-10 font-mono text-xs shadow-2xs"
+              />
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
                 Monthly Dues <span className="text-destructive font-bold">*</span>
               </Label>
               <CurrencyInput
@@ -423,212 +484,371 @@ export default function ContributionFormPage() {
                 onChange={() => {}}
                 readOnly
                 disabled
-                className="bg-muted/40"
+                className="h-10 bg-muted/40 font-mono text-xs font-semibold"
               />
-              <p className="text-[11px] text-muted-foreground">Based on the Monthly Contribution configured in Contribution Settings.</p>
+              <p className="text-[11px] text-muted-foreground">
+                Configured standard rate from Contribution Settings.
+              </p>
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
-                Cash Pabaon
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                Cash Pabaon (Linked Deduction)
               </Label>
               <CurrencyInput
                 value={existing?.cashPabaonAmount ?? globalPabaonAmount}
                 onChange={() => {}}
                 readOnly
                 disabled
-                className="bg-muted/40"
+                className="h-10 bg-muted/40 font-mono text-xs font-semibold"
               />
-              <p className="text-[11px] text-muted-foreground">Read-only amount posted for the same contribution period.</p>
+              <p className="text-[11px] text-muted-foreground">
+                Synchronized deduction for the selected period.
+              </p>
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payment Method</Label>
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                Payment Method
+              </Label>
               <CommandSelect
-                className="w-full h-10 text-sm bg-background border-border hover:bg-accent/40 transition-all"
+                className="w-full h-10 text-xs shadow-2xs"
                 value={editPaymentMethod}
                 onValueChange={(v) => setEditPaymentMethod((v ?? "Payroll Deduction") as PaymentMethod)}
                 options={PAYMENT_METHODS.map((m) => ({ value: m, label: m }))}
                 hideSearch
               />
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
                 Payment Date <span className="text-destructive font-bold">*</span>
               </Label>
-              <Input type="date" value={editPaymentDate} onChange={(e) => setEditPaymentDate(e.target.value)} className="h-10 text-sm" />
+              <Input
+                type="date"
+                value={editPaymentDate}
+                onChange={(e) => setEditPaymentDate(e.target.value)}
+                className="h-10 font-mono text-xs shadow-2xs"
+              />
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Official Receipt Number</Label>
-              <Input placeholder="e.g. OR-2026-004521" value={editOfficialReceiptNumber} onChange={(e) => setEditOfficialReceiptNumber(e.target.value)} className="h-10 text-sm" />
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                Official Receipt Number
+              </Label>
+              <Input
+                placeholder="e.g. OR-2026-004521"
+                value={editOfficialReceiptNumber}
+                onChange={(e) => setEditOfficialReceiptNumber(e.target.value)}
+                className="h-10 font-mono text-xs shadow-2xs"
+              />
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payroll Reference</Label>
-              <Input placeholder="e.g. PR-2026-07-001" value={editPayrollReference} onChange={(e) => setEditPayrollReference(e.target.value)} className="h-10 text-sm" />
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                Payroll Reference
+              </Label>
+              <Input
+                placeholder="e.g. PR-2026-07-001"
+                value={editPayrollReference}
+                onChange={(e) => setEditPayrollReference(e.target.value)}
+                className="h-10 font-mono text-xs shadow-2xs"
+              />
             </div>
+
             <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Remarks</Label>
-              <Textarea rows={2} placeholder="Additional notes about this contribution (optional)" value={editRemarks} onChange={(e) => setEditRemarks(e.target.value)} className="text-sm bg-background resize-none" />
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                Remarks & Notes
+              </Label>
+              <Textarea
+                rows={2}
+                placeholder="Additional audit notes about this payment (optional)"
+                value={editRemarks}
+                onChange={(e) => setEditRemarks(e.target.value)}
+                className="bg-background text-xs resize-none"
+              />
             </div>
           </div>
         </FormSection>
       )}
 
-      {/* Step 2: Contribution details form (CREATE MODE - Ledger style cards) */}
+      {/* Step 2: Contribution Details (CREATE MODE) */}
       {member && !isEditMode && (
         <FormSection
           title={
-            <span className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-background border border-border/60 shadow-xs">
-                <Receipt className="size-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary shadow-2xs">
+                <Receipt className="size-4" strokeWidth={2.2} />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Step 2 · Contribution Details</span>
-            </span>
+              <span className="font-heading text-sm font-semibold tracking-tight text-foreground">
+                Step 2 · Payment Ledger Encoding
+              </span>
+            </div>
           }
-          description="Contribution type is automatically recorded as Monthly Dues. Cash Pabaon is configured and posted under Deduction Types."
+          description="Monthly Dues are posted as standard contributions. Corresponding Cash Pabaon allocations post to the deduction ledger automatically."
         >
           <div className="space-y-6">
             {entries.map((entry, index) => {
               const duplicate = isEntryDuplicate(entry)
               const voidedRecord = !duplicate ? findVoidedEntryContribution(entry) : undefined
-              const blockingVoidedPeriod = contributionSettings.requireResolvedVoidedMonths ? findUnresolvedVoidedPeriod(entry) : undefined
+              const blockingVoidedPeriod = contributionSettings.requireResolvedVoidedMonths
+                ? findUnresolvedVoidedPeriod(entry)
+                : undefined
+
               return (
                 <div
                   key={entry.key}
                   className={cn(
-                    "rounded-2xl border bg-muted/5 p-5 shadow-sm space-y-4 transition-all duration-200 hover:bg-muted/10",
-                    duplicate || blockingVoidedPeriod ? "border-destructive/30 bg-destructive/[0.01]" : "border-border/60"
+                    "relative overflow-hidden rounded-2xl border bg-card/90 p-5 shadow-xs backdrop-blur-xs space-y-4 transition-all duration-200",
+                    duplicate || blockingVoidedPeriod
+                      ? "border-destructive/40 ring-2 ring-destructive/10"
+                      : "border-border/60 hover:border-border"
                   )}
                 >
-                  <div className="border-b border-border/45 pb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  <div className="flex items-center justify-between border-b border-border/40 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-bold text-primary">
                         {index + 1}
                       </span>
-                      <p className="text-xs font-bold text-foreground/95 tracking-wide uppercase">Monthly Dues</p>
+                      <p className="font-heading text-xs font-bold tracking-wider uppercase text-foreground">
+                        Monthly Dues Contribution Entry
+                      </p>
                     </div>
                   </div>
 
                   {voidedRecord && !blockingVoidedPeriod && (
                     <AlertBanner
                       tone="info"
-                      title="This month was previously voided."
-                      description="You can still re-contribute for this period — saving this entry will record a new contribution."
-                      className="animate-in fade-in slide-in-from-top-2 duration-200"
+                      title="Previously voided contribution period"
+                      description="This period was voided previously. Saving this entry will record a clean replacement contribution."
                     />
                   )}
 
                   {blockingVoidedPeriod && (
                     <AlertBanner
                       tone="danger"
-                      title="Earlier voided month not yet resolved"
-                      description={`A voided ${entry.contributionType} contribution for ${blockingVoidedPeriod} has not been re-contributed. Post ${blockingVoidedPeriod} before proceeding to ${entry.contributionPeriod}.`}
+                      title="Earlier voided period unresolved"
+                      description={`A voided ${entry.contributionType} contribution for ${blockingVoidedPeriod} has not been posted yet. Settle ${blockingVoidedPeriod} before continuing to ${entry.contributionPeriod}.`}
                       actions={
-                        <Button type="button" size="sm" variant="outline" onClick={() => updateEntry(entry.key, { contributionPeriod: blockingVoidedPeriod })}>
-                          Set Period to {blockingVoidedPeriod}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            updateEntry(entry.key, { contributionPeriod: blockingVoidedPeriod })
+                          }
+                          className="h-7 text-xs"
+                        >
+                          Set to {blockingVoidedPeriod}
                         </Button>
                       }
-                      className="animate-in fade-in slide-in-from-top-2 duration-200"
                     />
                   )}
 
                   {duplicate && (
                     <AlertBanner
                       tone="danger"
-                      title="Duplicate contribution warning"
-                      description={`A posted ${entry.contributionType} contribution already exists for ${member.fullName} for period ${entry.contributionPeriod} (or it is repeated in another entry below). Change the period or type before saving.`}
-                      className="animate-in fade-in slide-in-from-top-2 duration-200"
+                      title="Duplicate period conflict"
+                      description={`A posted ${entry.contributionType} contribution already exists for ${member.fullName} for period ${entry.contributionPeriod}. Please choose an open period.`}
                     />
                   )}
 
                   {!contributionSettings.allowAdvanceContribution && isEntryAdvance(entry) && (
                     <AlertBanner
                       tone="warning"
-                      title="Advance contribution"
-                      description="This period is ahead of the current month. Allow Advance Contribution is off in Contribution Settings."
-                      className="animate-in fade-in slide-in-from-top-2 duration-200"
+                      title="Advance payment warning"
+                      description="This period exceeds current calendar month. Allow Advance Contribution is disabled in system settings."
                     />
                   )}
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
                         Contribution Period <span className="text-destructive font-bold">*</span>
                       </Label>
-                      <Input type="month" value={entry.contributionPeriod} onChange={(e) => updateEntry(entry.key, { contributionPeriod: e.target.value })} className="h-10 text-sm" />
+                      <Input
+                        type="month"
+                        value={entry.contributionPeriod}
+                        onChange={(e) => updateEntry(entry.key, { contributionPeriod: e.target.value })}
+                        className="h-10 font-mono text-xs shadow-2xs"
+                      />
                     </div>
+
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Monthly Contribution</Label>
-                      <CurrencyInput value={entry.amount} onChange={() => {}} readOnly disabled className="bg-muted/40" />
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Monthly Contribution
+                      </Label>
+                      <CurrencyInput
+                        value={entry.amount}
+                        onChange={() => {}}
+                        readOnly
+                        disabled
+                        className="h-10 bg-muted/40 font-mono text-xs font-semibold"
+                      />
                     </div>
+
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Cash Pabaon (Contribution Settings)</Label>
-                      <CurrencyInput value={contributionSettings.defaultCashPabaonContribution} onChange={() => {}} readOnly disabled className="bg-muted/40" />
-                      <p className="text-[11px] text-muted-foreground">
-                        Informational only. Actually posted from Deduction Types → Pabaon
-                        {typeof globalPabaonAmount === "number" ? ` (currently ${formatCurrency(globalPabaonAmount)})` : ""}.
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Cash Pabaon Setting
+                      </Label>
+                      <CurrencyInput
+                        value={contributionSettings.defaultCashPabaonContribution}
+                        onChange={() => {}}
+                        readOnly
+                        disabled
+                        className="h-10 bg-muted/40 font-mono text-xs font-semibold"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Auto-posted via Deduction Types → Pabaon
+                        {typeof globalPabaonAmount === "number"
+                          ? ` (${formatCurrency(globalPabaonAmount)})`
+                          : ""}
+                        .
                       </p>
                     </div>
+
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payment Method</Label>
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Payment Method
+                      </Label>
                       <CommandSelect
-                        className="w-full h-10 text-sm bg-background border-border hover:bg-accent/45 transition-all"
+                        className="w-full h-10 text-xs shadow-2xs"
                         value={entry.paymentMethod}
-                        onValueChange={(v) => updateEntry(entry.key, { paymentMethod: (v ?? "Payroll Deduction") as PaymentMethod })}
+                        onValueChange={(v) =>
+                          updateEntry(entry.key, {
+                            paymentMethod: (v ?? "Payroll Deduction") as PaymentMethod,
+                          })
+                        }
                         options={PAYMENT_METHODS.map((m) => ({ value: m, label: m }))}
                         hideSearch
                       />
                     </div>
+
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
                         Payment Date <span className="text-destructive font-bold">*</span>
                       </Label>
-                      <Input type="date" value={entry.paymentDate} onChange={(e) => updateEntry(entry.key, { paymentDate: e.target.value })} className="h-10 text-sm" />
+                      <Input
+                        type="date"
+                        value={entry.paymentDate}
+                        onChange={(e) => updateEntry(entry.key, { paymentDate: e.target.value })}
+                        className="h-10 font-mono text-xs shadow-2xs"
+                      />
                     </div>
+
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Official Receipt Number</Label>
-                      <Input placeholder="e.g. OR-2026-004521" value={entry.officialReceiptNumber} onChange={(e) => updateEntry(entry.key, { officialReceiptNumber: e.target.value })} className="h-10 text-sm" />
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Official Receipt #
+                      </Label>
+                      <Input
+                        placeholder="e.g. OR-2026-004521"
+                        value={entry.officialReceiptNumber}
+                        onChange={(e) =>
+                          updateEntry(entry.key, { officialReceiptNumber: e.target.value })
+                        }
+                        className="h-10 font-mono text-xs shadow-2xs"
+                      />
                     </div>
+
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Payroll Reference</Label>
-                      <Input placeholder="e.g. PR-2026-07-001" value={entry.payrollReference} onChange={(e) => updateEntry(entry.key, { payrollReference: e.target.value })} className="h-10 text-sm" />
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Payroll Reference
+                      </Label>
+                      <Input
+                        placeholder="e.g. PR-2026-07-001"
+                        value={entry.payrollReference}
+                        onChange={(e) =>
+                          updateEntry(entry.key, { payrollReference: e.target.value })
+                        }
+                        className="h-10 font-mono text-xs shadow-2xs"
+                      />
                     </div>
+
                     <div className="space-y-1.5 sm:col-span-3">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Remarks</Label>
-                      <Textarea rows={2} placeholder="Additional notes about this contribution (optional)" value={entry.remarks} onChange={(e) => updateEntry(entry.key, { remarks: e.target.value })} className="text-sm bg-background resize-none" />
+                      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        Remarks
+                      </Label>
+                      <Textarea
+                        rows={2}
+                        placeholder="Additional notes about this contribution (optional)"
+                        value={entry.remarks}
+                        onChange={(e) => updateEntry(entry.key, { remarks: e.target.value })}
+                        className="bg-background text-xs resize-none"
+                      />
                     </div>
                   </div>
                 </div>
               )
             })}
 
-            <p className="text-[11px] text-muted-foreground font-medium italic pl-1">
-              * A reference number (e.g. GCGEA-CON-2026-000001) will be generated automatically per entry when you save.
-            </p>
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium pl-1">
+              <Sparkles className="size-3 text-primary" />
+              <span>
+                System generated tracking reference (e.g. GCGEA-CON-2026-000001) will be assigned upon save.
+              </span>
+            </div>
           </div>
         </FormSection>
       )}
 
-      {/* Sticky Action Footer */}
-      <div className="sticky bottom-4 z-15 flex flex-wrap items-center justify-between gap-3 border border-border/65 bg-background/80 backdrop-blur-md px-6 py-4 shadow-lg transition-all duration-200">
-        <Button variant="outline" onClick={() => setShowCancelConfirm(true)} className="h-9 text-xs">Cancel</Button>
-        <div className="flex flex-wrap gap-2">
+      {/* Floating Action Dock */}
+      <div className="sticky bottom-4 z-30 flex items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/85 px-5 py-3.5 shadow-xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 sm:px-6">
+        <Button
+          variant="outline"
+          onClick={() => setShowCancelConfirm(true)}
+          className="h-9 rounded-xl px-4 text-xs font-semibold active:scale-95 transition-transform"
+        >
+          Cancel
+        </Button>
+
+        <div className="flex items-center gap-2.5">
           {!isEditMode && (
-            <Button variant="default" onClick={() => handleSave(true)} disabled={!canSave || isSaving} className="h-9 text-xs gap-1.5 active:scale-97 transition-all">
-              {isSaving && pendingAddAnother ? <Loader2 className="animate-spin size-3.5" /> : <Save className="size-3.5" />} Save &amp; Add Another
+            <Button
+              variant="outline"
+              onClick={() => handleSave(true)}
+              disabled={!canSave || isSaving}
+              className="h-9 gap-1.5 rounded-xl px-4 text-xs font-semibold active:scale-95 shadow-2xs"
+            >
+              {isSaving && pendingAddAnother ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
+              <span>Save & Encode Another</span>
             </Button>
           )}
-          <Button variant="success" onClick={() => handleSave(false)} disabled={!canSave || isSaving} className="h-9 text-xs gap-1.5 shadow-sm active:scale-97 transition-all">
-            {isSaving && !pendingAddAnother ? <Loader2 className="animate-spin size-3.5" /> : <Save className="size-3.5" />} {isEditMode ? "Save Changes" : entries.length > 1 ? `Save ${entries.length} Entries` : "Save"}
+
+          <Button
+            variant="success"
+            onClick={() => handleSave(false)}
+            disabled={!canSave || isSaving}
+            className="h-9 gap-1.5 rounded-xl px-5 text-xs font-semibold shadow-xs active:scale-95 transition-all"
+          >
+            {isSaving && !pendingAddAnother ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Save className="size-3.5" strokeWidth={2.2} />
+            )}
+            <span>
+              {isSaving
+                ? "Recording…"
+                : isEditMode
+                  ? "Save Changes"
+                  : entries.length > 1
+                    ? `Save ${entries.length} Contributions`
+                    : "Save Contribution"}
+            </span>
           </Button>
         </div>
       </div>
 
-      {/* Discard changes dialog */}
+      {/* Discard confirmation dialog */}
       <ConfirmDialog
         open={showCancelConfirm}
         onOpenChange={setShowCancelConfirm}
-        title="Discard this contribution entry?"
-        description="Any information entered so far will be lost."
-        confirmLabel="Discard"
+        title="Discard contribution form?"
+        description="Any unsaved payment information entered in this session will be discarded."
+        confirmLabel="Discard & Exit"
         destructive
         onConfirm={() => {
           setShowCancelConfirm(false)
@@ -638,34 +858,52 @@ export default function ContributionFormPage() {
 
       {/* Success Dialog overlay */}
       <Dialog open={!!successDialog} onOpenChange={(open) => !open && setSuccessDialog(null)}>
-        <DialogContent className="sm:max-w-sm rounded-2xl p-6">
+        <DialogContent className="sm:max-w-md rounded-3xl p-6 sm:p-7 shadow-2xl backdrop-blur-2xl">
           <DialogHeader className="space-y-3">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-success/10 text-success">
-              <CheckCircle2 className="size-6" />
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-sm">
+              <CheckCircle2 className="size-7" />
             </div>
-            <DialogTitle className="text-center text-lg font-bold">
-              {successDialog && successDialog.created.length > 1 ? "Contributions Saved" : "Contribution Saved"}
+            <DialogTitle className="text-center font-heading text-xl font-bold tracking-tight text-foreground">
+              {successDialog && successDialog.created.length > 1
+                ? "Contributions Recorded"
+                : "Contribution Recorded"}
             </DialogTitle>
-            <DialogDescription className="text-center text-sm text-muted-foreground">
+            <DialogDescription className="text-center text-xs leading-relaxed text-muted-foreground">
               {successDialog?.created.map((c) => (
-                <span key={c.id} className="block mt-0.5">
-                  <span className="font-bold text-foreground">{c.referenceNumber}</span> ({c.contributionType})
+                <span key={c.id} className="block mt-1">
+                  <span className="font-mono font-bold text-foreground">{c.referenceNumber}</span> (
+                  {c.contributionType} · {c.contributionPeriod})
                 </span>
               ))}
-              {" "}has been recorded successfully.
+              {" "}posted successfully to the GCGEA ledger.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-col mt-4">
+
+          <DialogFooter className="mt-6 flex flex-col gap-2 sm:flex-col">
             {successDialog && successDialog.created.length === 1 && (
-              <Button className="w-full h-9 text-xs shadow-sm" onClick={() => navigate(`/contributions/${successDialog.created[0].id}`)}>
-                View Contribution Details
+              <Button
+                className="w-full h-9 rounded-xl text-xs font-semibold shadow-xs active:scale-95"
+                onClick={() => navigate(`/contributions/${successDialog.created[0].id}`)}
+              >
+                View Contribution Record
               </Button>
             )}
-            <Button variant="outline" className="w-full h-9 text-xs" onClick={() => { setSuccessDialog(null); resetForNewEntry() }}>
+            <Button
+              variant="outline"
+              className="w-full h-9 rounded-xl text-xs font-semibold active:scale-95"
+              onClick={() => {
+                setSuccessDialog(null)
+                resetForNewEntry()
+              }}
+            >
               Add Another Contribution
             </Button>
-            <Button variant="ghost" className="w-full h-9 text-xs text-muted-foreground" onClick={() => navigate("/contributions")}>
-              Back to Records
+            <Button
+              variant="ghost"
+              className="w-full h-9 rounded-xl text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => navigate("/contributions")}
+            >
+              Return to Contribution Records
             </Button>
           </DialogFooter>
         </DialogContent>
