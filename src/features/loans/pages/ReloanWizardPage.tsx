@@ -482,7 +482,7 @@ export default function ReloanWizardPage() {
       )}
 
       {step === 6 && (
-        <FormSection title="Step 6 · Requirements" description="Confirm which updated supporting documents have been submitted.">
+        <FormSection title="Step 6 · Requirements (Optional)" description="Confirm which updated supporting documents have been submitted, if any. Not required to proceed.">
           <div className="space-y-2">
             {REQUIREMENT_LABELS.map((label) => (
               <div key={label} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3">
@@ -490,7 +490,7 @@ export default function ReloanWizardPage() {
                   <Checkbox checked={requirements[label]} onCheckedChange={(v) => setRequirements((prev) => ({ ...prev, [label]: !!v }))} />
                   {label}
                 </label>
-                <StatusBadge label={requirements[label] ? "Submitted" : "Missing"} tone={requirements[label] ? "success" : "warning"} />
+                <StatusBadge label={requirements[label] ? "Submitted" : "Optional"} tone={requirements[label] ? "success" : "neutral"} />
               </div>
             ))}
           </div>
