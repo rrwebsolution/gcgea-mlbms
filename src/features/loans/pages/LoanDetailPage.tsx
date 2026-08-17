@@ -21,17 +21,18 @@ import {
   LayoutGrid,
   Wallet,
   Printer,
+  Eye,
 } from "lucide-react"
 import { DataTable } from "@/components/shared/DataTable"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { StatusBadge } from "@/components/shared/StatusBadge"
-import { PrintButton } from "@/components/shared/PrintButton"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { ApprovalTimeline } from "@/components/shared/ApprovalTimeline"
 import { AlertBanner } from "@/components/shared/AlertBanner"
 import { EligibilityChecklist, type EligibilityResult } from "@/components/shared/EligibilityChecklist"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { useBreadcrumbExtra } from "@/contexts/BreadcrumbContext"
+import { useAuth } from "@/contexts/AuthContext"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -47,7 +48,9 @@ import { ReloanEligibilityCard } from "@/features/loans/components/ReloanEligibi
 import { LOAN_STATUS_TONE, AMORTIZATION_STATUS_TONE } from "@/constants/status"
 import { formatCurrency, formatDateShort, formatMonthYear } from "@/utils/format"
 import { cn } from "@/lib/utils"
-import type { AmortizationEntry, PreviousObligationSettlementMethod } from "@/types"
+import type { AmortizationEntry, LoanStatus, PreviousObligationSettlementMethod } from "@/types"
+
+const APPROVAL_PENDING_STATUSES: LoanStatus[] = ["Under Review", "For Approval", "Approved"]
 
 const SETTLEMENT_METHOD_LABEL: Record<PreviousObligationSettlementMethod, string> = {
   full_payment_required: "Full Payment Required Before Release",
@@ -157,6 +160,7 @@ function buildAmortizationColumns(schedule: AmortizationEntry[]): ColumnDef<Amor
 
 export default function LoanDetailPage() {
   const { id = "" } = useParams()
+  const { hasPermission } = useAuth()
   const { data: loan, isLoading } = useQuery({ queryKey: ["loans", id], queryFn: () => getLoan(id) })
   const {
     data: schedule = [],
@@ -261,6 +265,23 @@ export default function LoanDetailPage() {
 
           {/* Action Toolbar */}
           <div className="flex flex-wrap items-center gap-2">
+            {APPROVAL_PENDING_STATUSES.includes(loan.status) && (
+              <PermissionButton
+                permission={
+                  loan.status === "Under Review"
+                    ? "loans.review"
+                    : loan.status === "For Approval"
+                      ? "loans.approve"
+                      : "loans.release"
+                }
+                size="sm"
+                className="h-9 gap-1.5 rounded-xl px-4 text-xs font-semibold shadow-xs active:scale-95 transition-all"
+                render={<Link to={`/approvals/loans/${loan.id}`} />}
+              >
+                <Eye className="size-3.5" /> {loan.status === "Approved" ? "Process Release" : "Review"}
+              </PermissionButton>
+            )}
+
             {loan.releaseDate && loan.releaseMethod === "Check" && (
               <PermissionButton
                 permission="loans.print"
@@ -270,6 +291,18 @@ export default function LoanDetailPage() {
                 render={<Link to={`/loans/${loan.id}/check`} />}
               >
                 <Printer className="size-3.5" /> Print Check
+              </PermissionButton>
+            )}
+
+            {loan.releaseDate && (
+              <PermissionButton
+                permission="loans.print"
+                size="sm"
+                variant="outline"
+                className="h-9 gap-1.5 rounded-xl px-3.5 text-xs font-semibold shadow-2xs hover:bg-muted active:scale-95 transition-all"
+                render={<Link to={`/loans/${loan.id}/disbursement-voucher`} />}
+              >
+                <Receipt className="size-3.5" /> Disbursement Voucher
               </PermissionButton>
             )}
 
@@ -293,7 +326,16 @@ export default function LoanDetailPage() {
                 </PermissionButton>
               )}
 
-            <PrintButton permission="loans.print" label="Print Application" />
+            {hasPermission("loans.print") && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 rounded-xl px-3.5 text-xs font-semibold shadow-2xs hover:bg-muted active:scale-95 transition-all print:hidden"
+                onClick={() => window.print()}
+              >
+                <Printer className="size-3.5" /> Print
+              </Button>
+            )}
           </div>
         </div>
 

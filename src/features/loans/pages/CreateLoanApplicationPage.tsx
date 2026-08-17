@@ -18,6 +18,7 @@ import {
   ArrowRight,
   ArrowLeft,
   UserSearch,
+  Printer,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
@@ -1426,6 +1427,16 @@ export default function CreateLoanApplicationPage() {
                 Step 4 · Financial Computation & Amortization
               </span>
             </div>
+          }
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              className="print:hidden"
+              onClick={() => window.print()}
+            >
+              <Printer className="size-3.5" /> Print
+            </Button>
           }
         >
           <div className="space-y-6">

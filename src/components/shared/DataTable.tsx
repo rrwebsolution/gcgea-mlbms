@@ -325,7 +325,7 @@ export function DataTable<TData>({
       {/* Scrollable Table Viewport */}
       <Table
         containerClassName={cn(
-          "data-table-scrollbar overflow-y-auto",
+          "data-table-scrollbar overflow-y-auto print:max-h-none print:overflow-visible",
           maxHeight
         )}
       >

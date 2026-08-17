@@ -2,7 +2,8 @@ import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { CheckCircle2, Loader2, RotateCw, ShieldAlert } from "lucide-react"
+import { CheckCircle2, Loader2, Printer, RotateCw, ShieldAlert } from "lucide-react"
+import type { ColumnDef } from "@tanstack/react-table"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { FormSection } from "@/components/shared/FormSection"
 import { WizardStepIndicator } from "@/components/shared/WizardStepIndicator"
@@ -13,6 +14,7 @@ import { CurrencyInput } from "@/components/shared/CurrencyInput"
 import { AlertBanner } from "@/components/shared/AlertBanner"
 import { SaveDraftButton } from "@/components/shared/SaveDraftButton"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { DataTable } from "@/components/shared/DataTable"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,7 +31,7 @@ import { computeLoan, bracketForNetPay } from "@/utils/loan-math"
 import { formatCurrency, formatDateShort } from "@/utils/format"
 import { useAuth } from "@/contexts/AuthContext"
 import { useDraft } from "@/hooks/useDraft"
-import type { LoanApplication, LoanRequirementItem, PaymentMethod } from "@/types"
+import type { AmortizationEntry, LoanApplication, LoanRequirementItem, PaymentMethod } from "@/types"
 
 const STEPS = ["Previous Loan Summary", "Member & Eligibility", "Current Financial Info", "New Loan Details", "Computation", "Requirements", "Review & Submit"]
 
@@ -41,6 +43,16 @@ const REQUIREMENT_LABELS = [
 ]
 
 const PAYMENT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
+
+const AMORTIZATION_COLUMNS: ColumnDef<AmortizationEntry, unknown>[] = [
+  { accessorKey: "installmentNumber", header: "#", cell: ({ row }) => <span className="font-medium">{row.original.installmentNumber}</span> },
+  { accessorKey: "dueDate", header: "Due Date", cell: ({ row }) => formatDateShort(row.original.dueDate) },
+  { accessorKey: "beginningBalance", header: "Beginning Balance", cell: ({ row }) => formatCurrency(row.original.beginningBalance) },
+  { accessorKey: "principal", header: "Principal", cell: ({ row }) => formatCurrency(row.original.principal) },
+  { accessorKey: "interest", header: "Interest", cell: ({ row }) => formatCurrency(row.original.interest) },
+  { accessorKey: "amountDue", header: "Amount Due", cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amountDue)}</span> },
+  { accessorKey: "remainingBalance", header: "Remaining Balance", cell: ({ row }) => formatCurrency(row.original.remainingBalance) },
+]
 
 export default function ReloanWizardPage() {
   const navigate = useNavigate()
@@ -458,7 +470,14 @@ export default function ReloanWizardPage() {
       )}
 
       {step === 5 && computation && (
-        <FormSection title="Step 5 · Computation">
+        <FormSection
+          title="Step 5 · Computation"
+          actions={
+            <Button variant="outline" size="sm" className="print:hidden" onClick={() => window.print()}>
+              <Printer className="size-3.5" /> Print
+            </Button>
+          }
+        >
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <ComputationStat label="Maximum Loanable Amount" value={loanType ? formatCurrency(loanType.maxAmount) : "—"} />
             <ComputationStat label="Monthly Interest" value={loanType ? `${loanType.defaultInterestRate}%` : "—"} />
@@ -478,6 +497,16 @@ export default function ReloanWizardPage() {
               description={`The previous loan has an outstanding balance of ${formatCurrency(previousObligation)}. Current policy requires this to be fully settled before release.`}
             />
           )}
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs">
+            <DataTable
+              columns={AMORTIZATION_COLUMNS}
+              data={computation.schedule}
+              getRowId={(row) => String(row.installmentNumber)}
+              enableColumnVisibility={false}
+              maxHeight="max-h-96"
+              emptyTitle="No schedule generated"
+            />
+          </div>
         </FormSection>
       )}
 

@@ -8,6 +8,7 @@ import {
   Plus,
   Trash2,
   RotateCcw,
+  Eye,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchInput } from "@/components/shared/SearchInput"
@@ -303,34 +304,57 @@ export default function LoansPage({
       id: "actions",
       header: "Actions",
       enableHiding: false,
-      cell: ({ row }) =>
-        row.original.status === "Draft" ? (
-          <div className="flex items-center gap-1.5">
-            <PermissionGuard permission="loans.update">
+      cell: ({ row }) => {
+        const status = row.original.status
+        if (status === "Draft") {
+          return (
+            <div className="flex items-center gap-1.5">
+              <PermissionGuard permission="loans.update">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 rounded-lg text-xs font-semibold active:scale-95"
+                  render={<Link to={`/loans/${row.original.id}/edit`} />}
+                >
+                  <PencilLine className="size-3.5" /> Continue
+                </Button>
+              </PermissionGuard>
+              <PermissionGuard anyOf={["drafts.delete_own", "drafts.delete_all"]}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="size-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90"
+                  onClick={() => setDeleteTarget(row.original)}
+                  aria-label="Delete draft"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </PermissionGuard>
+            </div>
+          )
+        }
+        if (["Under Review", "For Approval", "Approved"].includes(status)) {
+          const actionPermission =
+            status === "Under Review" ? "loans.review" : status === "For Approval" ? "loans.approve" : "loans.release"
+          const actionLabel = status === "Approved" ? "Process Release" : "Review"
+          return (
+            <PermissionGuard permission={actionPermission}>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-8 gap-1.5 rounded-lg text-xs font-semibold active:scale-95"
-                render={<Link to={`/loans/${row.original.id}/edit`} />}
+                render={<Link to={`/approvals/loans/${row.original.id}`} />}
               >
-                <PencilLine className="size-3.5" /> Continue
+                <Eye className="size-3.5" /> {actionLabel}
               </Button>
             </PermissionGuard>
-            <PermissionGuard anyOf={["drafts.delete_own", "drafts.delete_all"]}>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="size-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90"
-                onClick={() => setDeleteTarget(row.original)}
-                aria-label="Delete draft"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </PermissionGuard>
-          </div>
-        ) : ["Fully Paid", "Active", "Released"].includes(row.original.status) ? (
-          <ReloanButton loan={row.original} eligible />
-        ) : null,
+          )
+        }
+        if (["Fully Paid", "Active", "Released"].includes(status)) {
+          return <ReloanButton loan={row.original} eligible />
+        }
+        return null
+      },
     },
   ]
 
