@@ -7,7 +7,7 @@ import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { getLoan } from "@/services/loans.service"
 import { getMember } from "@/services/members.service"
 import { getSettings } from "@/services/settings.service"
-import { formatDateShort } from "@/utils/format"
+import { formatCurrency, formatDateShort } from "@/utils/format"
 
 const EXCLUDED_STATUSES = ["Draft"]
 
@@ -89,23 +89,25 @@ export default function LoanApplicationFormPrintPage() {
           <img src={template.rightLogo} alt="" className="mx-auto size-16 object-contain" />
         </div>
 
-        {/* Title / New-Renewal / Photo box */}
-        <div className="mt-3 flex items-start justify-between gap-4">
-          <div>
+        {/* Title / Photo box */}
+        <div className="relative mt-3">
+          <div className="text-center">
             <h2 className="text-lg font-bold uppercase underline">{loan.loanTypeName}</h2>
             <h3 className="text-lg font-bold uppercase">Application Form</h3>
-            <div className="mt-2 flex gap-6">
-              <span className="flex items-center gap-1.5">
-                <span className={`inline-block size-3 border border-black ${!isRenewal ? "bg-black" : ""}`} /> New
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className={`inline-block size-3 border border-black ${isRenewal ? "bg-black" : ""}`} /> Renewal
-              </span>
-            </div>
           </div>
-          <div className="flex h-20 w-20 shrink-0 flex-col items-center justify-center border border-dashed border-gray-500 text-center text-[9px] italic text-gray-500">
+          <div className="absolute top-0 right-0 flex h-20 w-20 shrink-0 flex-col items-center justify-center border border-dashed border-gray-500 text-center text-[9px] italic text-gray-500">
             Latest 1&quot;x1&quot; Photo Applicant
           </div>
+        </div>
+
+        {/* New / Renewal */}
+        <div className="mt-2 flex gap-6">
+          <span className="flex items-center gap-1.5">
+            <span className={`inline-block size-3 border border-black ${!isRenewal ? "bg-black" : ""}`} /> New
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className={`inline-block size-3 border border-black ${isRenewal ? "bg-black" : ""}`} /> Renewal
+          </span>
         </div>
 
         <div className="mt-2 flex items-center justify-between">
@@ -246,24 +248,24 @@ export default function LoanApplicationFormPrintPage() {
             <div className="space-y-1">
               <div className="flex items-end gap-1">
                 <span className="font-semibold whitespace-nowrap">Loan Granted:</span>
-                <span className="flex-1 border-b border-black">&nbsp;</span>
+                <span className="flex-1 border-b border-black px-1">{formatCurrency(loan.approvedAmount ?? loan.requestedAmount)}</span>
               </div>
               <div className="flex items-end gap-1">
                 <span className="font-semibold whitespace-nowrap">Terms of Payment:</span>
-                <span className="flex-1 border-b border-black">&nbsp;</span>
+                <span className="flex-1 border-b border-black px-1">{loan.termMonths} month(s)</span>
               </div>
               <div className="flex items-end gap-1">
                 <span className="font-semibold whitespace-nowrap">Net Proceeds:</span>
-                <span className="flex-1 border-b border-black">&nbsp;</span>
+                <span className="flex-1 border-b border-black px-1">{formatCurrency(loan.netProceeds)}</span>
               </div>
               <div className="flex items-end gap-1">
                 <span className="font-semibold whitespace-nowrap">Interest Rate:</span>
-                <span className="flex-1 border-b border-black">&nbsp;</span>
+                <span className="flex-1 border-b border-black px-1">{loan.interestRate}%</span>
                 <span>p.a.</span>
               </div>
               <div className="flex items-end gap-1">
                 <span className="font-semibold whitespace-nowrap">Monthly Amortization:</span>
-                <span className="flex-1 border-b border-black">&nbsp;</span>
+                <span className="flex-1 border-b border-black px-1">{formatCurrency(loan.monthlyAmortization)}</span>
               </div>
             </div>
             <div className="flex flex-col items-center justify-center gap-2 border-l border-dotted border-gray-400">
