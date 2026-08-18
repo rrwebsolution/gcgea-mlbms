@@ -125,6 +125,15 @@ export default function CreateBenefitApplicationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
+  // A GCGEA Member self-service account can only ever apply for themselves —
+  // the backend force-overrides memberId on submit regardless, but locking it
+  // here avoids the confusing experience of browsing/picking someone else's name.
+  React.useEffect(() => {
+    if (!isEdit && user?.memberId && memberId !== user.memberId) {
+      setMemberId(user.memberId)
+    }
+  }, [isEdit, user?.memberId, memberId])
+
   const [benefitTypeId, setBenefitTypeId] = React.useState("")
   const [requestedAmount, setRequestedAmount] = React.useState<number>()
   const [applicationDate, setApplicationDate] = React.useState(() => new Date().toISOString().slice(0, 10))
@@ -620,6 +629,7 @@ export default function CreateBenefitApplicationPage() {
             outstandingLoanBalance={outstandingLoanBalance}
             activeLoanCount={activeLoans.length}
             overdueLoanCount={overdueLoans.length}
+            disabled={!!user?.memberId}
             extra={
               memberBenefits.length > 0 ? (
                 <div className="rounded-xl border border-border/50 bg-muted/30 p-4 text-xs text-muted-foreground shadow-2xs flex items-center gap-3">

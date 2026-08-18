@@ -172,7 +172,13 @@ export interface ReportTemplateSettings {
   rightLogo: string
   showGeneratedDate: boolean
   checkTemplate: CheckTemplateSettings
+  loanApplicationForm: LoanApplicationFormTemplateSettings
   categoryTemplates: Record<ReportTemplateCategory, ReportCategoryTemplate>
+}
+
+export interface LoanApplicationFormTemplateSettings {
+  /** Controls whether "View Form" appears on a loan once it's been submitted. */
+  enabled: boolean
 }
 
 export interface CheckTemplateSettings {

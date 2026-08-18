@@ -253,6 +253,15 @@ export default function CreateLoanApplicationPage() {
     }
   }, [searchParams, memberId, isEdit])
 
+  // A GCGEA Member self-service account can only ever apply for themselves —
+  // the backend force-overrides memberId on submit regardless, but locking it
+  // here avoids the confusing experience of browsing/picking someone else's name.
+  React.useEffect(() => {
+    if (!isEdit && user?.memberId && memberId !== user.memberId) {
+      setMemberId(user.memberId)
+    }
+  }, [isEdit, user?.memberId, memberId])
+
   const [entries, setEntries] = React.useState<LoanEntry[]>(() => [makeLoanEntry()])
 
   React.useEffect(() => {
@@ -911,6 +920,7 @@ export default function CreateLoanApplicationPage() {
                 value={memberId || undefined}
                 selectedMember={member}
                 onSelect={handleMemberSelect}
+                disabled={!!user?.memberId}
               />
             </div>
             {isVerifyingMemberEligibility ? (
@@ -924,7 +934,7 @@ export default function CreateLoanApplicationPage() {
                   outstandingLoanBalance={outstandingLoanBalance}
                   activeLoanCount={activeLoans.length}
                   overdueLoanCount={overdueLoans.length}
-                  onChangeMember={() => setMemberId("")}
+                  onChangeMember={user?.memberId ? undefined : () => setMemberId("")}
                 />
                 {!hasAnyFullyPaidMonthlyDues && (
                   <AlertBanner

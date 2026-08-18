@@ -41,6 +41,10 @@ function mergeReportTemplate(value?: Partial<SystemSettings["reportTemplate"]>):
       ...defaults.checkTemplate,
       ...value?.checkTemplate,
     },
+    loanApplicationForm: {
+      ...defaults.loanApplicationForm,
+      ...value?.loanApplicationForm,
+    },
     categoryTemplates: {
       member: category("member"),
       contribution: category("contribution"),

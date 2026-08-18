@@ -10,6 +10,8 @@ export interface AuthUser {
   roleId: string
   roleName: RoleName | string
   roleIds: string[]
+  /** Set when this account is a GCGEA Member self-service login — all loan/benefit data is scoped to this member. */
+  memberId?: string
   permissions: PermissionCode[]
   avatarUrl?: string
   status: UserStatus
@@ -28,6 +30,10 @@ export interface SystemUser {
   roleName: RoleName | string
   /** Additional role ids stacked on top of the primary role. */
   additionalRoleIds: string[]
+  /** Set when this account is a GCGEA Member self-service login — linked Member record id. */
+  memberId?: string
+  memberName?: string
+  memberNumber?: string
   /** @deprecated kept for backward compatibility with older mock records; prefer `allowedPermissions`. */
   additionalPermissions: PermissionCode[]
   allowedPermissions: PermissionCode[]

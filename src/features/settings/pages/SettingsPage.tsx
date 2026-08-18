@@ -213,6 +213,7 @@ export default function SettingsPage() {
     ? settings.reportTemplate.categoryTemplates[reportCategory]
     : settings.reportTemplate.categoryTemplates[reportCategory].excelTemplate
   const checkTemplate = settings.reportTemplate.checkTemplate
+  const loanApplicationForm = settings.reportTemplate.loanApplicationForm
   const activeTextStyle: ReportTextStyle = editorRegion === "caption"
     ? currentReportDesign.captionStyle
     : editorRegion === "note"
@@ -280,6 +281,10 @@ export default function SettingsPage() {
 
   function patchCheckTemplate(value: Partial<SystemSettings["reportTemplate"]["checkTemplate"]>) {
     patch("reportTemplate", { checkTemplate: { ...checkTemplate, ...value } })
+  }
+
+  function patchLoanApplicationForm(value: Partial<SystemSettings["reportTemplate"]["loanApplicationForm"]>) {
+    patch("reportTemplate", { loanApplicationForm: { ...loanApplicationForm, ...value } })
   }
 
   function patchReloanPolicy(value: Partial<SystemSettings["loan"]["reloanPolicy"]>) {
@@ -1272,7 +1277,15 @@ export default function SettingsPage() {
                   }
                 `}</style>
               </div>
-              <AlertBanner tone="info" title="Category-specific report layouts" description="The organization header is shared, while the title, table body, colors, density, borders, and orientation can be configured separately per report category." className="mb-4" />
+
+              <ToggleField
+                label="Loan Application Form"
+                description={'Shows a "View Form" action on a loan once it has been submitted, printing an exact copy of the paper Loan Application Form.'}
+                checked={loanApplicationForm.enabled}
+                onCheckedChange={(v) => patchLoanApplicationForm({ enabled: v })}
+              />
+
+              <AlertBanner tone="info" title="Category-specific report layouts" description="The organization header is shared, while the title, table body, colors, density, borders, and orientation can be configured separately per report category." className="mb-4 mt-4" />
 
               <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-border bg-muted/20 p-1">
                 {REPORT_CATEGORIES.map((category) => (

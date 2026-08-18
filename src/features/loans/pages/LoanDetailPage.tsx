@@ -43,6 +43,7 @@ import {
   getReloanEligibility,
 } from "@/services/loans.service"
 import { getAllLoanPayments } from "@/services/loan-payments.service"
+import { getSettings } from "@/services/settings.service"
 import { ReloanButton } from "@/features/loans/components/ReloanButton"
 import { ReloanEligibilityCard } from "@/features/loans/components/ReloanEligibilityCard"
 import { LOAN_STATUS_TONE, AMORTIZATION_STATUS_TONE } from "@/constants/status"
@@ -279,6 +280,18 @@ export default function LoanDetailPage() {
                 render={<Link to={`/approvals/loans/${loan.id}`} />}
               >
                 <Eye className="size-3.5" /> {loan.status === "Approved" ? "Process Release" : "Review"}
+              </PermissionButton>
+            )}
+
+            {loan.status !== "Draft" && getSettings().reportTemplate.loanApplicationForm.enabled && (
+              <PermissionButton
+                permission="loans.print"
+                size="sm"
+                variant="outline"
+                className="h-9 gap-1.5 rounded-xl px-3.5 text-xs font-semibold shadow-2xs hover:bg-muted active:scale-95 transition-all"
+                render={<Link to={`/loans/${loan.id}/application-form`} />}
+              >
+                <FileText className="size-3.5" /> View Form
               </PermissionButton>
             )}
 

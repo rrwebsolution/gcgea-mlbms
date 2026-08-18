@@ -14,6 +14,8 @@ interface MemberSelectionStepProps {
   activeLoanCount: number
   overdueLoanCount: number
   extra?: ReactNode
+  /** Locks the picker to the current selection — used for a GCGEA Member self-service account, which can only ever apply for itself. */
+  disabled?: boolean
 }
 
 export function MemberSelectionStep({
@@ -25,11 +27,12 @@ export function MemberSelectionStep({
   activeLoanCount,
   overdueLoanCount,
   extra,
+  disabled,
 }: MemberSelectionStepProps) {
   return (
     <div className="space-y-4">
       <div className="max-w-lg">
-        <MemberSearchSelect value={selectedMemberId} selectedMember={member} onSelect={onSelect} placeholder="Search by member number, name, office, or position…" />
+        <MemberSearchSelect value={selectedMemberId} selectedMember={member} onSelect={onSelect} placeholder="Search by member number, name, office, or position…" disabled={disabled} />
       </div>
       {member ? (
         <div className="space-y-4">
@@ -39,7 +42,7 @@ export function MemberSelectionStep({
             outstandingLoanBalance={outstandingLoanBalance}
             activeLoanCount={activeLoanCount}
             overdueLoanCount={overdueLoanCount}
-            onChangeMember={() => onSelect("")}
+            onChangeMember={disabled ? undefined : () => onSelect("")}
           />
           {extra}
         </div>

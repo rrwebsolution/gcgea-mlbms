@@ -55,6 +55,7 @@ import LoanDetailPage from "@/features/loans/pages/LoanDetailPage"
 import LoanStatementPage from "@/features/loans/pages/LoanStatementPage"
 import LoanCheckPrintPage from "@/features/loans/pages/LoanCheckPrintPage"
 import LoanDisbursementVoucherPage from "@/features/loans/pages/LoanDisbursementVoucherPage"
+import LoanApplicationFormPrintPage from "@/features/loans/pages/LoanApplicationFormPrintPage"
 import CreateLoanApplicationPage from "@/features/loans/pages/CreateLoanApplicationPage"
 import ReloanWizardPage from "@/features/loans/pages/ReloanWizardPage"
 import LoanDraftsPage from "@/features/loans/pages/LoanDraftsPage"
@@ -226,6 +227,7 @@ export function AppRoutes() {
             <Route path="/loans/:id/statement" element={<LoanStatementPage />} />
             <Route path="/loans/:id/check" element={<LoanCheckPrintPage />} />
             <Route path="/loans/:id/disbursement-voucher" element={<LoanDisbursementVoucherPage />} />
+            <Route path="/loans/:id/application-form" element={<LoanApplicationFormPrintPage />} />
           </Route>
           <Route element={<ProtectedRoute permission="loans.create" />}>
             <Route path="/loans/new" element={<CreateLoanApplicationPage />} />

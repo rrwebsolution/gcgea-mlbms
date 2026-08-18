@@ -191,6 +191,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       wordsTop: 1.65,
       footerBottom: 0.42,
     },
+    loanApplicationForm: {
+      enabled: true,
+    },
     categoryTemplates: {
       member: reportCategory({ preset: "classic", primaryColor: "#1E3A8A", headerBackground: "#E8EDF3", bodyFontSize: 9, bodyFontFamily: "Arial", bodyFontWeight: "normal", bodyFontStyle: "normal", bodyTextDecoration: "none", bodyTextColor: "#111111", bodyTextAlignment: "left", stripedRows: false, showBorders: true, titleAlignment: "center", orientation: "auto", paperSize: "a4", captionText: "", noteText: "" }),
       contribution: reportCategory({ preset: "modern", primaryColor: "#166534", headerBackground: "#DCFCE7", bodyFontSize: 9, bodyFontFamily: "Arial", bodyFontWeight: "normal", bodyFontStyle: "normal", bodyTextDecoration: "none", bodyTextColor: "#111111", bodyTextAlignment: "left", stripedRows: true, showBorders: true, titleAlignment: "left", orientation: "auto", paperSize: "a4", captionText: "", noteText: "" }),

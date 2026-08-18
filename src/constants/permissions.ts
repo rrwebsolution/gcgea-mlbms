@@ -434,6 +434,12 @@ export function permissionsForRole(role: string): PermissionCode[] {
       ]
     case "Auditor / Viewer":
       return Array.from(new Set([...VIEW_ONLY_PERMISSION_CODES, "audit_logs.view", "audit_logs.export", "drafts.view_all"]))
+    case "GCGEA Member":
+      return [
+        "dashboard.view",
+        "loans.view", "loans.create", "loans.submit",
+        "benefits.view", "benefits.create", "benefits.submit",
+      ]
     default:
       return ["dashboard.view"]
   }

@@ -15,6 +15,7 @@ export const userFormSchema = z
     confirmPassword: z.string().optional(),
     roleId: z.string().min(1, "Primary role is required"),
     additionalRoleIds: z.array(z.string()),
+    memberId: z.string().optional(),
     status: z.enum(["Active", "Inactive", "Disabled"]),
     requirePasswordChange: z.boolean(),
     remarks: z.string().optional(),

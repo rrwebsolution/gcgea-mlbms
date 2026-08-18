@@ -20,8 +20,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { userFormSchema, type UserFormValues } from "@/schemas/user.schema"
-import { createUser, getUser, isEmailTaken, isLastActiveSuperAdmin, isUsernameTaken, updateUser } from "@/services/users.service"
+import { createUser, getUser, isEmailTaken, isLastActiveSuperAdmin, isUsernameTaken, listAllUsersIncludingInactive, updateUser } from "@/services/users.service"
 import { listAllRoles } from "@/services/roles.service"
+import { listAllActiveMembers } from "@/services/members.service"
 import type { PaginatedResponse, PermissionCode, SystemUser } from "@/types"
 
 export default function UserFormPage() {
@@ -32,6 +33,8 @@ export default function UserFormPage() {
 
   const { data: existingUser, isLoading: isLoadingUser } = useQuery({ queryKey: ["users", id], queryFn: () => getUser(id!), enabled: isEdit })
   const { data: allRoles = [] } = useQuery({ queryKey: ["roles", "all"], queryFn: listAllRoles })
+  const { data: allMembers = [] } = useQuery({ queryKey: ["members", "all-active"], queryFn: listAllActiveMembers })
+  const { data: allUsers = [] } = useQuery({ queryKey: ["users", "all", "including-inactive"], queryFn: listAllUsersIncludingInactive })
 
   useBreadcrumbExtra(isEdit ? existingUser?.fullName : "Add User")
 
@@ -51,7 +54,7 @@ export default function UserFormPage() {
     resolver: zodResolver(userFormSchema),
     defaultValues: {
       fullName: "", username: "", email: "", contactNumber: "", password: "", confirmPassword: "",
-      roleId: "", additionalRoleIds: [], status: "Active", requirePasswordChange: false, remarks: "",
+      roleId: "", additionalRoleIds: [], memberId: "", status: "Active", requirePasswordChange: false, remarks: "",
     },
   })
 
@@ -66,6 +69,7 @@ export default function UserFormPage() {
         confirmPassword: "",
         roleId: existingUser.roleId,
         additionalRoleIds: existingUser.additionalRoleIds,
+        memberId: existingUser.memberId ?? "",
         status: existingUser.status,
         requirePasswordChange: existingUser.requirePasswordChange,
         remarks: existingUser.remarks ?? "",
@@ -77,7 +81,22 @@ export default function UserFormPage() {
 
   const roleId = watch("roleId")
   const additionalRoleIds = watch("additionalRoleIds")
+  const memberId = watch("memberId")
   const selectedRole = allRoles.find((r) => r.id === roleId)
+  const isMemberRole = selectedRole?.code === "gcgea_member"
+  // Members already linked to a different account are excluded from the picker —
+  // one Member record can back at most one GCGEA Member login. The current user's
+  // own linked member (on edit) stays selectable.
+  const linkedMemberIds = React.useMemo(
+    () => new Set(allUsers.filter((u) => u.id !== id && u.memberId).map((u) => u.memberId)),
+    [allUsers, id]
+  )
+  const memberOptions = React.useMemo(
+    () => allMembers
+      .filter((m) => !linkedMemberIds.has(m.id) || m.id === memberId)
+      .map((m) => ({ value: m.id, label: `${m.fullName} — ${m.memberNumber}` })),
+    [allMembers, linkedMemberIds, memberId]
+  )
   const combinedRolePermissions = React.useMemo(() => {
     const ids = new Set([roleId, ...additionalRoleIds])
     const codes = new Set<PermissionCode>()
@@ -130,6 +149,10 @@ export default function UserFormPage() {
       toast.error("This is the last active Super Administrator and cannot be deactivated.")
       return
     }
+    if (isMemberRole && !values.memberId) {
+      toast.error("Select the GCGEA member this account belongs to.")
+      return
+    }
 
     try {
       const payload = {
@@ -139,7 +162,8 @@ export default function UserFormPage() {
         contactNumber: values.contactNumber,
         password: values.password || undefined,
         roleId: values.roleId,
-        additionalRoleIds: values.additionalRoleIds,
+        additionalRoleIds: isMemberRole ? [] : values.additionalRoleIds,
+        memberId: isMemberRole ? values.memberId : undefined,
         status: values.status,
         requirePasswordChange: values.requirePasswordChange,
         allowedPermissions,
@@ -168,16 +192,22 @@ export default function UserFormPage() {
       toast.error("A password of at least 8 characters is required for new users.")
       return
     }
+    if (isMemberRole && !values.memberId) {
+      toast.error("Select the GCGEA member this account belongs to.")
+      return
+    }
     try {
       const user = await createUser({
         fullName: values.fullName, username: values.username, email: values.email, contactNumber: values.contactNumber,
         password: values.password,
-        roleId: values.roleId, additionalRoleIds: values.additionalRoleIds, status: values.status,
+        roleId: values.roleId, additionalRoleIds: isMemberRole ? [] : values.additionalRoleIds,
+        memberId: isMemberRole ? values.memberId : undefined,
+        status: values.status,
         requirePasswordChange: values.requirePasswordChange, allowedPermissions, deniedPermissions, remarks: values.remarks,
       })
       toast.success("User created successfully.")
       await synchronizeUserCache(user)
-      reset({ fullName: "", username: "", email: "", contactNumber: "", password: "", confirmPassword: "", roleId: "", additionalRoleIds: [], status: "Active", requirePasswordChange: false, remarks: "" })
+      reset({ fullName: "", username: "", email: "", contactNumber: "", password: "", confirmPassword: "", roleId: "", additionalRoleIds: [], memberId: "", status: "Active", requirePasswordChange: false, remarks: "" })
       setAllowedPermissions([])
       setDeniedPermissions([])
     } catch (err) {
@@ -194,11 +224,17 @@ export default function UserFormPage() {
       toast.error("This email address is already in use.")
       return
     }
+    if (isMemberRole && !values.memberId) {
+      toast.error("Select the GCGEA member this account belongs to.")
+      return
+    }
     try {
       const payload = {
         fullName: values.fullName, username: values.username, email: values.email, contactNumber: values.contactNumber,
         password: values.password || undefined,
-        roleId: values.roleId, additionalRoleIds: values.additionalRoleIds, status: values.status,
+        roleId: values.roleId, additionalRoleIds: isMemberRole ? [] : values.additionalRoleIds,
+        memberId: isMemberRole ? values.memberId : undefined,
+        status: values.status,
         requirePasswordChange: values.requirePasswordChange, allowedPermissions, deniedPermissions, remarks: values.remarks,
       }
       const user = isEdit && id ? await updateUser(id, payload) : await createUser(payload)
@@ -216,7 +252,7 @@ export default function UserFormPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 pb-16">
-      <PageHeader title={isEdit ? `Edit User — ${existingUser?.fullName ?? ""}` : "Add User"} description="Create or update a GCGEA MLBMS staff account." />
+      <PageHeader title={isEdit ? `Edit User — ${existingUser?.fullName ?? ""}` : "Add User"} description="Create or update a staff account, or a GCGEA Member self-service account." />
 
       {isProtectedSuperAdmin && (
         <AlertBanner tone="warning" title="Protected account" description="This is the last active Super Administrator. Their role, status cannot be changed to a non-administrator state or deactivated." />
@@ -280,10 +316,26 @@ export default function UserFormPage() {
               />
               {errors.roleId && <p className="text-xs font-medium text-destructive">{errors.roleId.message}</p>}
             </div>
-            <div className="space-y-1.5">
-              <Label>Additional Roles</Label>
-              <RoleMultiSelect roles={allRoles} selectedIds={additionalRoleIds} excludeId={roleId} onChange={(ids) => setValue("additionalRoleIds", ids, { shouldDirty: true })} />
-            </div>
+            {isMemberRole ? (
+              <div className="space-y-1.5">
+                <Label>Linked GCGEA Member <span className="text-destructive">*</span></Label>
+                <CommandSelect
+                  className="w-full"
+                  value={memberId}
+                  onValueChange={(v) => setValue("memberId", v ?? "", { shouldDirty: true })}
+                  placeholder="Select the member this account belongs to"
+                  searchPlaceholder="Search by name or member number…"
+                  emptyText="No unlinked members found."
+                  options={memberOptions}
+                />
+                <p className="text-xs text-muted-foreground">This account will only ever see and create this member's own loan and benefit applications.</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Additional Roles</Label>
+                <RoleMultiSelect roles={allRoles} selectedIds={additionalRoleIds} excludeId={roleId} onChange={(ids) => setValue("additionalRoleIds", ids, { shouldDirty: true })} />
+              </div>
+            )}
           </div>
           {selectedRole && (
             <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">

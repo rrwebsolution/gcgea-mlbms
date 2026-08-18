@@ -63,6 +63,7 @@ export interface CreateUserInput {
   password?: string
   roleId: string
   additionalRoleIds: string[]
+  memberId?: string
   status: SystemUser["status"]
   requirePasswordChange: boolean
   allowedPermissions: PermissionCode[]
