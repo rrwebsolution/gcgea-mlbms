@@ -399,7 +399,7 @@ export function permissionsForRole(role: string): PermissionCode[] {
         "contributions.export", "contributions.print",
         "loan_payments.view", "loan_payments.create", "loan_payments.update", "loan_payments.void",
         "loan_payments.import", "loan_payments.print_receipt", "loan_payments.export",
-        "loans.view", "loans.review", "loans.release", "loans.print",
+        "loans.view", "loans.release", "loans.print",
         "benefits.view", "benefits.release", "benefits.print",
         "reports.view", "reports.export", "reports.print", "reports.financial", "reports.contribution",
         "payroll.manual.view", "payroll.manual.create", "payroll.manual.edit", "payroll.manual.post",
