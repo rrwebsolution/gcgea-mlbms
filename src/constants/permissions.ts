@@ -437,7 +437,7 @@ export function permissionsForRole(role: string): PermissionCode[] {
     case "GCGEA Member":
       return [
         "dashboard.view",
-        "loans.view", "loans.create", "loans.submit",
+        "loans.view", "loans.create", "loans.submit", "loans.reloan",
         "benefits.view", "benefits.create", "benefits.submit",
       ]
     default:

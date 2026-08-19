@@ -69,7 +69,7 @@ function StatementPreview({ report }: { report: FinancialConditionStatement }) {
   const funds = a.loanInvestmentFund + a.membershipCoreServicesFund + a.operationalFund + a.pabaonMortuaryFund + a.membershipFeeFund
   const payables = a.dueToPsLink + a.insurancePremiumPayables
   const liabilities = funds + payables
-  return <article className="mx-auto w-full bg-white px-6 py-8 font-[Arial] text-[11px] text-black sm:px-10">
+  return <article className="mx-auto w-full bg-white px-6 py-8 text-[11px] text-black sm:px-10">
     <header className="grid grid-cols-[80px_1fr_80px] text-center"><img src={report.organization.leftLogo} className="size-20 object-contain" alt="Organization logo" /><div><p className="font-bold uppercase">{report.organization.name}</p><p className="font-bold">({report.organization.acronym})</p><p className="mt-2">DOLE Registration No. 528, dated, October 2, 1997</p><p>CSC Accreditation No. 166, dated, October 7, 1998</p><div className="mt-3 italic"><p>Affiliated to Public Services Labor Independent Confederation</p><p>An accredited training Institution on Public Sector Unionism</p><p>Prescribed under CSC, MC. No.9, s. 1994</p></div></div><img src={report.organization.rightLogo} className="size-20 object-contain" alt="City seal" /></header>
     <h1 className="mt-5 text-center text-xs font-bold uppercase">Statement of Financial Condition</h1><p className="mt-3 text-center font-bold">as of December 31, {report.fiscalYear}</p>
     <StatementTable a={a} v={{ receivables, currentAssets, netEquipment, totalAssets, funds, payables, liabilities, grandTotal: liabilities + a.equity }} />

@@ -248,18 +248,18 @@ function SummarySkeleton() {
 function StatementPreview({ statement, leftLogo, rightLogo }: { statement: FinancialStatementDocument; leftLogo: string; rightLogo: string }) {
   const { organization } = statement
   return (
-    <article className="mx-auto max-w-[850px] rounded-sm border border-border bg-white px-10 py-10 font-serif text-black shadow-md sm:px-14">
+    <article className="mx-auto max-w-[850px] rounded-sm border border-border bg-white px-10 py-10 text-black shadow-md sm:px-14">
       <header className="grid grid-cols-[96px_1fr_96px] items-center gap-4 text-center">
         <img src={leftLogo} alt="Association logo" className="size-24 object-contain" />
         <div>
-          <p className="font-sans text-sm font-bold uppercase">{organization.organizationName}</p>
-          <p className="mt-1 font-sans text-sm font-bold">({organization.acronym})</p>
-          <p className="mt-3 font-sans text-xs">{statement.registrationLine}</p>
-          <p className="font-sans text-xs">{statement.accreditationLine}</p>
+          <p className="text-sm font-bold uppercase">{organization.organizationName}</p>
+          <p className="mt-1 text-sm font-bold">({organization.acronym})</p>
+          <p className="mt-3 text-xs">{statement.registrationLine}</p>
+          <p className="text-xs">{statement.accreditationLine}</p>
         </div>
         <img src={rightLogo} alt="City seal" className="size-24 object-contain" />
       </header>
-      <div className="mt-4 text-center font-sans text-xs italic leading-5">
+      <div className="mt-4 text-center text-xs italic leading-5">
         {statement.affiliationLines.map((line) => <p key={line}>{line}</p>)}
       </div>
       <h1 className="mt-9 text-center text-2xl font-bold">Unaudited Financial Statement Disclaimer</h1>
