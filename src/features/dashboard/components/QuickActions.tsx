@@ -6,6 +6,7 @@ import {
   Landmark,
   CreditCard,
   HeartHandshake,
+  RotateCw,
   ArrowUpRight,
 } from "lucide-react"
 import { PermissionGuard } from "@/components/shared/PermissionGuard"
@@ -34,6 +35,18 @@ const ACTIONS = [
       text: "text-amber-600 dark:text-amber-400",
       hoverBg: "group-hover:bg-amber-600",
       border: "group-hover:border-amber-500/30",
+    },
+  },
+  {
+    label: "Reloan",
+    path: "/loans/active",
+    icon: RotateCw,
+    permission: "loans.reloan" as const,
+    tone: {
+      bg: "bg-cyan-500/10 dark:bg-cyan-500/15",
+      text: "text-cyan-600 dark:text-cyan-400",
+      hoverBg: "group-hover:bg-cyan-600",
+      border: "group-hover:border-cyan-500/30",
     },
   },
   {

@@ -13,18 +13,23 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { CommandSelect } from "@/components/shared/CommandSelect"
 import { CurrencyInput } from "@/components/shared/CurrencyInput"
+import { CheckSheet } from "@/components/shared/CheckSheet"
 import { Button } from "@/components/ui/button"
+import { getSettings } from "@/services/settings.service"
+import { amountInWords } from "@/utils/format"
 import type { ReleaseLoanInput } from "@/services/loans.service"
 
 interface LoanReleaseDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultAmount?: number
+  /** Payee name for the live Check Format preview shown when Release Method is "Check". */
+  memberName: string
   isLoading?: boolean
   onConfirm: (input: ReleaseLoanInput) => void
 }
 
-export function LoanReleaseDialog({ open, onOpenChange, defaultAmount, isLoading, onConfirm }: LoanReleaseDialogProps) {
+export function LoanReleaseDialog({ open, onOpenChange, defaultAmount, memberName, isLoading, onConfirm }: LoanReleaseDialogProps) {
   const [releaseReferenceNumber, setReleaseReferenceNumber] = React.useState("")
   const [releaseMethod, setReleaseMethod] = React.useState<ReleaseLoanInput["releaseMethod"] | "">("")
   const [actualReleasedAmount, setActualReleasedAmount] = React.useState<number | undefined>(defaultAmount)
@@ -56,9 +61,12 @@ export function LoanReleaseDialog({ open, onOpenChange, defaultAmount, isLoading
     })
   }
 
+  const checkTemplate = getSettings().reportTemplate.checkTemplate
+  const checkPreviewAmount = actualReleasedAmount ?? 0
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={releaseMethod === "Check" ? "sm:max-w-2xl" : "sm:max-w-sm"}>
         <DialogHeader>
           <DialogTitle>Release Loan</DialogTitle>
           <DialogDescription>Record how and when this loan's proceeds were released to the member.</DialogDescription>
@@ -99,6 +107,26 @@ export function LoanReleaseDialog({ open, onOpenChange, defaultAmount, isLoading
             <Textarea id="release-remarks" value={releaseRemarks} onChange={(e) => setReleaseRemarks(e.target.value)} rows={2} placeholder="Optional remarks…" />
           </div>
           {isInvalid && <p className="text-xs font-medium text-destructive">Reference #, method, and amount are required.</p>}
+
+          {releaseMethod === "Check" && (
+            <div className="grid gap-1.5">
+              <Label>Check Format Preview</Label>
+              <div className="overflow-x-auto rounded-lg border bg-muted/30 p-3">
+                <CheckSheet
+                  className="origin-top-left scale-[0.82]"
+                  template={checkTemplate}
+                  payeeName={memberName}
+                  amount={checkPreviewAmount}
+                  amountInWords={amountInWords(checkPreviewAmount)}
+                  checkDate={new Date().toLocaleDateString("en-PH", { month: "2-digit", day: "2-digit", year: "numeric" })}
+                  checkNo={releaseReferenceNumber || undefined}
+                  memoLine={`${checkTemplate.memoPrefix} ${releaseReferenceNumber || "—"}`}
+                  isVoid
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">Preview only — updates live as you fill in the fields above. Configure the layout in Settings &gt; Report Template.</p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={isLoading} onClick={() => onOpenChange(false)}>Cancel</Button>
