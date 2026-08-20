@@ -20,7 +20,7 @@ interface MemberSummaryCardProps {
 
 export function MemberSummaryCard({ member, totalContributions, paidContributionMonths, outstandingLoanBalance, activeLoanCount, overdueLoanCount, onChangeMember }: MemberSummaryCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <Avatar size="lg">

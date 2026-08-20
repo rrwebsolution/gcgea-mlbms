@@ -187,7 +187,7 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
 
       <PageHeader title={title} description={description} />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${hasFixedStatuses ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}>
           <div className="space-y-1.5">
             <Label>Office</Label>
@@ -234,7 +234,7 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to build the {title.toLowerCase()} report.</p>
         </div>
       ) : (
@@ -245,7 +245,7 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
             <StatCard label="Total Outstanding" value={formatCurrency(summary.totalOutstanding)} icon={Banknote} tone="info" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Loans Per Office</h3>
             {officeChartData.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No loans match your filters.</p>
@@ -261,7 +261,7 @@ export default function LoanStatusReportPage({ status, statuses, title, descript
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

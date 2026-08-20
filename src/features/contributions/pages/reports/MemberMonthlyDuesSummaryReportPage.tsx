@@ -159,7 +159,7 @@ export default function MemberMonthlyDuesSummaryReportPage() {
         description="Generate a per-member or overall annual breakdown of Monthly Dues across all configured funds."
       />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm print:hidden">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs print:hidden">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[12rem_1fr_10rem]">
           <div className="space-y-1.5">
             <Label>Report Scope</Label>
@@ -200,11 +200,11 @@ export default function MemberMonthlyDuesSummaryReportPage() {
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Select a member and year, then click <strong className="text-foreground">Generate</strong>.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
           <div className="border-b border-border px-5 py-4">
             <h2 className="font-heading text-base font-bold uppercase">Summary of GCGEA Monthly Dues Deduction</h2>
             <p className="mt-1 text-sm font-semibold">

@@ -184,7 +184,13 @@ export function DataTable<TData>({
     []
   )
 
-  const tableColumns = enableRowSelection ? [selectionColumn, ...columns] : columns
+  const hasSelectableRows = React.useMemo(() => {
+    if (!enableRowSelection) return false
+    if (typeof enableRowSelection !== "function") return true
+    return filteredData.some((item) => (enableRowSelection as (row: Row<TData>) => boolean)({ original: item } as Row<TData>))
+  }, [enableRowSelection, filteredData])
+
+  const tableColumns = hasSelectableRows ? [selectionColumn, ...columns] : columns
 
   const table = useReactTable({
     data: filteredData,

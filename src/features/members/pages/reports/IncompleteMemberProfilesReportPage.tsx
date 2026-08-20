@@ -86,7 +86,7 @@ export default function IncompleteMemberProfilesReportPage() {
 
       <PageHeader title="Incomplete Member Profiles" description="Members with missing contact details, beneficiaries, or documents." />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Office</Label>
@@ -103,7 +103,7 @@ export default function IncompleteMemberProfilesReportPage() {
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to find incomplete profiles.</p>
         </div>
       ) : (
@@ -114,7 +114,7 @@ export default function IncompleteMemberProfilesReportPage() {
             <StatCard label="Incomplete Rate" value={`${summary.rate.toFixed(1)}%`} icon={AlertTriangle} tone="warning" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Profile Completeness Overview</h3>
             {pieData.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No members match your filters.</p>
@@ -130,7 +130,7 @@ export default function IncompleteMemberProfilesReportPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

@@ -102,7 +102,7 @@ export default function UnpaidContributionsReportPage() {
 
       <PageHeader title="Unpaid Contributions" description="Identify active members who have not yet paid their contribution for a period." />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Contribution Period</Label>
@@ -129,7 +129,7 @@ export default function UnpaidContributionsReportPage() {
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Choose a contribution period and click <strong className="text-foreground">Generate</strong> to see who hasn't paid.</p>
         </div>
       ) : (
@@ -141,7 +141,7 @@ export default function UnpaidContributionsReportPage() {
             <StatCard label="Unpaid Rate" value={`${summary.rate.toFixed(1)}%`} icon={AlertTriangle} tone="warning" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground"><Building2 className="size-4" /> Unpaid Members Per Office</h3>
             {officeChartData.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">All active members have paid for this period.</p>
@@ -157,7 +157,7 @@ export default function UnpaidContributionsReportPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

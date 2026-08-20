@@ -288,12 +288,12 @@ export default function PayrollImportWizardPage() {
   return (
     <div className="space-y-5 pb-10">
       <PageHeader title="Payroll Deduction Import" description="Import payroll deductions using the official GCGEA Excel or CSV template." />
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <WizardStepIndicator steps={STEPS} currentStep={step} />
       </div>
 
       {step === 1 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
           <h2 className="mb-3 text-sm font-semibold text-foreground">Step 1 · Upload File</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -341,7 +341,7 @@ export default function PayrollImportWizardPage() {
       )}
 
       {step === 2 && uploadResult && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
           <h2 className="mb-1 text-sm font-semibold text-foreground">Step 2 · Select Worksheet</h2>
           <p className="mb-3 text-sm text-muted-foreground">
             This file has {uploadResult.sheetNames.length} worksheets. Pick the one with the payroll data you want to import — office/department
@@ -392,7 +392,7 @@ export default function PayrollImportWizardPage() {
       )}
 
       {step === 3 && uploadResult && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
           <h2 className="mb-1 text-sm font-semibold text-foreground">Step 3 · Map Columns</h2>
           <p className="mb-3 text-sm text-muted-foreground">
             Columns were auto-detected from the uploaded file ({uploadResult.totalRows} row(s) found). Adjust any mapping below if needed.
@@ -464,7 +464,7 @@ export default function PayrollImportWizardPage() {
       )}
 
       {step === 4 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
           <h2 className="mb-3 text-sm font-semibold text-foreground">Step 4 · Preview & Validate</h2>
           {batchWarnings.length > 0 && (
             <div className="mb-3 space-y-1 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-warning">
@@ -510,7 +510,7 @@ export default function PayrollImportWizardPage() {
       )}
 
       {step === 5 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
           <h2 className="mb-1 text-sm font-semibold text-foreground">Step 5 · Resolve Conflicts (Optional)</h2>
           {ambiguousRows.length === 0 && otherInvalidRows.length === 0 ? (
             <EmptyState icon={CheckCircle2} title="No conflicts found" description="Every row matched exactly one member." />
@@ -609,7 +609,7 @@ export default function PayrollImportWizardPage() {
       )}
 
       {step === 6 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
           <h2 className="mb-3 text-sm font-semibold text-foreground">Step 6 · Confirm Import</h2>
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <SummaryStat label="Total Rows" value={String(rows.length)} />
@@ -650,7 +650,7 @@ export default function PayrollImportWizardPage() {
       )}
 
       {step === 7 && commitResult && (
-        <div className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/90 p-6 text-center shadow-xs backdrop-blur-xs">
           <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-full bg-success/10 text-success">
             <CheckCircle2 className="size-7" />
           </div>

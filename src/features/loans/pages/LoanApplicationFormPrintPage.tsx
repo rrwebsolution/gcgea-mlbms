@@ -61,17 +61,25 @@ export default function LoanApplicationFormPrintPage() {
   const isRenewal = loan.applicationType === "reloan"
 
   return (
-    <div className="space-y-5 pb-16">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Button variant="ghost" size="sm" className="-ml-2 w-fit" render={<Link to={`/loans/${loan.id}`} />}>
-          <ArrowLeft /> Back to Loan Application
+    <div className="space-y-6 pb-20 max-w-4xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs print:hidden">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold text-muted-foreground hover:text-foreground active:scale-95"
+          render={<Link to={`/loans/${loan.id}`} />}
+        >
+          <ArrowLeft className="size-3.5" /> Back to Loan Application
         </Button>
-        <Button variant="outline" size="sm" onClick={() => window.print()}>
-          <Printer /> Print Form
+        <Button
+          onClick={() => window.print()}
+          className="h-9 gap-2 rounded-xl px-4 text-xs font-semibold shadow-xs active:scale-95 transition-all"
+        >
+          <Printer className="size-3.5" /> Print Form
         </Button>
       </div>
 
-      <div className="loan-application-form mx-auto max-w-4xl rounded-2xl border border-border bg-white p-8 text-[11px] text-black shadow-sm print:max-w-none print:rounded-none print:border-none print:p-0 print:text-[10px] print:leading-snug print:shadow-none">
+      <div className="loan-application-form overflow-hidden rounded-3xl border border-border/80 bg-white p-8 text-[11px] text-black shadow-xl ring-1 ring-black/5 print:max-w-none print:rounded-none print:border-none print:p-0 print:text-[10px] print:leading-snug print:shadow-none print:ring-0">
         {/* Top badges */}
         <div className="flex items-center justify-between">
           <span className="border border-black px-2 py-0.5 text-[10px] font-semibold">GCGEA Form: 2026-1</span>

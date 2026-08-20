@@ -98,7 +98,7 @@ export default function RemittanceBreakdownReportPage() {
         description="Monthly GCGEA remittances split into loan principal, interest, service income, Monthly Dues, Cash Pabaon, and OTC collections."
       />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="w-full space-y-1.5 sm:max-w-52">
             <Label htmlFor="remittance-year">Reporting Year</Label>
@@ -129,7 +129,7 @@ export default function RemittanceBreakdownReportPage() {
         <StatCard label="Current Loan Receivables" value={formatCurrency(data?.loanReceivables ?? 0)} icon={Landmark} tone="gold" isLoading={isLoading} />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
         <div className="border-b border-border bg-primary/5 px-4 py-3">
           <h2 className="font-heading text-sm font-bold text-foreground">GCGEA Summary {year}</h2>
           <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-primary">Remittances Breakdown</p>

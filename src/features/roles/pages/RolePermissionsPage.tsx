@@ -88,7 +88,7 @@ export default function RolePermissionsPage() {
         />
       )}
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-card/90 p-3 shadow-xs backdrop-blur-xs">
         <Button variant="outline" size="sm" disabled={isSuperAdmin} onClick={() => setDraft(VIEW_ONLY_PERMISSION_CODES)}>View Only Preset</Button>
         <Button variant="outline" size="sm" disabled={isSuperAdmin} onClick={() => setDraft(ENCODER_PERMISSION_CODES)}>Encoder Preset</Button>
         <Button variant="outline" size="sm" disabled={isSuperAdmin} onClick={() => setDraft(APPROVER_PERMISSION_CODES)}>Approver Preset</Button>
@@ -101,7 +101,7 @@ export default function RolePermissionsPage() {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <PermissionMatrix
           selected={isSuperAdmin ? ALL_PERMISSION_CODES : draft}
           onChange={setDraft}

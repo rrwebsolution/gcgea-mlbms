@@ -136,7 +136,7 @@ export default function BenefitStatusReportPage({ status, title, description }: 
 
       <PageHeader title={title} description={description} />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
             <Label>Application Date From</Label>
@@ -171,7 +171,7 @@ export default function BenefitStatusReportPage({ status, title, description }: 
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to build the {title.toLowerCase()} report.</p>
         </div>
       ) : (
@@ -182,7 +182,7 @@ export default function BenefitStatusReportPage({ status, title, description }: 
             <StatCard label="Total Approved" value={formatCurrency(summary.totalApproved)} icon={Banknote} tone="success" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Applications Per Office</h3>
             {officeData.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No benefit applications match your filters.</p>
@@ -198,7 +198,7 @@ export default function BenefitStatusReportPage({ status, title, description }: 
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

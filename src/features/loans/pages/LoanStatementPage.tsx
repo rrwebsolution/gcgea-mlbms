@@ -5,6 +5,7 @@ import { ArrowLeft, Landmark, Printer } from "lucide-react"
 import { ProfileSkeleton } from "@/components/shared/loaders/ProfileSkeleton"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { AlertBanner } from "@/components/shared/AlertBanner"
+import { StatusBadge } from "@/components/shared/StatusBadge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { CommandSelect } from "@/components/shared/CommandSelect"
@@ -12,6 +13,7 @@ import { getLoan, getLoanSchedule } from "@/services/loans.service"
 import { getSettings } from "@/services/settings.service"
 import { listAllUsers } from "@/services/users.service"
 import { formatCurrency, formatDateShort, formatMonthYear } from "@/utils/format"
+import { LOAN_STATUS_TONE } from "@/constants/status"
 
 const PAYMENT_STATUS_OPTIONS = [
   { value: "all", label: "All" },
@@ -65,11 +67,20 @@ export default function LoanStatementPage() {
   const interestBalance = Math.max(0, loan.totalInterest - paidInterest)
 
   return (
-    <div className="space-y-5 pb-16">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Button variant="ghost" size="sm" className="-ml-2 w-fit" render={<Link to={`/loans/${loan.id}`} />}>
-          <ArrowLeft /> Back to Loan Application
-        </Button>
+    <div className="space-y-6 pb-20 max-w-4xl mx-auto">
+      {/* Screen Toolbar (Hidden in Print) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs print:hidden">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold text-muted-foreground hover:text-foreground active:scale-95"
+            render={<Link to={`/loans/${loan.id}`} />}
+          >
+            <ArrowLeft className="size-3.5" /> Back to Loan Application
+          </Button>
+          <StatusBadge label={loan.status} tone={LOAN_STATUS_TONE[loan.status]} />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Label className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
           <CommandSelect
@@ -95,8 +106,11 @@ export default function LoanStatementPage() {
             className="w-32"
             hideSearch
           />
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer /> Print Statement
+          <Button
+            onClick={() => window.print()}
+            className="h-9 gap-2 rounded-xl px-4 text-xs font-semibold shadow-xs active:scale-95 transition-all"
+          >
+            <Printer className="size-3.5" /> Print Statement
           </Button>
         </div>
       </div>
@@ -111,66 +125,72 @@ export default function LoanStatementPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-3xl rounded-2xl border border-border bg-white text-black shadow-sm print:max-w-none print:rounded-none print:border-none print:shadow-none">
-        <div className="p-8 print:p-0">
-          {/* Header — same logos/org lines as every other GCGEA report */}
+      {/* Official Statement Canvas */}
+      <div className="overflow-hidden rounded-3xl border border-border/80 bg-white text-black shadow-xl ring-1 ring-black/5 print:max-w-none print:rounded-none print:border-none print:shadow-none print:ring-0">
+        <div className="p-8 sm:p-10 print:p-0">
+          {/* Header */}
           <div className="grid grid-cols-[80px_1fr_80px] items-center gap-4 text-center">
             <img src={template.leftLogo} alt="" className="mx-auto size-16 object-contain" />
-            <div className="leading-tight">
-              <p className="text-xs">{template.countryLine}</p>
-              <p className="text-base font-bold uppercase">{template.organizationLine}</p>
-              <p className="text-base font-bold">{template.acronymLine}</p>
-              <p className="text-xs">{template.addressLine}</p>
+            <div className="leading-tight space-y-0.5">
+              <p className="text-[11px] font-medium tracking-wide text-gray-700">{template.countryLine}</p>
+              <p className="font-heading text-sm font-bold uppercase tracking-wider text-black">
+                {template.organizationLine}
+              </p>
+              <p className="font-heading text-sm font-bold text-black">{template.acronymLine}</p>
+              <p className="text-[11px] text-gray-600">{template.addressLine}</p>
             </div>
             <img src={template.rightLogo} alt="" className="mx-auto size-16 object-contain" />
           </div>
 
-          <div className="mt-4 border-t-2 border-black pt-2 text-center">
-            <h2 className="text-sm font-bold uppercase tracking-wide">Statement of Loan</h2>
-            <p className="text-xs font-semibold">{loan.loanTypeName}</p>
+          {/* Title Ribbon */}
+          <div className="mt-5 border-t-2 border-b border-black py-2 text-center">
+            <h2 className="font-heading text-base font-bold uppercase tracking-widest text-black">
+              Statement of Loan
+            </h2>
+            <p className="text-xs font-semibold text-gray-800">{loan.loanTypeName}</p>
           </div>
 
           {/* Member / loan particulars */}
-          <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs">
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">Name:</span>
-              <span className="text-right">{loan.memberName}</span>
+          <div className="mt-6 grid grid-cols-2 gap-x-8 gap-y-2 text-xs">
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">Name:</span>
+              <span className="font-bold text-black text-right">{loan.memberName}</span>
             </div>
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">Date Granted:</span>
-              <span className="text-right">{formatDateShort(loan.releaseDate)}</span>
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">Date Granted:</span>
+              <span className="font-mono font-medium text-black text-right">{formatDateShort(loan.releaseDate)}</span>
             </div>
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">Office Address:</span>
-              <span className="text-right">{loan.officeName}</span>
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">Office Address:</span>
+              <span className="font-medium text-black text-right">{loan.officeName}</span>
             </div>
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">Due Date:</span>
-              <span className="text-right">{formatDateShort(loan.maturityDate)}</span>
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">Due Date:</span>
+              <span className="font-mono font-medium text-black text-right">{formatDateShort(loan.maturityDate)}</span>
             </div>
             <div />
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">Check #:</span>
-              <span className="text-right">{loan.releaseReferenceNumber || "—"}</span>
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">Check #:</span>
+              <span className="font-mono font-semibold text-black text-right">{loan.releaseReferenceNumber || "—"}</span>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs">
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">Loan Amount:</span>
-              <span className="text-right">{formatCurrency(loan.principal)}</span>
+          <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-2 text-xs">
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">Loan Amount:</span>
+              <span className="font-mono font-bold text-black text-right">{formatCurrency(loan.principal)}</span>
             </div>
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">Contractual Rate (Monthly interest):</span>
-              <span className="text-right">{loan.interestRate}%</span>
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">Contractual Rate (Monthly interest):</span>
+              <span className="font-mono font-semibold text-black text-right">{loan.interestRate}%</span>
             </div>
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">Monthly Installment:</span>
-              <span className="text-right">{formatCurrency(loan.monthlyAmortization)}</span>
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">Monthly Installment:</span>
+              <span className="font-mono font-semibold text-black text-right">{formatCurrency(loan.monthlyAmortization)}</span>
             </div>
-            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 py-1">
-              <span className="font-semibold">No. of Monthly Installments:</span>
-              <span className="text-right">{loan.termMonths}</span>
+            <div className="flex justify-between gap-3 border-b border-dotted border-gray-400 pb-1">
+              <span className="font-bold text-gray-700">No. of Monthly Installments:</span>
+              <span className="font-mono font-semibold text-black text-right">{loan.termMonths}</span>
             </div>
           </div>
 
@@ -238,21 +258,24 @@ export default function LoanStatementPage() {
           </table>
 
           {/* Signatures */}
-          <div className="mt-12 grid grid-cols-2 gap-8 text-xs">
+          <div className="mt-12 grid grid-cols-2 gap-x-12 gap-y-10 text-xs">
             <div>
-              <p className="mb-8 font-semibold">Verified by:</p>
-              <div className="w-48 border-t border-black pt-1">{loan.assignedOfficer || " "}</div>
-              <p className="mt-0.5 text-[10px] text-gray-600">GCGEA Bookkeeper</p>
+              <p className="mb-8 font-bold text-gray-700">Verified by:</p>
+              <div className="border-t border-black pt-1 font-bold text-black">{loan.assignedOfficer || "—"}</div>
+              <p className="text-[10px] text-gray-600">GCGEA Bookkeeper</p>
             </div>
             <div>
-              <p className="mb-8 font-semibold">Reviewed and checked by:</p>
-              <div className="w-48 border-t border-black pt-1">{treasurer?.fullName || " "}</div>
-              <p className="mt-0.5 text-[10px] text-gray-600">Treasurer</p>
+              <p className="mb-8 font-bold text-gray-700">Reviewed and checked by:</p>
+              <div className="border-t border-black pt-1 font-bold text-black">{treasurer?.fullName || "—"}</div>
+              <p className="text-[10px] text-gray-600">Treasurer</p>
             </div>
           </div>
 
           {template.showGeneratedDate && (
-            <p className="mt-6 text-[10px] text-gray-600">Generated on {formatDateShort(new Date().toISOString())}</p>
+            <div className="mt-10 border-t border-gray-200 pt-3 text-[10px] text-gray-500 flex justify-between">
+              <span>GCGEA Automated Financial Management System</span>
+              <span>Generated on {formatDateShort(new Date().toISOString())}</span>
+            </div>
           )}
         </div>
       </div>

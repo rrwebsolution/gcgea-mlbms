@@ -114,7 +114,7 @@ export default function PayrollDeductionSummaryReportPage() {
 
       <PageHeader title="Payroll Deduction Summary" description="Summarize contributions collected through payroll deduction." />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
             <Label>Contribution Period</Label>
@@ -149,7 +149,7 @@ export default function PayrollDeductionSummaryReportPage() {
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to build the payroll deduction summary.</p>
         </div>
       ) : (
@@ -161,7 +161,7 @@ export default function PayrollDeductionSummaryReportPage() {
             <StatCard label="Average Deduction" value={formatCurrency(summary.average)} icon={Banknote} tone="gold" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Payroll Deductions Per Office</h3>
             {officeData.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No payroll deductions match your filters.</p>
@@ -177,7 +177,7 @@ export default function PayrollDeductionSummaryReportPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

@@ -306,7 +306,7 @@ export default function ReloanWizardPage() {
         description={`Linked to previous loan ${previousLoan.applicationNumber}. This creates a new loan application — the previous loan record is never edited.`}
       />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <WizardStepIndicator steps={STEPS} currentStep={step} />
       </div>
 

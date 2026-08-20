@@ -144,7 +144,7 @@ export default function ContributionsByOfficeReportPage() {
 
       <PageHeader title="Contributions by Office" description="Compare contribution collections across member offices." />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Date From</Label>
@@ -175,7 +175,7 @@ export default function ContributionsByOfficeReportPage() {
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to build the contributions by office report.</p>
         </div>
       ) : (
@@ -187,7 +187,7 @@ export default function ContributionsByOfficeReportPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
               <h3 className="mb-3 text-sm font-semibold text-foreground">Collections Per Office</h3>
               {rows.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">No posted contributions in range.</p>
@@ -203,7 +203,7 @@ export default function ContributionsByOfficeReportPage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
               <h3 className="mb-3 text-sm font-semibold text-foreground">Share of Total Collections</h3>
               {rows.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">No posted contributions in range.</p>
@@ -220,7 +220,7 @@ export default function ContributionsByOfficeReportPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

@@ -81,7 +81,7 @@ export default function PayrollImportBatchDetailPage() {
         )}
       </div>
 
-      <div className="overflow-auto rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-auto rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
         <Table>
           <TableHeader>
             <TableRow>

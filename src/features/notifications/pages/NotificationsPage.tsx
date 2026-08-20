@@ -70,7 +70,7 @@ export default function NotificationsPage() {
         <Switch id="unread-only" checked={unreadOnly} onCheckedChange={setUnreadOnly} />
         <Label htmlFor="unread-only">Show unread only</Label>
       </div>
-      <div className="rounded-xl border border-border bg-card shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
         {filtered.length === 0 ? (
           <EmptyState icon={Bell} title="No notifications" description="You're all caught up." className="border-none" />
         ) : (

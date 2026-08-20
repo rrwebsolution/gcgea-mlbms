@@ -173,7 +173,7 @@ export function CollectionReportPage({ granularity, title, description }: Collec
 
       <PageHeader title={title} description={description} />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Date From</Label>
@@ -194,7 +194,7 @@ export function CollectionReportPage({ granularity, title, description }: Collec
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to build the {title.toLowerCase()}.</p>
         </div>
       ) : (
@@ -206,7 +206,7 @@ export function CollectionReportPage({ granularity, title, description }: Collec
             <StatCard label="Transactions" value={String(summary.transactionCount)} icon={Hash} tone="gold" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Collections Per {granularity === "day" ? "Day" : granularity === "month" ? "Month" : "Year"}</h3>
             {rows.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No posted collections in range.</p>
@@ -225,7 +225,7 @@ export function CollectionReportPage({ granularity, title, description }: Collec
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

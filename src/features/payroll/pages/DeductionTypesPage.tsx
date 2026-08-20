@@ -84,7 +84,7 @@ export default function DeductionTypesPage({ embedded = false }: { embedded?: bo
           <IndeterminateBar />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+              <div key={index} className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <Skeleton className="h-4 w-32" />
                   <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export default function DeductionTypesPage({ embedded = false }: { embedded?: bo
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {deductionTypes.map((dt) => (
-            <div key={dt.id} className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+            <div key={dt.id} className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="font-heading text-sm font-semibold text-foreground">{dt.name}</h3>
                 <div className="flex items-center gap-1.5">

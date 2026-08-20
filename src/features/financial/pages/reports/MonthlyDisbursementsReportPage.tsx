@@ -34,7 +34,7 @@ export default function MonthlyDisbursementsReportPage() {
     <div className="space-y-5">
       <Button variant="ghost" size="sm" className="-ml-2 print:hidden" render={<Link to="/reports" />}><ArrowLeft /> Back to Report Center</Button>
       <PageHeader title={`Monthly Disbursements ${year}`} description="Paid expenses by annual-budget account with monthly income and net-income summary." />
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm print:hidden">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs print:hidden">
         <div className="flex items-end gap-3">
           <div className="space-y-1.5"><Label>Reporting Year</Label><Input className="w-44" type="number" min={2000} max={2100} value={draftYear} onChange={(event) => setDraftYear(Number(event.target.value))} /></div>
           <ReportGenerateButton onGenerate={() => setYear(Math.min(2100, Math.max(2000, Math.trunc(draftYear))))} />
@@ -45,7 +45,7 @@ export default function MonthlyDisbursementsReportPage() {
         <StatCard label="Total Revenue" value={formatCurrency(total(revenue))} icon={CalendarDays} tone="success" isLoading={query.isLoading} />
         <StatCard label="Net Income" value={formatCurrency(total(netIncome))} icon={CalendarDays} tone={total(netIncome) >= 0 ? "primary" : "danger"} isLoading={query.isLoading} />
       </div>
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
         {query.isLoading ? <div className="space-y-2 p-4">{Array.from({ length: 8 }, (_, index) => <Skeleton key={index} className="h-9 w-full" />)}</div> : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1300px] text-xs">
@@ -60,7 +60,7 @@ export default function MonthlyDisbursementsReportPage() {
         )}
       </div>
       {summary && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
           <div className="border-b bg-primary/5 px-4 py-3 text-sm font-bold">Income Summary</div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1300px] text-xs">

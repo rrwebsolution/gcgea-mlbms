@@ -82,7 +82,7 @@ export default function DisbursementsPage() {
           </PermissionButton>
         }
       />
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
         <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center">
           <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1) }} placeholder="Search reference, payee, or particular…" className="w-full sm:max-w-sm" />
           <CommandSelect

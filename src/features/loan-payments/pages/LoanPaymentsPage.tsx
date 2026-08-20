@@ -62,7 +62,7 @@ export default function LoanPaymentsPage() {
         description="Record and track loan amortization payments."
         actions={<><ExportButtons permission="loan_payments.view" label="loan payments" /><PermissionButton permission="loan_payments.create" render={<Link to="/loan-payments/new" />}><Plus /> Record Payment</PermissionButton></>}
       />
-      <div className="rounded-xl border border-border bg-card shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
           <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search by member, reference #…" className="max-w-sm" />
         </div>

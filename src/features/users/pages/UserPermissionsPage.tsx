@@ -131,7 +131,7 @@ export default function UserPermissionsPage() {
             <EmptyState title="No roles assigned" description="This user has no primary role assigned." />
           ) : (
             assignedRoles.map((role) => (
-              <div key={role.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-sm">
+              <div key={role.id} className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <ShieldCheck className="size-4 text-primary" />
@@ -152,7 +152,7 @@ export default function UserPermissionsPage() {
           {draftEntries.filter((e) => e.sources.length > 0).length === 0 ? (
             <EmptyState title="No inherited permissions" description="The assigned role(s) do not grant any permissions." />
           ) : (
-            <div className="flex flex-wrap gap-1.5 rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex flex-wrap gap-1.5 rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
               {draftEntries.filter((e) => e.sources.length > 0).map((entry) => (
                 <span key={entry.code} className="rounded-full bg-info/10 px-2 py-0.5 text-xs font-medium text-info" title={entry.description}>
                   {entry.label}
@@ -185,7 +185,7 @@ export default function UserPermissionsPage() {
         </TabsContent>
 
         <TabsContent value="effective" className="mt-4">
-          <div className="max-h-[32rem] overflow-auto rounded-xl border border-border bg-card shadow-sm">
+          <div className="max-h-[32rem] overflow-auto rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <Table>
               <TableHeader className="sticky top-0 bg-card">
                 <TableRow>
@@ -293,7 +293,7 @@ function sameArray(a: string[], b: string[]): boolean {
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+    <div className="rounded-2xl border border-border/60 bg-card/90 p-3 shadow-xs backdrop-blur-xs">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-heading text-lg font-semibold text-foreground">{value}</p>
     </div>

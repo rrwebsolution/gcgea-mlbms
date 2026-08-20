@@ -600,7 +600,7 @@ export default function BulkContributionsPage() {
                 handleClear()
                 if (values.length > 0) setOfficeError(false)
               }}
-              className="h-10 shadow-2xs"
+              className="shadow-2xs"
             />
             {officeError && (
               <p className="text-[11px] font-semibold text-destructive">

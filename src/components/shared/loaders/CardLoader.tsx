@@ -12,7 +12,7 @@ interface CardLoaderProps {
 /** Generic skeleton replacement for summary info cards (Member/Loan/Benefit/Contribution/Payroll/Office Summary). */
 export function CardLoader({ rows = 4, showTitle = true, className }: CardLoaderProps) {
   return (
-    <div className={cn("rounded-xl border border-border bg-card p-4 shadow-sm", className)}>
+    <div className={cn("rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs", className)}>
       {showTitle && <Skeleton className="mb-4 h-4 w-32" />}
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {Array.from({ length: rows }).map((_, i) => (

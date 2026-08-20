@@ -1,18 +1,30 @@
 import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { PencilLine, Plus, Trash2 } from "lucide-react"
+import {
+  PencilLine,
+  Plus,
+  Trash2,
+  Gift
+} from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { PermissionButton } from "@/components/shared/PermissionButton"
 import { PermissionGuard } from "@/components/shared/PermissionGuard"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { EmptyState } from "@/components/shared/EmptyState"
 import { Button } from "@/components/ui/button"
-import { listBenefitTypes, createBenefitType, updateBenefitType, deleteBenefitType } from "@/services/benefits.service"
+import {
+  listBenefitTypes,
+  createBenefitType,
+  updateBenefitType,
+  deleteBenefitType,
+} from "@/services/benefits.service"
 import { formatCurrency } from "@/utils/format"
 import type { BenefitType } from "@/types"
 import { BenefitTypeFormDialog } from "@/features/benefits/components/BenefitTypeFormDialog"
 import type { BenefitTypeFormValues } from "@/schemas/benefit-type.schema"
+import { cn } from "@/lib/utils"
 
 const CORE_BENEFIT_NAMES = new Set([
   "Retirement and Separation Benefit",
@@ -28,7 +40,10 @@ function withSharedProration(type: BenefitType, values: BenefitTypeFormValues): 
     maximumAmount: type.maximumAmount,
     prorationBasis: values.prorationBasis,
     prorationTiers: values.prorationTiers,
-    fyAmounts: type.fyAmounts.map((amount) => ({ fiscalYear: amount.fiscalYear, baseAmount: amount.baseAmount })),
+    fyAmounts: type.fyAmounts.map((amount) => ({
+      fiscalYear: amount.fiscalYear,
+      baseAmount: amount.baseAmount,
+    })),
     eligibilityRequirements: type.eligibilityRequirements,
     requiredMembershipMonths: type.requiredMembershipMonths,
     frequencyLimit: type.frequencyLimit,
@@ -44,7 +59,10 @@ export default function BenefitTypesPage() {
   const [editingBenefitType, setEditingBenefitType] = React.useState<BenefitType | undefined>(undefined)
   const [deletingBenefitType, setDeletingBenefitType] = React.useState<BenefitType | undefined>(undefined)
 
-  const { data: benefitTypes = [] } = useQuery({ queryKey: ["benefit-types"], queryFn: listBenefitTypes })
+  const { data: benefitTypes = [] } = useQuery({
+    queryKey: ["benefit-types"],
+    queryFn: listBenefitTypes,
+  })
 
   React.useEffect(() => {
     if (!editingBenefitType) return
@@ -55,15 +73,16 @@ export default function BenefitTypesPage() {
   const createMutation = useMutation({
     mutationFn: createBenefitType,
     onSuccess: () => {
-      toast.success("Benefit type added successfully.")
+      toast.success("Benefit program added successfully.")
       queryClient.invalidateQueries({ queryKey: ["benefit-types"] })
     },
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: BenefitTypeFormValues }) => updateBenefitType(id, values),
+    mutationFn: ({ id, values }: { id: string; values: BenefitTypeFormValues }) =>
+      updateBenefitType(id, values),
     onSuccess: () => {
-      toast.success("Benefit type updated successfully.")
+      toast.success("Benefit program updated successfully.")
       queryClient.invalidateQueries({ queryKey: ["benefit-types"] })
     },
   })
@@ -78,108 +97,165 @@ export default function BenefitTypesPage() {
   })
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-16">
+      {/* Page Header */}
       <PageHeader
-        title="Benefit Types"
-        description="Configured benefit programs available to GCGEA members."
+        title="Benefit Programs &amp; Policy Matrix"
+        description="Configure association mutual aid programs, eligibility tenure, and document verification rules."
         actions={
           <PermissionButton
             permission="settings.benefit"
-            className="h-9 gap-1.5 text-xs shadow-sm active:scale-97 transition-all"
+            className="h-9 gap-2 rounded-xl px-4 text-xs font-semibold shadow-xs active:scale-95 transition-all"
             onClick={() => {
               setEditingBenefitType(undefined)
               setDialogOpen(true)
             }}
           >
-            <Plus className="size-4" /> Add Benefit Type
+            <Plus className="size-4" /> Add Benefit Program
           </PermissionButton>
         }
       />
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {benefitTypes.map((bt) => (
-          <div 
-            key={bt.id} 
-            className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-card/95 p-5 shadow-sm hover:shadow-md hover:border-border/80 transition-all duration-200 flex flex-col justify-between"
-          >
-            <div>
-              {/* Card Title & Controls */}
-              <div className="mb-3 flex items-center justify-between gap-2 border-b border-border/30 pb-2">
-                <h3 className="font-heading text-sm font-bold tracking-tight text-foreground">{bt.name}</h3>
-                <div className="flex items-center gap-1.5">
-                  <StatusBadge label={bt.status} tone={bt.status === "Active" ? "success" : "neutral"} />
+      {/* Program Grid */}
+      {benefitTypes.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/70 p-12 text-center">
+          <EmptyState
+            icon={Gift}
+            title="No benefit programs configured"
+            description="Create your first mutual aid program to configure member assistance policies."
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {benefitTypes.map((bt) => (
+            <div
+              key={bt.id}
+              className={cn(
+                "group flex flex-col justify-between overflow-hidden rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs",
+                "transition-all duration-300 hover:-translate-y-1 hover:border-border/90 hover:shadow-md"
+              )}
+            >
+              <div>
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3 border-b border-border/40 pb-3.5 mb-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 shadow-2xs">
+                      <Gift className="size-4" strokeWidth={2.2} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-heading text-sm font-bold tracking-tight text-foreground truncate">
+                        {bt.name}
+                      </h3>
+                      <div className="mt-1">
+                        <StatusBadge
+                          label={bt.status}
+                          tone={bt.status === "Active" ? "success" : "neutral"}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
                   <PermissionGuard permission="settings.benefit">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="size-7 h-7 w-7 text-muted-foreground/80 hover:text-foreground hover:bg-accent/80 rounded-full active:scale-95 transition-all"
-                      onClick={() => {
-                        setEditingBenefitType(bt)
-                        setDialogOpen(true)
-                      }}
-                      aria-label="Edit benefit type"
-                    >
-                      <PencilLine className="size-3.5" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon-sm" 
-                      className="size-7 h-7 w-7 text-muted-foreground/80 hover:text-destructive hover:bg-destructive/10 rounded-full active:scale-95 transition-all"
-                      onClick={() => setDeletingBenefitType(bt)} 
-                      aria-label="Delete benefit type"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 active:scale-90"
+                        onClick={() => {
+                          setEditingBenefitType(bt)
+                          setDialogOpen(true)
+                        }}
+                        aria-label="Edit benefit type"
+                      >
+                        <PencilLine className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90"
+                        onClick={() => setDeletingBenefitType(bt)}
+                        aria-label="Delete benefit type"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
                   </PermissionGuard>
                 </div>
-              </div>
-              <p className="mb-5 text-xs font-medium text-muted-foreground leading-relaxed line-clamp-2 min-h-8">{bt.description}</p>
-            </div>
 
-            {/* Spec parameters definitions list */}
-            <dl className="space-y-2 border-t border-border/30 pt-4">
-              <div className="flex items-center justify-between border-b border-border/20 pb-2 last:border-0 last:pb-0">
-                <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/85">Default Amount</dt>
-                <dd className="text-xs font-semibold text-foreground">{formatCurrency(bt.defaultAmount)}</dd>
+                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 min-h-8 mb-4">
+                  {bt.description || "No description provided for this benefit program."}
+                </p>
               </div>
-              <div className="flex items-center justify-between border-b border-border/20 pb-2 last:border-0 last:pb-0">
-                <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/85">Maximum Amount</dt>
-                <dd className="text-xs font-semibold text-foreground">{formatCurrency(bt.maximumAmount)}</dd>
-              </div>
-              <div className="flex items-center justify-between border-b border-border/20 pb-2 last:border-0 last:pb-0">
-                <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/85">Frequency Limit</dt>
-                <dd className="text-xs font-semibold text-foreground">{bt.frequencyLimit}</dd>
-              </div>
-              <div className="flex items-center justify-between border-b border-border/20 pb-2 last:border-0 last:pb-0">
-                <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/85">Min. Membership</dt>
-                <dd className="text-xs font-semibold text-foreground">{bt.requiredMembershipMonths} months</dd>
-              </div>
-              <div className="flex items-center justify-between border-b border-border/20 pb-2 last:border-0 last:pb-0">
-                <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/85">Approval Required</dt>
-                <dd className="text-xs font-semibold text-foreground">{bt.approvalRequired ? "Yes" : "No"}</dd>
-              </div>
-            </dl>
 
-            {/* Document Checklist Tag Tray */}
-            {bt.requiredDocuments.length > 0 && (
-              <div className="mt-4 border-t border-border/30 pt-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/85 block mb-2">Required Documents</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {bt.requiredDocuments.map((doc) => (
-                    <span 
-                      key={doc} 
-                      className="inline-flex items-center text-[10px] font-medium bg-muted/65 text-foreground/90 px-2 py-0.5 rounded-md border border-border/10"
-                    >
-                      {doc}
+              {/* Policy Parameters Grid */}
+              <div className="space-y-4">
+                <dl className="divide-y divide-border/30 rounded-xl border border-border/50 bg-muted/20 px-3.5 py-1 text-xs">
+                  <div className="flex items-center justify-between py-2">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Default Amount
+                    </dt>
+                    <dd className="font-mono font-semibold text-foreground">
+                      {formatCurrency(bt.defaultAmount)}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Maximum Amount
+                    </dt>
+                    <dd className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(bt.maximumAmount)}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Frequency Limit
+                    </dt>
+                    <dd className="font-medium text-foreground">{bt.frequencyLimit}</dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Required Tenure
+                    </dt>
+                    <dd className="font-mono font-semibold text-foreground">
+                      {bt.requiredMembershipMonths} month(s)
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Approval Workflow
+                    </dt>
+                    <dd className="font-semibold text-foreground">
+                      {bt.approvalRequired ? "Mandatory" : "Direct Release"}
+                    </dd>
+                  </div>
+                </dl>
+
+                {/* Required Documents Tag Tray */}
+                {bt.requiredDocuments.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                      Required Supporting Credentials
                     </span>
-                  ))}
-                </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {bt.requiredDocuments.map((doc) => (
+                        <span
+                          key={doc}
+                          className="inline-flex items-center rounded-lg border border-border/60 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-foreground shadow-2xs"
+                        >
+                          {doc}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
 
+      {/* Program Modal Dialog */}
       <BenefitTypeFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -201,12 +277,13 @@ export default function BenefitTypesPage() {
         }}
       />
 
+      {/* Delete Confirmation */}
       <ConfirmDialog
         open={!!deletingBenefitType}
         onOpenChange={(open) => !open && setDeletingBenefitType(undefined)}
-        title="Delete Benefit Type"
-        description={`Are you sure you want to delete "${deletingBenefitType?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        title="Delete Benefit Program"
+        description={`Are you sure you want to delete "${deletingBenefitType?.name}"? This action cannot be reversed.`}
+        confirmLabel="Yes, Delete Program"
         destructive
         isLoading={deleteMutation.isPending}
         onConfirm={() => deletingBenefitType && deleteMutation.mutate(deletingBenefitType.id)}

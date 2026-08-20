@@ -114,7 +114,7 @@ export default function LoanAgingReportPage() {
 
       <PageHeader title="Loan Aging Report" description="See how far past due overdue loan balances are, grouped into aging buckets." />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Office</Label>
@@ -131,7 +131,7 @@ export default function LoanAgingReportPage() {
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to build the loan aging report.</p>
         </div>
       ) : (
@@ -143,7 +143,7 @@ export default function LoanAgingReportPage() {
             <StatCard label="90+ Days Outstanding" value={formatCurrency(summary.over90Outstanding)} icon={Banknote} tone="danger" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Outstanding Balance Per Aging Bucket</h3>
             {summary.totalLoans === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No overdue loans match your filters.</p>
@@ -160,7 +160,7 @@ export default function LoanAgingReportPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

@@ -111,7 +111,7 @@ export default function OutstandingBalancesReportPage() {
 
       <PageHeader title="Outstanding Balances" description="Track loans with a remaining outstanding balance across the association." />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Office</Label>
@@ -138,7 +138,7 @@ export default function OutstandingBalancesReportPage() {
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to build the outstanding balances report.</p>
         </div>
       ) : (
@@ -149,7 +149,7 @@ export default function OutstandingBalancesReportPage() {
             <StatCard label="Average Balance" value={formatCurrency(summary.average)} icon={TrendingUp} tone="gold" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Outstanding Balance Per Office</h3>
             {officeChartData.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No outstanding balances match your filters.</p>
@@ -165,7 +165,7 @@ export default function OutstandingBalancesReportPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

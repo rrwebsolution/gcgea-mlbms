@@ -15,7 +15,7 @@ interface ProfileSkeletonProps {
 export function ProfileSkeleton({ cards = 2, showTabs = true, className }: ProfileSkeletonProps) {
   return (
     <div className={cn("space-y-5", className)}>
-      <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center gap-4 rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
         <AvatarSkeleton size="lg" className="size-16" />
         <div className="min-w-0 flex-1 space-y-2">
           <Skeleton className="h-5 w-48" />

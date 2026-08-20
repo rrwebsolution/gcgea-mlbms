@@ -344,7 +344,7 @@ export default function BulkPayrollEntryPage() {
             <SummaryStat label="Total Amount" value={formatCurrency(totalAmount)} />
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
               <SearchInput value={search} onChange={setSearch} placeholder="Search loaded members…" className="max-w-sm" />
               <div className="ml-auto flex flex-wrap gap-2">
@@ -418,7 +418,7 @@ export default function BulkPayrollEntryPage() {
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+    <div className="rounded-2xl border border-border/60 bg-card/90 p-3 shadow-xs backdrop-blur-xs">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-heading text-lg font-semibold text-foreground">{value}</p>
     </div>

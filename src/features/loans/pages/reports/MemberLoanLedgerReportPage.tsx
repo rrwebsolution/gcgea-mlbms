@@ -122,7 +122,7 @@ export default function MemberLoanLedgerReportPage() {
 
       <PageHeader title="Member Loan Ledger" description="Review a member's full loan application record and payment history." />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Member</Label>
@@ -139,12 +139,12 @@ export default function MemberLoanLedgerReportPage() {
       </div>
 
       {!appliedMemberId ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Search for a member and click <strong className="text-foreground">Generate</strong> to view their loan ledger.</p>
         </div>
       ) : (
         <>
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h2 className="font-heading text-base font-semibold text-foreground">{memberName}</h2>
             <p className="text-sm text-muted-foreground">{memberOffice}</p>
           </div>
@@ -156,7 +156,7 @@ export default function MemberLoanLedgerReportPage() {
             <StatCard label="Active Loans" value={String(summary.activeLoans)} icon={Banknote} tone="info" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Loan Payments Over Time</h3>
             {chartData.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No posted loan payments for this member.</p>
@@ -173,7 +173,7 @@ export default function MemberLoanLedgerReportPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <ReportDataTable
               columns={columns}
               data={rows}

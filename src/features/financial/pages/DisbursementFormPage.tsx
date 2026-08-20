@@ -133,7 +133,7 @@ export default function DisbursementFormPage() {
       {!budgetsQuery.isLoading && (budgetsQuery.data?.data.length ?? 0) === 0 && !editing && (
         <AlertBanner tone="warning" title="No approved annual budget" description="An annual budget must be approved before a disbursement can be created." />
       )}
-      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Approved Annual Budget</Label>

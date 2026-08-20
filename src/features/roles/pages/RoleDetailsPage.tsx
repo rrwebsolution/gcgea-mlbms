@@ -113,7 +113,7 @@ export default function RoleDetailsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               <dt className="text-muted-foreground">Role Name</dt>
               <dd className="font-medium text-foreground">{role.name}</dd>
@@ -137,7 +137,7 @@ export default function RoleDetailsPage() {
               const granted = group.permissions.filter((p) => role.permissions.includes(p.code))
               if (granted.length === 0) return null
               return (
-                <div key={group.group} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                <div key={group.group} className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
                     <span className="text-xs text-muted-foreground">{granted.length}/{group.permissions.length}</span>
@@ -160,7 +160,7 @@ export default function RoleDetailsPage() {
           {assignedUsers.length === 0 ? (
             <EmptyState title="No users assigned" description="No user currently holds this role." />
           ) : (
-            <div className="divide-y divide-border rounded-xl border border-border bg-card shadow-sm">
+            <div className="divide-y divide-border rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
               {assignedUsers.map((u) => (
                 <Link key={u.id} to={`/admin/users/${u.id}/edit`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50">
                   <Avatar size="sm">
@@ -180,7 +180,7 @@ export default function RoleDetailsPage() {
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <ActivityTimeline entries={activity} />
           </div>
         </TabsContent>
@@ -202,7 +202,7 @@ export default function RoleDetailsPage() {
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+    <div className="rounded-2xl border border-border/60 bg-card/90 p-3 shadow-xs backdrop-blur-xs">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-heading text-lg font-semibold text-foreground">{value}</p>
     </div>

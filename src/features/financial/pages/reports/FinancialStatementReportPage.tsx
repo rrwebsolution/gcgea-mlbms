@@ -181,7 +181,7 @@ export default function FinancialStatementReportPage() {
           </div>
 
           {isEditing && (
-            <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+            <section className="space-y-4 rounded-2xl border border-border/60 bg-card/90 p-5 shadow-xs backdrop-blur-xs">
           <div className="flex items-center justify-between gap-3">
             <div><h2 className="font-semibold">Statement Content</h2><p className="text-xs text-muted-foreground">Saved changes are used by both PDF and Excel exports.</p></div>
             <PermissionButton permission="reports.export" onClick={handleSave} isLoading={isSaving} loadingText="Saving…"><Save /> Save Changes</PermissionButton>

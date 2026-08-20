@@ -52,7 +52,7 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Audit Logs" description="Review system activity and change history across all modules." />
-      <div className="rounded-xl border border-border bg-card shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
           <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search by user or record reference…" className="max-w-sm" />
           <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2">

@@ -196,7 +196,7 @@ export default function DraftCenterPage() {
       </div>
 
       {/* Structured Content Panel */}
-      <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 overflow-hidden shadow-xs backdrop-blur-xs">
         
         {/* Panel Action Controls Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 bg-muted/5 p-4 transition-all duration-200">

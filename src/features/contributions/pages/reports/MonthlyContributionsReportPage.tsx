@@ -210,7 +210,7 @@ export default function MonthlyContributionsReportPage() {
 
       <PageHeader title="Monthly Contributions" description="Review member contributions together with Cash Pabaon and other posted deductions." />
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Date From</Label>
@@ -235,7 +235,7 @@ export default function MonthlyContributionsReportPage() {
       </div>
 
       {!applied ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-10 text-center backdrop-blur-xs">
           <p className="text-sm text-muted-foreground">Set your filters and click <strong className="text-foreground">Generate</strong> to build the monthly contributions report.</p>
         </div>
       ) : (
@@ -247,7 +247,7 @@ export default function MonthlyContributionsReportPage() {
             <StatCard label="Highest Month" value={formatCurrency(summary.highest)} icon={Banknote} tone="info" />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-xs backdrop-blur-xs">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Contributions and Deductions Per Month</h3>
             {rows.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">No posted contributions in range.</p>
@@ -264,7 +264,7 @@ export default function MonthlyContributionsReportPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
             <DataTable
               columns={columns}
               data={pagedRows}

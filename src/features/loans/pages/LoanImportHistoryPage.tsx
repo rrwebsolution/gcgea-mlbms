@@ -121,7 +121,7 @@ export default function LoanImportHistoryPage() {
         }
       />
 
-      <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/90 overflow-hidden shadow-xs backdrop-blur-xs">
         <DataTable
           columns={columns}
           data={data}

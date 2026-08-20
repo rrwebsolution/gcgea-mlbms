@@ -17,7 +17,7 @@ export function SidebarAccessPreview({ effectivePermissions }: SidebarAccessPrev
   const granted = new Set(effectivePermissions)
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
       <div className="border-b border-border bg-sidebar px-3 py-2">
         <p className="text-xs font-semibold tracking-wide text-sidebar-foreground/70 uppercase">Sidebar preview</p>
       </div>

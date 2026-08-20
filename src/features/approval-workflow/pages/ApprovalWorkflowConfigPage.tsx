@@ -120,7 +120,7 @@ function DefinitionCard({ definition }: { definition: WorkflowDefinition }) {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card shadow-sm">
+    <div className="rounded-2xl border border-border/60 bg-card/90 shadow-xs backdrop-blur-xs">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div>
           <h3 className="font-heading text-base font-semibold text-foreground">{definition.label}</h3>
