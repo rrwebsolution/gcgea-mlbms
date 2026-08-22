@@ -35,15 +35,18 @@ import { createLoanPayment } from "@/services/loan-payments.service"
 import { getLoanSettings } from "@/services/loan-settings.service"
 import { getMemberLoans, getLoanSchedule, listAllLoans } from "@/services/loans.service"
 import { listAllBenefits, releaseBenefit } from "@/services/benefits.service"
+import { createBenefitPayment } from "@/services/benefit-payments.service"
 import { listAllDeductions } from "@/services/deductions.service"
 import { listDeductionTypes } from "@/services/deduction-types.service"
 import { getSettings } from "@/services/settings.service"
 import { formatCurrency, formatMonthYear } from "@/utils/format"
 import { CASH_PABAON_PROGRAM_NAME } from "@/utils/eligibility"
 import { cn } from "@/lib/utils"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { PaymentMethod } from "@/types"
 
 type DirectPaymentType = "Contribution" | "Loan Payment" | "Benefit Payment" | "Membership Fee"
+type BenefitAction = "Release" | "Bayad"
 
 const DIRECT_METHODS: PaymentMethod[] = ["Payroll Deduction", "Cash", "Bank Transfer", "Check"]
 
@@ -69,6 +72,7 @@ export default function DirectPaymentsPage() {
   const firstAvailableType: DirectPaymentType = canPostContribution ? "Contribution" : canPostLoanPayment ? "Loan Payment" : canPostBenefitPayment ? "Benefit Payment" : "Membership Fee"
 
   const [paymentType, setPaymentType] = React.useState<DirectPaymentType>(firstAvailableType)
+  const [benefitAction, setBenefitAction] = React.useState<BenefitAction>("Release")
   const [memberId, setMemberId] = React.useState("")
   const [loanId, setLoanId] = React.useState("")
   const [benefitId, setBenefitId] = React.useState("")
@@ -96,7 +100,16 @@ export default function DirectPaymentsPage() {
 
   const { data: benefits = [] } = useQuery({ queryKey: ["benefits", "all"], queryFn: listAllBenefits, enabled: canPostBenefitPayment })
   const memberApprovedBenefits = benefits.filter((b) => b.memberId === memberId && b.status === "Approved")
-  const selectedBenefit = memberApprovedBenefits.find((b) => b.id === benefitId)
+  const memberPartiallyPaidBenefits = benefits.filter((b) =>
+    b.memberId === memberId
+    && b.status === "Released"
+    && (b.approvedAmount ?? b.requestedAmount) - (b.actualReleasedAmount ?? 0) > 0.01
+  )
+  const activeBenefitList = benefitAction === "Release" ? memberApprovedBenefits : memberPartiallyPaidBenefits
+  const selectedBenefit = activeBenefitList.find((b) => b.id === benefitId)
+  const benefitRemainingBalance = selectedBenefit
+    ? (selectedBenefit.approvedAmount ?? selectedBenefit.requestedAmount) - (selectedBenefit.actualReleasedAmount ?? 0)
+    : 0
   const { data: allContributionsForBenefit = [] } = useQuery({ queryKey: ["contributions", "all"], queryFn: listAllContributions, enabled: paymentType === "Benefit Payment" })
   const { data: allDeductionsForBenefit = [] } = useQuery({ queryKey: ["deductions", "all"], queryFn: listAllDeductions, enabled: paymentType === "Benefit Payment" })
   const pabaonDeductionType = deductionTypes.find((t) => t.code.toLowerCase() === "pabaon")
@@ -121,9 +134,9 @@ export default function DirectPaymentsPage() {
 
   React.useEffect(() => {
     if (paymentType !== "Benefit Payment" || !selectedBenefit) return
-    setAmount(defaultBenefitReleaseAmount)
+    setAmount(benefitAction === "Release" ? defaultBenefitReleaseAmount : benefitRemainingBalance)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentType, selectedBenefit?.id, defaultBenefitReleaseAmount])
+  }, [paymentType, benefitAction, selectedBenefit?.id, defaultBenefitReleaseAmount, benefitRemainingBalance])
 
   React.useEffect(() => {
     if (paymentType !== "Membership Fee" || !member?.membershipFeePayment) return
@@ -172,10 +185,17 @@ export default function DirectPaymentsPage() {
 
   function changePaymentType(type: DirectPaymentType) {
     setPaymentType(type)
+    setBenefitAction("Release")
     setLoanId("")
     setBenefitId("")
     setPenalty(0)
     setAmount(type === "Contribution" ? (defaultContributionAmountForType("Monthly Dues") ?? 150) : 0)
+  }
+
+  function changeBenefitAction(action: BenefitAction) {
+    setBenefitAction(action)
+    setBenefitId("")
+    setAmount(0)
   }
 
   function selectMember(id: string) {
@@ -196,7 +216,9 @@ export default function DirectPaymentsPage() {
       : paymentType === "Loan Payment"
         ? paymentDate && officialReceiptNumber.trim() && selectedLoan && loanPrincipalPayment > 0 && loanPrincipalPayment <= selectedLoan.outstandingBalance
         : paymentType === "Benefit Payment"
-          ? selectedBenefit && amount <= benefitApprovedAmount
+          ? benefitAction === "Release"
+            ? selectedBenefit && amount <= benefitApprovedAmount
+            : selectedBenefit && amount <= benefitRemainingBalance + 0.01
           : member.membershipFeePayment && !membershipFeeAlreadyPosted && paymentDate && paymentMethod)
   )
 
@@ -239,13 +261,23 @@ export default function DirectPaymentsPage() {
           queryClient.invalidateQueries({ queryKey: ["loans"] }),
         ])
         toast.success(`Direct loan payment ${payment.paymentReferenceNumber} posted successfully.`)
-      } else if (paymentType === "Benefit Payment" && selectedBenefit) {
+      } else if (paymentType === "Benefit Payment" && selectedBenefit && benefitAction === "Release") {
         const released = await releaseBenefit(selectedBenefit.id, remarks.trim() || undefined, amount)
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["benefits"] }),
           queryClient.invalidateQueries({ queryKey: ["approvals"] }),
         ])
         toast.success(`Benefit ${released.releaseReferenceNumber ?? released.applicationNumber} released and paid successfully.`)
+      } else if (paymentType === "Benefit Payment" && selectedBenefit && benefitAction === "Bayad") {
+        const payment = await createBenefitPayment({
+          benefitApplicationId: selectedBenefit.id,
+          memberId: member.id,
+          paymentDate,
+          amountPaid: amount,
+          remarks: remarks.trim() || undefined,
+        })
+        await queryClient.invalidateQueries({ queryKey: ["benefits"] })
+        toast.success(`Benefit payment ${payment.paymentReferenceNumber} posted successfully.`)
       } else if (paymentType === "Membership Fee" && member.membershipFeePayment) {
         const updated = await payMembershipFee(member.id, { amount, paymentDate, paymentMethod })
         await queryClient.invalidateQueries({ queryKey: ["members"] })
@@ -614,17 +646,32 @@ export default function DirectPaymentsPage() {
       {/* Step 2: Benefit Payment Details */}
       {member && paymentType === "Benefit Payment" && (
         <FormSection title="Step 2 · Benefit Payment Details">
-          {memberApprovedBenefits.length === 0 && (
-            <AlertBanner 
-              tone="warning" 
-              title="No payable benefit found" 
-              description="This member has no benefit application awaiting release." 
-              className="mb-5 shadow-sm" 
+          <Tabs
+            value={benefitAction}
+            onValueChange={(value) => changeBenefitAction(value as BenefitAction)}
+            className="mb-5"
+          >
+            <TabsList>
+              <TabsTrigger value="Release">Release</TabsTrigger>
+              <TabsTrigger value="Bayad">Bayad (Balance Payment)</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {activeBenefitList.length === 0 && (
+            <AlertBanner
+              tone="warning"
+              title={benefitAction === "Release" ? "No payable benefit found" : "No pending balance found"}
+              description={
+                benefitAction === "Release"
+                  ? "This member has no benefit application awaiting release."
+                  : "This member has no released benefit with a remaining balance to pay."
+              }
+              className="mb-5 shadow-sm"
             />
           )}
 
           {/* Cash Pabaon Net Breakdown Card */}
-          {isCashPabaonBenefit && (
+          {benefitAction === "Release" && isCashPabaonBenefit && (
             <div className="mb-5 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.04] via-background to-primary/[0.02] p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary mb-3">
                 <FileSpreadsheet className="size-4 text-primary" />
@@ -656,18 +703,20 @@ export default function DirectPaymentsPage() {
                 className="h-11 text-sm bg-background"
                 value={benefitId}
                 onValueChange={setBenefitId}
-                options={memberApprovedBenefits.map((b) => ({
+                options={activeBenefitList.map((b) => ({
                   value: b.id,
-                  label: `${b.applicationNumber} · ${b.benefitTypeName} · Approved ${formatCurrency(b.approvedAmount ?? b.requestedAmount)}`,
+                  label: benefitAction === "Release"
+                    ? `${b.applicationNumber} · ${b.benefitTypeName} · Approved ${formatCurrency(b.approvedAmount ?? b.requestedAmount)}`
+                    : `${b.applicationNumber} · ${b.benefitTypeName} · Balance ${formatCurrency((b.approvedAmount ?? b.requestedAmount) - (b.actualReleasedAmount ?? 0))}`,
                 }))}
-                placeholder="Select an approved benefit application"
-                disabled={memberApprovedBenefits.length === 0}
+                placeholder={benefitAction === "Release" ? "Select an approved benefit application" : "Select a benefit with a remaining balance"}
+                disabled={activeBenefitList.length === 0}
               />
             </div>
 
             <div className="space-y-1.5">
               <Label className={FIELD_LABEL}>
-                Amount Released <span className="text-destructive font-bold">*</span>
+                {benefitAction === "Release" ? "Amount Released" : "Amount Paid"} <span className="text-destructive font-bold">*</span>
               </Label>
               <CurrencyInput value={amount || undefined} onChange={(value) => setAmount(value ?? 0)} className="h-10 font-semibold text-primary" />
             </div>
@@ -678,10 +727,17 @@ export default function DirectPaymentsPage() {
             </div>
           </div>
 
-          {selectedBenefit && amount > benefitApprovedAmount && (
+          {selectedBenefit && benefitAction === "Release" && amount > benefitApprovedAmount && (
             <div className="mt-4 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs font-medium text-destructive flex items-center gap-2">
               <AlertCircle className="size-4 shrink-0" />
               Amount released cannot exceed the approved amount of {formatCurrency(benefitApprovedAmount)}.
+            </div>
+          )}
+
+          {selectedBenefit && benefitAction === "Bayad" && amount > benefitRemainingBalance && (
+            <div className="mt-4 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs font-medium text-destructive flex items-center gap-2">
+              <AlertCircle className="size-4 shrink-0" />
+              Amount paid cannot exceed the remaining balance of {formatCurrency(benefitRemainingBalance)}.
             </div>
           )}
         </FormSection>
@@ -760,7 +816,9 @@ export default function DirectPaymentsPage() {
                 : paymentType === "Loan Payment"
                   ? "Record Loan Payment"
                   : paymentType === "Benefit Payment"
-                    ? "Release Benefit"
+                    ? benefitAction === "Release"
+                      ? "Release Benefit"
+                      : "Post Benefit Payment"
                     : "Post Membership Fee"}
           </Button>
         </div>
